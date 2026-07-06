@@ -98,3 +98,25 @@ message InvocationMetrics {
 }
 
 message Empty {}
+
+service Runtime {
+  rpc Trigger(TriggerRequest) returns (stream TriggerResponse);
+}
+
+message TriggerRequest {
+  string domain_id = 1;
+  string session_id = 2;
+  string payload = 3; // JSON string
+}
+
+message TriggerResponse {
+  oneof item {
+    ChunkText text = 1;
+    ChunkError error = 2;
+    ChunkDone done = 3;
+  }
+}
+
+message ChunkText { string content = 1; }
+message ChunkError { string message = 1; }
+message ChunkDone { string variables = 1; } // JSON string

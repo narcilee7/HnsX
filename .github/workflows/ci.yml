@@ -33,3 +33,12 @@ jobs:
 
       - name: cargo clippy
         run: cargo clippy --workspace -- -D warnings
+
+      - name: Smoke test hnsx build
+        run: |
+          cargo build --release --bin hnsx
+          ./target/release/hnsx build --domain domains/financial-analysis/domain.yaml --output /tmp/fa.hnsx.tar
+          test -f /tmp/fa.hnsx.tar
+
+      - name: Verify Docker availability (optional)
+        run: docker version || echo "Docker not available, skipping container tests"
