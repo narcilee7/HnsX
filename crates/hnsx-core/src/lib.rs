@@ -1,0 +1,29 @@
+#![allow(dead_code)] // skeleton phase: trait stubs are intentionally unused
+
+//! HnsX core runtime: shared traits (Domain, Agent, Adapter, Sandbox, MemoryBackend),
+//! cross-cutting types (Chunk, InvokeContext, RuntimeContext), and error type.
+//!
+//! See `design/Tech/V1/Initial_Architectrue.md` for the full architecture.
+
+pub mod adapter;
+pub mod agent;
+pub mod bus;
+pub mod chunk;
+pub mod domain;
+pub mod error;
+pub mod loader;
+pub mod memory;
+pub mod sandbox;
+pub mod telemetry;
+pub mod workflow;
+
+pub use adapter::{Adapter, RuntimeContext};
+pub use agent::{
+    AdapterConfig, Agent, AgentSchema, AgentSpec, HealthStatus, InvokeContext, ModelRef,
+    PromptTemplate, Provider, ToolKind, ToolRef,
+};
+pub use chunk::{Artifact, Chunk, FileChange, FileChangeKind};
+pub use domain::{Domain, DomainSpec, Step, Workflow};
+pub use error::{Error, Result};
+pub use memory::{MemoryBackend, MemoryConfig, Message, Session};
+pub use sandbox::{ProcessHandle, Sandbox, SandboxInstance, SandboxPolicy, SandboxSpec};

@@ -1,0 +1,40 @@
+id: financial-analysis
+version: 0.1.0
+description: |
+  Pulls a stock quote and produces a short analysis using a local
+  Ollama model for the lookup and OpenAI for the final write-up.
+agents:
+  - id: quoter
+    description: Fetches the latest quote for a ticker via the http tool.
+    model:
+      provider: ollama
+      model: llama3.1
+    adapter:
+      timeout_seconds: 15
+    prompt:
+      template: |
+        You are the quoter. Use the http tool to fetch the latest price
+        for the requested ticker and return it as JSON.
+      variables: {}
+  - id: analyst
+    description: Writes the final analysis given quote + news.
+    model:
+      provider: openai
+      model: gpt-4o
+    adapter:
+      timeout_seconds: 60
+    prompt:
+      template: |
+        You are the analyst. Given the quote and news, write a 4-sentence
+        analysis with a clear directional view.
+      variables: {}
+workflow:
+  entry: quoter
+  steps:
+    - id: fetch_quote
+      agent: quoter
+      output: quote
+    - id: analyze
+      agent: analyst
+      input:
+        quote: "${steps.fetch_quote.output}"
