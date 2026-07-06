@@ -1,9 +1,24 @@
+use std::sync::Arc;
+
 use anyhow::{Context, Result};
-use clap::Args;
+use clap::{Args, ValueEnum};
 use futures::StreamExt;
 
+use hnsx_adapter::GenaiAgentFactory;
 use hnsx_core::DomainLoader;
+use hnsx_core::agent_factory::AgentFactory;
 use hnsx_core::chunk::Chunk;
+
+#[derive(ValueEnum, Clone, Copy, Debug, Default)]
+pub enum AdapterKind {
+    /// Use the genai-backed factory (OpenAI / Anthropic / Ollama / Custom).
+    /// Reads API keys from env (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, ...).
+    #[default]
+    Genai,
+    /// Use the noop factory: every agent echoes its input. No network, no
+    /// API keys needed. Useful for CI and local end-to-end smoke tests.
+    Noop,
+}
 
 #[derive(Args, Debug)]
 pub struct RunArgs {
@@ -13,11 +28,12 @@ pub struct RunArgs {
     /// JSON trigger payload (defaults to `{}`)
     #[arg(long, default_value = "{}")]
     pub trigger: String,
+    /// Which AgentFactory to use. Default: `genai`.
+    #[arg(long, value_enum, default_value_t = AdapterKind::Genai)]
+    pub adapter: AdapterKind,
 }
 
 pub fn exec(args: RunArgs) -> Result<()> {
-    // Build a small tokio runtime. We use a single-threaded runtime
-    // because the workflow engine is purely cooperative for 1.2.
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -27,7 +43,12 @@ pub fn exec(args: RunArgs) -> Result<()> {
 }
 
 async fn run(args: RunArgs) -> Result<()> {
-    let domain = DomainLoader::new()
+    let factory: Arc<dyn AgentFactory> = match args.adapter {
+        AdapterKind::Genai => Arc::new(GenaiAgentFactory::new()),
+        AdapterKind::Noop => Arc::new(hnsx_core::NoopFactory),
+    };
+
+    let domain = DomainLoader::with_factory(factory)
         .from_path(&args.domain)
         .with_context(|| format!("failed to load domain {}", args.domain))?;
 

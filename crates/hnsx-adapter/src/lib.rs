@@ -9,13 +9,15 @@ pub mod anthropic;
 pub mod claude_code;
 pub mod codex;
 pub mod custom;
+pub mod genai;
 pub mod ollama;
 pub mod openai;
 
-pub use hnsx_core::{Adapter, AdapterConfig, RuntimeContext};
+pub use genai::{GenaiAgent, GenaiAgentFactory};
+pub use hnsx_core::{Adapter, AdapterConfig, AgentFactory, RuntimeContext};
 
 /// Factory that resolves a `Provider` to a concrete `Adapter` impl.
-/// Real dispatch lands in Phase 1.
+/// Real dispatch lands in Phase 1.4+ via `GenaiAgentFactory`.
 pub struct AdapterFactory;
 
 impl AdapterFactory {

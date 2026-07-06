@@ -16,10 +16,10 @@ use futures::stream::BoxStream;
 use serde_json::Value;
 
 use crate::agent::{Agent, AgentSpec};
+use crate::agent_factory::{AgentFactory, NoopFactory};
 use crate::chunk::Chunk;
 use crate::domain::{Domain, DomainSpec};
 use crate::error::{Error, Result};
-use crate::noop::NoopAgent;
 use crate::workflow::WorkflowEngine;
 
 /// A loaded (parsed + validated) domain.
@@ -37,9 +37,9 @@ pub struct LoadedDomain {
 
 impl LoadedDomain {
     /// Build a `LoadedDomain` from a parsed spec, validating it first.
-    pub fn new(spec: DomainSpec) -> Result<Self> {
+    pub fn new(spec: DomainSpec, factory: &Arc<dyn AgentFactory>) -> Result<Self> {
         let agents = validate(&spec)?;
-        let engine = build_engine(&spec, &agents)?;
+        let engine = build_engine(&spec, &agents, factory)?;
         Ok(Self {
             spec,
             agents,
@@ -84,16 +84,32 @@ impl Domain for LoadedDomain {
     }
 }
 
-/// Stateless YAML → `Arc<dyn Domain>` loader.
+/// YAML → `Arc<dyn Domain>` loader, parameterized by an `AgentFactory`.
 ///
-/// In later phases this will hold an `AdapterFactory` and a `SandboxFactory`
-/// so it can materialize real `Agent` instances.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct DomainLoader;
+/// In Phase 1.2 the default factory is [`NoopFactory`], so `DomainLoader::new()`
+/// produces a domain whose agents all echo their input. In Phase 1.4+ the
+/// CLI injects a real factory (e.g. `GenaiAgentFactory`) so the same loader
+/// drives real LLM calls.
+pub struct DomainLoader {
+    factory: Arc<dyn AgentFactory>,
+}
+
+impl Default for DomainLoader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl DomainLoader {
     pub fn new() -> Self {
-        Self
+        Self {
+            factory: Arc::new(NoopFactory),
+        }
+    }
+
+    /// Construct a loader that uses `factory` to materialize agents.
+    pub fn with_factory(factory: Arc<dyn AgentFactory>) -> Self {
+        Self { factory }
     }
 
     /// Load a domain from a YAML file on disk.
@@ -110,7 +126,7 @@ impl DomainLoader {
     }
 
     fn finish(&self, spec: DomainSpec) -> Result<Arc<dyn Domain>> {
-        let domain = LoadedDomain::new(spec)?;
+        let domain = LoadedDomain::new(spec, &self.factory)?;
         Ok(Arc::new(domain))
     }
 }
@@ -166,14 +182,15 @@ fn validate(spec: &DomainSpec) -> Result<HashMap<String, AgentSpec>> {
     Ok(agents)
 }
 
-/// Build a workflow engine by wiring one noop agent per spec agent.
-///
-/// Phase 1.2 keeps this simple — every spec agent maps to the same noop.
-/// Phase 1.4+ will replace this with an `AdapterFactory`-driven dispatch.
-fn build_engine(spec: &DomainSpec, agents: &HashMap<String, AgentSpec>) -> Result<WorkflowEngine> {
+/// Build a workflow engine by asking the factory for one agent per spec agent.
+fn build_engine(
+    spec: &DomainSpec,
+    agents: &HashMap<String, AgentSpec>,
+    factory: &Arc<dyn AgentFactory>,
+) -> Result<WorkflowEngine> {
     let mut engine_agents: HashMap<String, Arc<dyn Agent>> = HashMap::with_capacity(agents.len());
-    for id in agents.keys() {
-        engine_agents.insert(id.clone(), NoopAgent::arc());
+    for (id, agent_spec) in agents {
+        engine_agents.insert(id.clone(), factory.create(agent_spec)?);
     }
     WorkflowEngine::new(spec.workflow.clone(), engine_agents)
 }
