@@ -29,7 +29,7 @@ agents:
         analysis with a clear directional view.
       variables: {}
 workflow:
-  entry: quoter
+  entry: fetch_quote
   steps:
     - id: fetch_quote
       agent: quoter

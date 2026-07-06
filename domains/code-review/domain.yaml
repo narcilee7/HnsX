@@ -28,7 +28,7 @@ agents:
         Summarize the review findings into 3 bullets for a PR comment.
       variables: {}
 workflow:
-  entry: reviewer
+  entry: review
   steps:
     - id: review
       agent: reviewer

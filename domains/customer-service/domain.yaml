@@ -28,7 +28,7 @@ agents:
         You are the billing specialist. Answer the user's billing question.
       variables: {}
 workflow:
-  entry: triage
+  entry: classify
   steps:
     - id: classify
       agent: triage

@@ -50,4 +50,11 @@ pub trait Domain: Send + Sync {
     async fn invoke(&self, trigger: Value) -> Result<BoxStream<'static, Chunk>>;
     fn get_agent(&self, id: &str) -> Option<Arc<dyn Agent>>;
     fn spec(&self) -> &DomainSpec;
+
+    /// Look up an agent spec by id without constructing an `Arc<dyn Agent>`.
+    /// Useful for tooling (validation, documentation) before adapter wiring lands.
+    fn agent_spec(&self, id: &str) -> Option<&AgentSpec> {
+        let _ = id;
+        None
+    }
 }
