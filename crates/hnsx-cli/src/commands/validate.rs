@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Args;
 
-use hnsx_core::DomainSpec;
+use hnsx_core::DomainLoader;
 
 #[derive(Args, Debug)]
 pub struct ValidateArgs {
@@ -11,8 +11,11 @@ pub struct ValidateArgs {
 }
 
 pub fn exec(args: ValidateArgs) -> Result<()> {
-    let text = std::fs::read_to_string(&args.domain)?;
-    let spec: DomainSpec = serde_yaml::from_str(&text)?;
+    // Goes through DomainLoader so it picks up structural validation
+    // (id uniqueness, workflow.entry, step agent references) in addition to
+    // raw YAML parsing.
+    let domain = DomainLoader::new().from_path(&args.domain)?;
+    let spec = domain.spec();
     println!(
         "validated domain id={} version={} agents={} steps={}",
         spec.id,

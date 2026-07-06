@@ -25,5 +25,6 @@ pub use agent::{
 pub use chunk::{Artifact, Chunk, FileChange, FileChangeKind};
 pub use domain::{Domain, DomainSpec, Step, Workflow};
 pub use error::{Error, Result};
+pub use loader::{DomainLoader, LoadedDomain};
 pub use memory::{MemoryBackend, MemoryConfig, Message, Session};
 pub use sandbox::{ProcessHandle, Sandbox, SandboxInstance, SandboxPolicy, SandboxSpec};
