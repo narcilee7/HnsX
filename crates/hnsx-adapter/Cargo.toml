@@ -13,3 +13,12 @@ workspace = true
 [dependencies]
 hnsx-core = { workspace = true }
 async-trait = { workspace = true }
+async-stream = { workspace = true }
+futures = { workspace = true }
+genai = { workspace = true }
+serde_json = { workspace = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1"
+
+[dev-dependencies]
+wiremock = { workspace = true }

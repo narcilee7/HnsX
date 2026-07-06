@@ -7,6 +7,7 @@
 
 pub mod adapter;
 pub mod agent;
+pub mod agent_factory;
 pub mod bus;
 pub mod chunk;
 pub mod domain;
@@ -23,6 +24,7 @@ pub use agent::{
     AdapterConfig, Agent, AgentSchema, AgentSpec, HealthStatus, InvokeContext, ModelRef,
     PromptTemplate, Provider, ToolKind, ToolRef,
 };
+pub use agent_factory::{AgentFactory, NoopFactory};
 pub use chunk::{Artifact, Chunk, FileChange, FileChangeKind};
 pub use domain::{Domain, DomainSpec, Step, Workflow};
 pub use error::{Error, Result};
