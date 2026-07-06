@@ -135,11 +135,18 @@ impl WorkflowEngine {
     }
 
     /// Execute the workflow against `trigger`, returning a chunk stream.
-    pub fn execute(&self, trigger: Value) -> BoxStream<'static, Chunk> {
+    #[tracing::instrument(skip(self, trigger), fields(domain_id = %self.domain_id))]
+    pub fn execute(&self,
+        trigger: Value,
+    ) -> BoxStream<'static, Chunk> {
         let engine = self.clone();
         // Single session id per execution, attached to every step trace.
         let session_id = Uuid::new_v4().to_string();
         Box::pin(stream! {
+            let workflow_started_at_ms = now_ms();
+            let mut total_prompt_tokens: u64 = 0;
+            let mut total_completion_tokens: u64 = 0;
+            let mut total_cost_usd: f64 = 0.0;
             let mut ctx = ExecutionContext::new(trigger, engine.workflow_variables());
             let mut current_index = engine.step_index[&engine.entry];
 
@@ -199,6 +206,11 @@ impl WorkflowEngine {
                         }
                         result.output.push_str(t);
                     }
+                    if let Chunk::Artifact(crate::chunk::Artifact::TokenUsage { prompt, completion, cost_usd }) = &chunk {
+                        total_prompt_tokens += prompt;
+                        total_completion_tokens += completion;
+                        total_cost_usd += cost_usd;
+                    }
                     result.chunks.push(chunk.clone());
                     yield chunk;
                 }
@@ -225,12 +237,26 @@ impl WorkflowEngine {
                 current_index += 1;
             }
 
-            // Final Chunk::done carries the step outputs as a flat object.
+            // 6. Final Chunk::done carries the step outputs as a flat object.
             let mut done_vars = serde_json::Map::new();
             for (k, v) in &ctx.steps {
                 done_vars.insert(format!("steps.{k}.output"), Value::String(v.output.clone()));
             }
             yield Chunk::done(Value::Object(done_vars));
+
+            // 7. Report invocation-level telemetry (Phase 6).
+            if let Some(tel) = engine.telemetry.as_ref() {
+                let duration_ms = now_ms().saturating_sub(workflow_started_at_ms);
+                tel.record_invocation(&hnsx_proto::v1::InvocationRecord {
+                    session_id: session_id.clone(),
+                    domain_id: engine.domain_id.clone(),
+                    started_at_ms: workflow_started_at_ms as i64,
+                    duration_ms: duration_ms as i64,
+                    prompt_tokens: total_prompt_tokens as i64,
+                    completion_tokens: total_completion_tokens as i64,
+                    total_cost_usd,
+                });
+            }
         })
     }
 

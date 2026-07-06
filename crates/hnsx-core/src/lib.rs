@@ -16,6 +16,7 @@ pub mod loader;
 pub mod memory;
 pub mod noop;
 pub mod pii;
+pub mod reporter;
 pub mod sandbox;
 pub mod telemetry;
 pub mod tool;
@@ -37,6 +38,7 @@ pub use memory::{
 };
 pub use noop::NoopAgent;
 pub use pii::{contains_pii, detect};
+pub use reporter::{GrpcReporter, NoopReporter, Reporter, SharedReporter};
 pub use sandbox::{LineStream, ProcessHandle, Sandbox, SandboxInstance, SandboxPolicy, SandboxRuntime, SandboxSpec};
 pub use telemetry::{StepTrace, Telemetry, now_ms};
 pub use tool::{Tool, ToolRegistry, ToolSpec};

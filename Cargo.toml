@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/hnsx-proto",
     "crates/hnsx-core",
     "crates/hnsx-sandbox",
     "crates/hnsx-adapter",
@@ -29,6 +30,7 @@ missing_panics_doc = "allow"
 
 [workspace.dependencies]
 # Internal
+hnsx-proto = { path = "crates/hnsx-proto" }
 hnsx-core = { path = "crates/hnsx-core" }
 hnsx-sandbox = { path = "crates/hnsx-sandbox" }
 hnsx-adapter = { path = "crates/hnsx-adapter" }
@@ -82,6 +84,21 @@ prost = "0.13"
 tokio-stream = "0.1"
 dashmap = "6"
 chrono = "0.4"
+
+# HTTP / Web UI gateway
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+opentelemetry = "0.27"
+opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
+opentelemetry-stdout = { version = "0.27", features = ["trace"] }
+tracing-opentelemetry = "0.30"
+metrics = "0.24"
+metrics-exporter-prometheus = "0.16"
 
 # Pattern matching for PII detection
 regex = "1"

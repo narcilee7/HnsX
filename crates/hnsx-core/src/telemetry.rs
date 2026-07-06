@@ -13,10 +13,12 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use hnsx_proto::v1::InvocationRecord;
 use serde::Serialize;
 use serde_json::Value;
 
 use crate::error::{Error, Result};
+use crate::reporter::{NoopReporter, Reporter};
 
 /// A single step's telemetry record, written as one JSON line.
 #[derive(Debug, Clone, Serialize)]
@@ -43,6 +45,7 @@ pub struct Telemetry {
 
 struct TelemetryInner {
     trace_dir: PathBuf,
+    reporter: Arc<dyn Reporter>,
 }
 
 impl Telemetry {
@@ -56,6 +59,14 @@ impl Telemetry {
     /// Build a telemetry sink rooted at a specific directory. Used by tests
     /// and by the CLI when an explicit `--trace-dir` is passed.
     pub fn with_dir(dir: PathBuf) -> Result<Self> {
+        Self::with_dir_and_reporter(dir, Arc::new(NoopReporter))
+    }
+
+    /// Build a telemetry sink with an explicit reporter (e.g. gRPC).
+    pub fn with_dir_and_reporter(
+        dir: PathBuf,
+        reporter: Arc<dyn Reporter>,
+    ) -> Result<Self> {
         create_dir_all(&dir).map_err(|e| {
             Error::Adapter(format!(
                 "failed to create trace directory {}: {e}",
@@ -63,17 +74,33 @@ impl Telemetry {
             ))
         })?;
         Ok(Self {
-            inner: Arc::new(Mutex::new(TelemetryInner { trace_dir: dir })),
+            inner: Arc::new(Mutex::new(TelemetryInner { trace_dir: dir, reporter })),
         })
     }
 
-    /// Append a step trace to `<dir>/<session_id>.jsonl`.
-    pub fn record_step(&self, trace: &StepTrace) -> Result<()> {
-        let inner = self
-            .inner
-            .lock()
-            .map_err(|_| Error::Adapter("telemetry mutex poisoned".into()))?;
-        let path = inner.trace_dir.join(format!("{}.jsonl", trace.session_id));
+    /// Replace the reporter.
+    pub fn set_reporter(&self,
+        reporter: Arc<dyn Reporter>,
+    ) {
+        if let Ok(mut inner) = self.inner.lock() {
+            inner.reporter = reporter;
+        }
+    }
+
+    /// Append a step trace to `<dir>/<session_id>.jsonl` and forward it to
+    /// the configured reporter.
+    pub fn record_step(&self,
+        trace: &StepTrace,
+    ) -> Result<()> {
+        let (path, reporter) = {
+            let inner = self
+                .inner
+                .lock()
+                .map_err(|_| Error::Adapter("telemetry mutex poisoned".into()))?;
+            let path = inner.trace_dir.join(format!("{}.jsonl", trace.session_id));
+            (path, inner.reporter.clone())
+        };
+
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -83,7 +110,32 @@ impl Telemetry {
             .map_err(|e| Error::Adapter(format!("serialise StepTrace: {e}")))?;
         writeln!(file, "{line}")
             .map_err(|e| Error::Adapter(format!("write {}: {e}", path.display())))?;
+
+        // Forward asynchronously without blocking the caller.
+        let trace = trace.clone();
+        tokio::spawn(async move {
+            if let Err(e) = reporter.report_trace(&trace).await {
+                tracing::warn!(error = %e, "failed to report trace");
+            }
+        });
         Ok(())
+    }
+
+    /// Report a completed invocation summary.
+    pub fn record_invocation(&self,
+        record: &InvocationRecord,
+    ) {
+        let reporter = self
+            .inner
+            .lock()
+            .map(|i| i.reporter.clone())
+            .unwrap_or_else(|_| Arc::new(NoopReporter));
+        let record = record.clone();
+        tokio::spawn(async move {
+            if let Err(e) = reporter.report_invocation(&record).await {
+                tracing::warn!(error = %e, "failed to report invocation");
+            }
+        });
     }
 
     /// The directory this sink writes to. Mainly for diagnostics.
@@ -120,8 +172,8 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
-    #[test]
-    fn new_creates_dir_and_appends_lines() {
+    #[tokio::test]
+    async fn new_creates_dir_and_appends_lines() {
         let dir = tempdir().expect("tempdir");
         let path = dir.path().to_path_buf();
         let t = Telemetry::with_dir(path.clone()).expect("with_dir");
@@ -152,8 +204,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn different_sessions_get_different_files() {
+    #[tokio::test]
+    async fn different_sessions_get_different_files() {
         let dir = tempdir().expect("tempdir");
         let t = Telemetry::with_dir(dir.path().to_path_buf()).expect("with_dir");
 

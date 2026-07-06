@@ -9,7 +9,7 @@ use std::sync::Arc;
 use rusqlite::{Connection, params};
 use tokio::sync::Mutex;
 
-use crate::proto::{DomainSpec, InstanceInfo, TraceRecord};
+use crate::proto::{DomainSpec, InstanceInfo, InvocationMetrics, InvocationRecord, TraceRecord};
 
 /// Central control-plane store backed by SQLite.
 ///
@@ -99,6 +99,20 @@ impl SqliteStore {
 
             CREATE INDEX IF NOT EXISTS idx_traces_domain_session
                 ON traces(domain_id, session_id);
+
+            CREATE TABLE IF NOT EXISTS invocations (
+                session_id TEXT PRIMARY KEY,
+                domain_id TEXT NOT NULL,
+                started_at_ms INTEGER NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                total_cost_usd REAL NOT NULL DEFAULT 0,
+                prompt_tokens INTEGER NOT NULL DEFAULT 0,
+                completion_tokens INTEGER NOT NULL DEFAULT 0
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_invocations_domain_id
+                ON invocations(domain_id);
+            
             ",
         )?;
         Ok(())
@@ -272,7 +286,71 @@ impl SqliteStore {
     // Telemetry
     // ------------------------------------------------------------------
 
-    /// Persist a trace record.
+    /// Persist an invocation summary.
+    pub async fn record_invocation(
+        &self,
+        record: &InvocationRecord,
+    ) -> anyhow::Result<()> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "INSERT INTO invocations
+                (session_id, domain_id, started_at_ms, duration_ms,
+                 total_cost_usd, prompt_tokens, completion_tokens)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(session_id) DO UPDATE SET
+                domain_id = excluded.domain_id,
+                started_at_ms = excluded.started_at_ms,
+                duration_ms = excluded.duration_ms,
+                total_cost_usd = excluded.total_cost_usd,
+                prompt_tokens = excluded.prompt_tokens,
+                completion_tokens = excluded.completion_tokens",
+            params![
+                &record.session_id,
+                &record.domain_id,
+                record.started_at_ms,
+                record.duration_ms,
+                record.total_cost_usd,
+                record.prompt_tokens,
+                record.completion_tokens,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Aggregate invocation metrics for a domain.
+    pub async fn query_invocation_metrics(
+        &self,
+        domain_id: &str,
+    ) -> anyhow::Result<InvocationMetrics> {
+        let conn = self.conn.lock().await;
+        let row: (i64, f64, i64, i64, Option<f64>) = conn.query_row(
+            "SELECT COUNT(*),
+                    COALESCE(SUM(total_cost_usd), 0),
+                    COALESCE(SUM(prompt_tokens), 0),
+                    COALESCE(SUM(completion_tokens), 0),
+                    AVG(duration_ms)
+             FROM invocations
+             WHERE domain_id = ?1",
+            params![domain_id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
+        )?;
+        Ok(InvocationMetrics {
+            domain_id: domain_id.to_owned(),
+            invocation_count: row.0,
+            total_cost_usd: row.1,
+            total_prompt_tokens: row.2,
+            total_completion_tokens: row.3,
+            avg_latency_ms: row.4.unwrap_or(0.0),
+        })
+    }
     pub async fn record_trace(&self, trace: &TraceRecord) -> anyhow::Result<()> {
         let conn = self.conn.lock().await;
         conn.execute(

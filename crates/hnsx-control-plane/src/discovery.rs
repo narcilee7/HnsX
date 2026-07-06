@@ -38,17 +38,20 @@ impl Discovery for DiscoveryService {
         &self,
         request: Request<DiscoverRequest>,
     ) -> Result<Response<InstanceList>, Status> {
-        let req = request.into_inner();
-        self.store
-            .expire_instances(self.heartbeat_timeout_ms)
-            .await
-            .map_err(|e| Status::internal(format!("failed to expire instances: {e}")))?;
-        let instances = self
-            .store
-            .discover_instances(&req.domain_id, &req.tags, &req.region)
-            .await
-            .map_err(|e| Status::internal(format!("discovery failed: {e}")))?;
-        Ok(Response::new(InstanceList { instances }))
+        crate::timed_grpc_async!("discover", async {
+            let req = request.into_inner();
+            self.store
+                .expire_instances(self.heartbeat_timeout_ms)
+                .await
+                .map_err(|e| Status::internal(format!("failed to expire instances: {e}")))?;
+            let instances = self
+                .store
+                .discover_instances(&req.domain_id, &req.tags, &req.region)
+                .await
+                .map_err(|e| Status::internal(format!("discovery failed: {e}")))?;
+            crate::metrics::set_instance_count(&req.domain_id, instances.len());
+            Ok(Response::new(InstanceList { instances }))
+        })
     }
 }
 

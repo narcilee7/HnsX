@@ -16,10 +16,13 @@ workspace = true
 
 [dependencies]
 hnsx-core = { workspace = true }
+hnsx-proto = { workspace = true }
+hnsx-adapter = { version = "0.1.0", path = "../hnsx-adapter" }
+hnsx-control-plane = { path = "../hnsx-control-plane" }
 clap = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 tokio = { version = "1", features = ["rt", "macros"] }
-hnsx-adapter = { version = "0.1.0", path = "../hnsx-adapter" }
+tonic = { workspace = true }
