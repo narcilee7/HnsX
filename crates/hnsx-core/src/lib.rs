@@ -22,6 +22,8 @@ pub mod telemetry;
 pub mod tool;
 pub mod workflow;
 
+pub mod package;
+
 pub use adapter::{Adapter, RuntimeContext};
 pub use agent::{
     AdapterConfig, Agent, AgentSchema, AgentSpec, HealthStatus, InvokeContext, ModelRef,
@@ -37,6 +39,7 @@ pub use memory::{
     RedisBackend, Session, SqliteBackend, Turn,
 };
 pub use noop::NoopAgent;
+pub use package::{PackageFile, PackageManifest, pack_domain, unpack_domain};
 pub use pii::{contains_pii, detect};
 pub use reporter::{GrpcReporter, NoopReporter, Reporter, SharedReporter};
 pub use sandbox::{LineStream, ProcessHandle, Sandbox, SandboxInstance, SandboxPolicy, SandboxRuntime, SandboxSpec};

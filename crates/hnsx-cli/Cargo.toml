@@ -24,5 +24,11 @@ anyhow = { workspace = true }
 futures = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
-tokio = { version = "1", features = ["rt", "macros"] }
+tokio = { version = "1", features = ["rt", "macros", "time", "process", "fs", "signal"] }
+tokio-stream = { workspace = true }
+serde = { workspace = true }
+uuid = { workspace = true }
+tower = { workspace = true }
+tempfile = "3"
+hostname = "0.4"
 tonic = { workspace = true }

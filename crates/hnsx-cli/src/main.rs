@@ -7,6 +7,8 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 mod commands;
+mod deploy;
+mod runtime;
 
 #[derive(Parser, Debug)]
 #[command(
