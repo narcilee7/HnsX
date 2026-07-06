@@ -1,5 +1,10 @@
-//! Sandbox trait and policy types. Sandbox is a first-class concept in HnsX,
-//! not a side effect of an Adapter.
+//! Sandbox trait and policy types. Sandbox is a first-class, cross-platform
+//! concept in HnsX, not a side effect of an Adapter.
+//!
+//! The contract is: a `SandboxSpec` declares *how strong* the isolation should
+//! be (`SandboxPolicy`) and optionally *which backend runtime* should provide
+//! it (`SandboxRuntime`). The actual implementation is selected by the
+//! platform-specific crate (`hnsx-sandbox`) or by the cloud deployment target.
 
 use std::collections::HashMap;
 
@@ -33,23 +38,55 @@ pub struct ProcessHandle {
 pub struct SandboxSpec {
     #[serde(default = "default_policy")]
     pub policy: SandboxPolicy,
+    /// Optional backend runtime hint. `Auto` lets the platform pick the best
+    /// available implementation for the requested policy.
+    #[serde(default)]
+    pub runtime: SandboxRuntime,
 }
 
 fn default_policy() -> SandboxPolicy {
     SandboxPolicy::None
 }
 
+/// Isolation strength. This is platform-neutral: the same `SandboxPolicy`
+/// produces equivalent *security outcomes* on Linux, macOS, Windows, or in the
+/// cloud, even though the underlying technology differs.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SandboxPolicy {
     /// No isolation; appropriate for pure network calls (OpenAI, Anthropic).
     None,
-    /// Process-level isolation.
+    /// Process-level isolation (least-privilege process tokens, seatbelt,
+    /// job objects, rlimits, etc.).
     Process,
-    /// Linux namespace isolation. Used by Claude Code CLI.
+    /// OS-level namespace / seatbelt / job-object isolation.
     Namespace,
-    /// Container-level isolation.
+    /// Container-level isolation (Docker, containerd, podman, etc.).
     Container,
-    /// VM-level isolation.
+    /// VM-level isolation (Firecracker, Kata, Cloud Hypervisor, etc.).
     Vm,
+}
+
+/// Concrete backend runtime that provides the isolation. `Auto` is the default
+/// and maps a `SandboxPolicy` to the best local or cloud backend.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum SandboxRuntime {
+    /// Pick the best available backend for the current platform / deployment.
+    #[default]
+    Auto,
+    /// No backend; equivalent to `SandboxPolicy::None`.
+    None,
+    /// Process-level hardening available on every OS.
+    Process,
+    /// Linux namespaces + landlock + seccomp + cgroups.
+    LinuxNamespace,
+    /// macOS seatbelt / sandbox profile.
+    MacosSeatbelt,
+    /// Windows job object + ACL / sandbox.
+    WindowsJobObject,
+    /// OCI container runtime (Docker, containerd, podman, ...).
+    Container,
+    /// Micro-VM (Firecracker, Kata, Cloud Hypervisor, ...).
+    MicroVm,
 }

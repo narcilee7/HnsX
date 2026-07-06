@@ -17,6 +17,7 @@ pub mod memory;
 pub mod noop;
 pub mod sandbox;
 pub mod telemetry;
+pub mod tool;
 pub mod workflow;
 
 pub use adapter::{Adapter, RuntimeContext};
@@ -33,3 +34,4 @@ pub use memory::{InMemoryBackend, MemoryBackend, MemoryConfig, Message, Session,
 pub use noop::NoopAgent;
 pub use sandbox::{ProcessHandle, Sandbox, SandboxInstance, SandboxPolicy, SandboxSpec};
 pub use telemetry::{StepTrace, Telemetry, now_ms};
+pub use tool::{Tool, ToolRegistry, ToolSpec};
