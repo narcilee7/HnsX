@@ -19,7 +19,7 @@ futures = { workspace = true }
 genai = { workspace = true }
 serde_json = { workspace = true }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
-tracing = "0.1"
+hnsx-tool = { path = "../hnsx-tool" }
 
 [dev-dependencies]
 wiremock = { workspace = true }
