@@ -27,7 +27,11 @@ impl NoopAgent {
 
 #[async_trait]
 impl Agent for NoopAgent {
-    async fn invoke(&self, input: Value, _ctx: InvokeContext) -> Result<BoxStream<'static, Chunk>> {
+    #[tracing::instrument(skip(self, _ctx), level = "debug")]
+    async fn invoke(&self,
+        input: Value,
+        _ctx: InvokeContext,
+    ) -> Result<BoxStream<'static, Chunk>> {
         let text = format!("noop: {}", input);
         let stream = stream::once(async move { Chunk::text(text) });
         Ok(Box::pin(stream))

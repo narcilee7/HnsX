@@ -27,39 +27,45 @@ impl Registry for RegistryService {
         &self,
         request: Request<DomainSpec>,
     ) -> Result<Response<DomainRef>, Status> {
-        let spec = request.into_inner();
-        self.store
-            .register_domain(&spec)
-            .await
-            .map_err(|e| Status::internal(format!("failed to register domain: {e}")))?;
-        Ok(Response::new(DomainRef {
-            id: spec.id,
-            version: spec.version,
-        }))
+        crate::timed_grpc_async!("register_domain", async {
+            let spec = request.into_inner();
+            self.store
+                .register_domain(&spec)
+                .await
+                .map_err(|e| Status::internal(format!("failed to register domain: {e}")))?;
+            Ok(Response::new(DomainRef {
+                id: spec.id,
+                version: spec.version,
+            }))
+        })
     }
 
     async fn unregister_domain(
         &self,
         request: Request<DomainRef>,
     ) -> Result<Response<Empty>, Status> {
-        let req = request.into_inner();
-        self.store
-            .unregister_domain(&req.id, &req.version)
-            .await
-            .map_err(|e| Status::internal(format!("failed to unregister domain: {e}")))?;
-        Ok(Response::new(Empty {}))
+        crate::timed_grpc_async!("unregister_domain", async {
+            let req = request.into_inner();
+            self.store
+                .unregister_domain(&req.id, &req.version)
+                .await
+                .map_err(|e| Status::internal(format!("failed to unregister domain: {e}")))?;
+            Ok(Response::new(Empty {}))
+        })
     }
 
     async fn list_domains(
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<DomainList>, Status> {
-        let domains = self
-            .store
-            .list_domains()
-            .await
-            .map_err(|e| Status::internal(format!("failed to list domains: {e}")))?;
-        Ok(Response::new(DomainList { domains }))
+        crate::timed_grpc_async!("list_domains", async {
+            let domains = self
+                .store
+                .list_domains()
+                .await
+                .map_err(|e| Status::internal(format!("failed to list domains: {e}")))?;
+            Ok(Response::new(DomainList { domains }))
+        })
     }
 }
 

@@ -36,8 +36,8 @@ workflow:
         prev: "${steps.s1.output}"
 "#;
 
-#[test]
-fn workflow_emits_one_trace_line_per_step() {
+#[tokio::test]
+async fn workflow_emits_one_trace_line_per_step() {
     let dir = tempdir().expect("tempdir");
     let telemetry = Arc::new(Telemetry::with_dir(dir.path().to_path_buf()).expect("with_dir"));
 
@@ -47,9 +47,9 @@ fn workflow_emits_one_trace_line_per_step() {
         .expect("load");
 
     // Drain the stream.
-    let stream = futures::executor::block_on(domain.invoke(json!({}))).expect("invoke");
+    let stream = domain.invoke(json!({})).await.expect("invoke");
     let mut s = Box::pin(stream);
-    while let Some(chunk) = futures::executor::block_on(s.next()) {
+    while let Some(chunk) = s.next().await {
         if let Chunk::Error(e) = chunk {
             panic!("unexpected error: {e}");
         }

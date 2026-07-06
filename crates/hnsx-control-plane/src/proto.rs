@@ -1,7 +1,3 @@
-//! Generated gRPC types and service stubs.
+//! Generated gRPC types and service stubs (re-exported from `hnsx-proto`).
 
-pub mod v1 {
-    include!(concat!(env!("OUT_DIR"), "/hnsx.v1.rs"));
-}
-
-pub use v1::*;
+pub use hnsx_proto::*;

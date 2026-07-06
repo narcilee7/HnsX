@@ -31,62 +31,71 @@ impl Scheduler for SchedulerService {
         &self,
         request: Request<InstanceInfo>,
     ) -> Result<Response<InstanceRef>, Status> {
-        let info = request.into_inner();
-        self.store
-            .register_instance(&info)
-            .await
-            .map_err(|e| Status::internal(format!("failed to register instance: {e}")))?;
-        Ok(Response::new(InstanceRef {
-            instance_id: info.instance_id,
-        }))
+        crate::timed_grpc_async!("register_instance", async {
+            let info = request.into_inner();
+            self.store
+                .register_instance(&info)
+                .await
+                .map_err(|e| Status::internal(format!("failed to register instance: {e}")))?;
+            Ok(Response::new(InstanceRef {
+                instance_id: info.instance_id,
+            }))
+        })
     }
 
     async fn heartbeat(
         &self,
         request: Request<InstanceRef>,
     ) -> Result<Response<Empty>, Status> {
-        let req = request.into_inner();
-        let ok = self
-            .store
-            .heartbeat(&req.instance_id)
-            .await
-            .map_err(|e| Status::internal(format!("heartbeat failed: {e}")))?;
-        if !ok {
-            return Err(Status::not_found(format!(
-                "instance {} not registered",
-                req.instance_id
-            )));
-        }
-        Ok(Response::new(Empty {}))
+        crate::timed_grpc_async!("heartbeat", async {
+            let req = request.into_inner();
+            let ok = self
+                .store
+                .heartbeat(&req.instance_id)
+                .await
+                .map_err(|e| Status::internal(format!("heartbeat failed: {e}")))?;
+            if !ok {
+                return Err(Status::not_found(format!(
+                    "instance {} not registered",
+                    req.instance_id
+                )));
+            }
+            Ok(Response::new(Empty {}))
+        })
     }
 
     async fn unregister_instance(
         &self,
         request: Request<InstanceRef>,
     ) -> Result<Response<Empty>, Status> {
-        let req = request.into_inner();
-        self.store
-            .unregister_instance(&req.instance_id)
-            .await
-            .map_err(|e| Status::internal(format!("failed to unregister instance: {e}")))?;
-        Ok(Response::new(Empty {}))
+        crate::timed_grpc_async!("unregister_instance", async {
+            let req = request.into_inner();
+            self.store
+                .unregister_instance(&req.instance_id)
+                .await
+                .map_err(|e| Status::internal(format!("failed to unregister instance: {e}")))?;
+            Ok(Response::new(Empty {}))
+        })
     }
 
     async fn list_instances(
         &self,
         request: Request<DomainRef>,
     ) -> Result<Response<InstanceList>, Status> {
-        let req = request.into_inner();
-        self.store
-            .expire_instances(self.heartbeat_timeout_ms)
-            .await
-            .map_err(|e| Status::internal(format!("failed to expire instances: {e}")))?;
-        let instances = self
-            .store
-            .list_instances(&req.id)
-            .await
-            .map_err(|e| Status::internal(format!("failed to list instances: {e}")))?;
-        Ok(Response::new(InstanceList { instances }))
+        crate::timed_grpc_async!("list_instances", async {
+            let req = request.into_inner();
+            self.store
+                .expire_instances(self.heartbeat_timeout_ms)
+                .await
+                .map_err(|e| Status::internal(format!("failed to expire instances: {e}")))?;
+            let instances = self
+                .store
+                .list_instances(&req.id)
+                .await
+                .map_err(|e| Status::internal(format!("failed to list instances: {e}")))?;
+            crate::metrics::set_instance_count(&req.id, instances.len());
+            Ok(Response::new(InstanceList { instances }))
+        })
     }
 }
 
