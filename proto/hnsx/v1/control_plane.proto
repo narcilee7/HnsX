@@ -1,0 +1,75 @@
+syntax = "proto3";
+package hnsx.v1;
+
+service Registry {
+  rpc RegisterDomain(DomainSpec) returns (DomainRef);
+  rpc UnregisterDomain(DomainRef) returns (Empty);
+  rpc ListDomains(Empty) returns (DomainList);
+}
+
+service Scheduler {
+  rpc RegisterInstance(InstanceInfo) returns (InstanceRef);
+  rpc Heartbeat(InstanceRef) returns (Empty);
+  rpc UnregisterInstance(InstanceRef) returns (Empty);
+  rpc ListInstances(DomainRef) returns (InstanceList);
+}
+
+service Discovery {
+  rpc Discover(DiscoverRequest) returns (InstanceList);
+}
+
+service Telemetry {
+  rpc RecordTrace(TraceRecord) returns (Empty);
+  rpc QueryTraces(QueryTraceRequest) returns (TraceList);
+}
+
+message DomainSpec {
+  string id = 1;
+  string version = 2;
+  string yaml_body = 3;
+}
+
+message DomainRef {
+  string id = 1;
+  string version = 2;
+}
+
+message DomainList { repeated DomainSpec domains = 1; }
+
+message InstanceInfo {
+  string instance_id = 1;
+  string domain_id = 2;
+  repeated string tags = 3;
+  string region = 4;
+  repeated string capabilities = 5;
+}
+
+message InstanceRef { string instance_id = 1; }
+
+message InstanceList { repeated InstanceInfo instances = 1; }
+
+message DiscoverRequest {
+  string domain_id = 1;
+  repeated string tags = 2;
+  string region = 3;
+}
+
+message TraceRecord {
+  string session_id = 1;
+  string domain_id = 2;
+  string step_id = 3;
+  string agent_id = 4;
+  int64 started_at_ms = 5;
+  int64 duration_ms = 6;
+  string input = 7;
+  string output = 8;
+}
+
+message QueryTraceRequest {
+  string domain_id = 1;
+  string session_id = 2;
+}
+
+message TraceList { repeated TraceRecord traces = 1; }
+
+message Empty {}
