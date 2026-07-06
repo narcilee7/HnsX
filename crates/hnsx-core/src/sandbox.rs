@@ -7,17 +7,26 @@
 //! platform-specific crate (`hnsx-sandbox`) or by the cloud deployment target.
 
 use std::collections::HashMap;
+use std::process::ExitStatus;
 
 use async_trait::async_trait;
+use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 
 use crate::chunk::FileChange;
 use crate::error::Result;
 
+/// A stream of lines read from a sandboxed process.
+pub type LineStream = BoxStream<'static, Result<String>>;
+
 #[async_trait]
 pub trait Sandbox: Send + Sync {
     async fn create(&self, spec: &SandboxSpec) -> Result<SandboxInstance>;
-    async fn execute(&self, cmd: &str, env: &HashMap<String, String>) -> Result<ProcessHandle>;
+    async fn execute(
+        &self,
+        cmd: &str,
+        env: &HashMap<String, String>,
+    ) -> Result<Box<dyn ProcessHandle>>;
     async fn read_file(&self, path: &str) -> Result<Vec<u8>>;
     async fn write_file(&self, path: &str, content: &[u8]) -> Result<()>;
     async fn list_changes(&self) -> Result<Vec<FileChange>>;
@@ -29,9 +38,19 @@ pub struct SandboxInstance {
     pub id: String,
 }
 
-#[derive(Debug)]
-pub struct ProcessHandle {
-    _private: (),
+/// Handle to a running sandboxed process. Backends return their own
+/// implementation (e.g. a `tokio::process::Child` wrapper). Callers stream
+/// stdout/stderr, can kill the process, and can wait for exit.
+#[async_trait]
+pub trait ProcessHandle: Send + Sync {
+    /// Stream of lines from the process's stdout.
+    fn stdout(&self) -> LineStream;
+    /// Stream of lines from the process's stderr.
+    fn stderr(&self) -> LineStream;
+    /// Send SIGKILL (or platform equivalent) to the process.
+    async fn kill(&self) -> Result<()>;
+    /// Wait for the process to exit and return its status.
+    async fn wait(&self) -> Result<ExitStatus>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

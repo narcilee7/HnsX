@@ -193,6 +193,10 @@ impl WorkflowEngine {
                 let mut result = StepResult::default();
                 while let Some(chunk) = stream.next().await {
                     if let Chunk::Text(t) = &chunk {
+                        if crate::pii::contains_pii(t) {
+                            yield Chunk::error("PII detected in agent output; stream halted".to_string());
+                            return;
+                        }
                         result.output.push_str(t);
                     }
                     result.chunks.push(chunk.clone());

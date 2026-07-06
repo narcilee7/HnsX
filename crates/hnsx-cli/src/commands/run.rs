@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use clap::{Args, ValueEnum};
 use futures::StreamExt;
 
-use hnsx_adapter::GenaiAgentFactory;
+use hnsx_adapter::HnsxAgentFactory;
 use hnsx_core::DomainLoader;
 use hnsx_core::agent_factory::AgentFactory;
 use hnsx_core::chunk::Chunk;
@@ -12,9 +12,12 @@ use hnsx_core::telemetry::Telemetry;
 
 #[derive(ValueEnum, Clone, Copy, Debug, Default)]
 pub enum AdapterKind {
-    /// Use the genai-backed factory (OpenAI / Anthropic / Ollama / Custom).
-    /// Reads API keys from env (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, ...).
+    /// Use the HnsX factory (genai for HTTP providers + sandboxed Claude Code
+    /// CLI for `provider: claude-code`).
     #[default]
+    Hnsx,
+    /// Use the genai-backed factory only (OpenAI / Anthropic / Ollama /
+    /// Custom). Reads API keys from env.
     Genai,
     /// Use the noop factory: every agent echoes its input. No network, no
     /// API keys needed. Useful for CI and local end-to-end smoke tests.
@@ -29,13 +32,13 @@ pub struct RunArgs {
     /// JSON trigger payload (defaults to `{}`)
     #[arg(long, default_value = "{}")]
     pub trigger: String,
-    /// Which AgentFactory to use. Default: `genai`.
-    #[arg(long, value_enum, default_value_t = AdapterKind::Genai)]
+    /// Which AgentFactory to use. Default: `hnsx`.
+    #[arg(long, value_enum, default_value_t = AdapterKind::Hnsx)]
     pub adapter: AdapterKind,
 }
 
 pub fn exec(args: RunArgs) -> Result<()> {
-    let rt = tokio::runtime::Builder::new_current_thread()
+    let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .context("failed to build tokio runtime")?;
@@ -45,7 +48,8 @@ pub fn exec(args: RunArgs) -> Result<()> {
 
 async fn run(args: RunArgs) -> Result<()> {
     let factory: Arc<dyn AgentFactory> = match args.adapter {
-        AdapterKind::Genai => Arc::new(GenaiAgentFactory::new()),
+        AdapterKind::Hnsx => Arc::new(HnsxAgentFactory::new()),
+        AdapterKind::Genai => Arc::new(hnsx_adapter::GenaiAgentFactory::new()),
         AdapterKind::Noop => Arc::new(hnsx_core::NoopFactory),
     };
 
