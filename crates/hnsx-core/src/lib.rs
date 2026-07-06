@@ -31,7 +31,10 @@ pub use chunk::{Artifact, Chunk, FileChange, FileChangeKind};
 pub use domain::{Domain, DomainSpec, Step, Workflow};
 pub use error::{Error, Result};
 pub use loader::{DomainLoader, LoadedDomain};
-pub use memory::{InMemoryBackend, MemoryBackend, MemoryConfig, Message, Session, Turn};
+pub use memory::{
+    InMemoryBackend, MemoryBackend, MemoryBackendFactory, MemoryConfig, Message, PostgresBackend,
+    RedisBackend, Session, SqliteBackend, Turn,
+};
 pub use noop::NoopAgent;
 pub use pii::{contains_pii, detect};
 pub use sandbox::{LineStream, ProcessHandle, Sandbox, SandboxInstance, SandboxPolicy, SandboxRuntime, SandboxSpec};

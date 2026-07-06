@@ -68,8 +68,12 @@ wiremock = "0.6"
 # HTTP client for the HTTP tool
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
-# SQLite for the SQL tool
+# SQLite for the SQL tool and SQLite memory backend
 rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Persistent memory backends (Phase 4)
+redis = { version = "0.29", features = ["tokio-comp"] }
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1"] }
 
 # Pattern matching for PII detection
 regex = "1"
