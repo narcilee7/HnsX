@@ -7,6 +7,9 @@ use hnsx_core::Sandbox;
 
 use crate::backend::{none::NoneBackend, process::ProcessBackend};
 
+#[cfg(target_os = "linux")]
+use crate::backend::linux::LinuxNamespaceBackend;
+
 #[derive(Debug, Clone, Default)]
 pub struct SandboxFactory;
 
@@ -29,10 +32,11 @@ impl SandboxFactory {
             }
             SandboxRuntime::Process | SandboxRuntime::Auto => Arc::new(ProcessBackend),
             #[cfg(target_os = "linux")]
+            SandboxRuntime::LinuxNamespace => Arc::new(LinuxNamespaceBackend::new()),
+            #[cfg(not(target_os = "linux"))]
             SandboxRuntime::LinuxNamespace => {
-                // TODO: wire up hnsx_core::Error properly once linux backend
-                // implements Sandbox.
-                Arc::new(ProcessBackend)
+                // Fall back to process-level hardening on non-Linux platforms.
+                Arc::new(ProcessBackend::new())
             }
             // Fallback to process-level hardening when a stronger backend is
             // requested but not compiled in for this platform.

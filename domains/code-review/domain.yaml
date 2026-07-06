@@ -19,8 +19,8 @@ agents:
   - id: summarizer
     description: Compresses findings into an executive summary.
     model:
-      provider: anthropic
-      model: claude-haiku-4-5
+      provider: claude-code
+      model: sonnet
     adapter:
       timeout_seconds: 30
     prompt:
@@ -32,6 +32,8 @@ workflow:
   steps:
     - id: review
       agent: reviewer
+      input:
+        diff: "${trigger.diff}"
       output: findings
     - id: summarize
       agent: summarizer

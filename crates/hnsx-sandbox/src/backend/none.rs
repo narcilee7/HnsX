@@ -22,7 +22,11 @@ impl Sandbox for NoneBackend {
         })
     }
 
-    async fn execute(&self, _cmd: &str, _env: &HashMap<String, String>) -> Result<ProcessHandle> {
+    async fn execute(
+        &self,
+        _cmd: &str,
+        _env: &HashMap<String, String>,
+    ) -> Result<Box<dyn ProcessHandle>> {
         Err(Error::Unimplemented("NoneBackend::execute"))
     }
 
