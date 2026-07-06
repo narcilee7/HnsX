@@ -20,6 +20,7 @@ use crate::agent_factory::{AgentFactory, NoopFactory};
 use crate::chunk::Chunk;
 use crate::domain::{Domain, DomainSpec};
 use crate::error::{Error, Result};
+use crate::telemetry::Telemetry;
 use crate::workflow::WorkflowEngine;
 
 /// A loaded (parsed + validated) domain.
@@ -38,8 +39,17 @@ pub struct LoadedDomain {
 impl LoadedDomain {
     /// Build a `LoadedDomain` from a parsed spec, validating it first.
     pub fn new(spec: DomainSpec, factory: &Arc<dyn AgentFactory>) -> Result<Self> {
+        Self::new_with_telemetry(spec, factory, None)
+    }
+
+    /// Same as [`new`](Self::new) but with an optional telemetry sink.
+    pub fn new_with_telemetry(
+        spec: DomainSpec,
+        factory: &Arc<dyn AgentFactory>,
+        telemetry: Option<Arc<Telemetry>>,
+    ) -> Result<Self> {
         let agents = validate(&spec)?;
-        let engine = build_engine(&spec, &agents, factory)?;
+        let engine = build_engine(&spec, &agents, factory, telemetry)?;
         Ok(Self {
             spec,
             agents,
@@ -92,6 +102,7 @@ impl Domain for LoadedDomain {
 /// drives real LLM calls.
 pub struct DomainLoader {
     factory: Arc<dyn AgentFactory>,
+    telemetry: Option<Arc<Telemetry>>,
 }
 
 impl Default for DomainLoader {
@@ -104,12 +115,23 @@ impl DomainLoader {
     pub fn new() -> Self {
         Self {
             factory: Arc::new(NoopFactory),
+            telemetry: None,
         }
     }
 
     /// Construct a loader that uses `factory` to materialize agents.
     pub fn with_factory(factory: Arc<dyn AgentFactory>) -> Self {
-        Self { factory }
+        Self {
+            factory,
+            telemetry: None,
+        }
+    }
+
+    /// Attach a telemetry sink. Subsequent `from_*` calls pass it to the
+    /// resulting `LoadedDomain` so every `invoke` writes per-step traces.
+    pub fn with_telemetry(mut self, telemetry: Arc<Telemetry>) -> Self {
+        self.telemetry = Some(telemetry);
+        self
     }
 
     /// Load a domain from a YAML file on disk.
@@ -126,7 +148,7 @@ impl DomainLoader {
     }
 
     fn finish(&self, spec: DomainSpec) -> Result<Arc<dyn Domain>> {
-        let domain = LoadedDomain::new(spec, &self.factory)?;
+        let domain = LoadedDomain::new_with_telemetry(spec, &self.factory, self.telemetry.clone())?;
         Ok(Arc::new(domain))
     }
 }
@@ -187,12 +209,18 @@ fn build_engine(
     spec: &DomainSpec,
     agents: &HashMap<String, AgentSpec>,
     factory: &Arc<dyn AgentFactory>,
+    telemetry: Option<Arc<Telemetry>>,
 ) -> Result<WorkflowEngine> {
     let mut engine_agents: HashMap<String, Arc<dyn Agent>> = HashMap::with_capacity(agents.len());
     for (id, agent_spec) in agents {
         engine_agents.insert(id.clone(), factory.create(agent_spec)?);
     }
-    WorkflowEngine::new(spec.workflow.clone(), engine_agents)
+    WorkflowEngine::new_with_telemetry(
+        spec.workflow.clone(),
+        engine_agents,
+        telemetry,
+        spec.id.clone(),
+    )
 }
 
 #[cfg(test)]

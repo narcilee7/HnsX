@@ -59,6 +59,9 @@ petgraph = "0.6"
 # Multi-provider LLM (OpenAI, Anthropic, Ollama, custom OpenAI-compatible)
 genai = "0.7.0-beta.9"
 
+# Session / invocation ids
+uuid = { version = "1", features = ["v4"] }
+
 # Test-only: mock HTTP for hermetic tests of LLM adapters
 wiremock = "0.6"
 

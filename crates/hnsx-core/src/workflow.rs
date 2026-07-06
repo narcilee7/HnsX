@@ -22,11 +22,13 @@ use futures::stream::{BoxStream, StreamExt};
 use petgraph::algo::toposort;
 use petgraph::graph::{DiGraph, NodeIndex};
 use serde_json::Value;
+use uuid::Uuid;
 
 use crate::agent::{Agent, InvokeContext};
 use crate::chunk::Chunk;
 use crate::domain::{Step, Workflow};
 use crate::error::{Error, Result};
+use crate::telemetry::{StepTrace, Telemetry, now_ms};
 
 /// Outcome of a single step: concatenated text + all chunks received.
 #[derive(Debug, Default, Clone)]
@@ -67,6 +69,12 @@ pub struct WorkflowEngine {
     /// against duplicates (the loader already rejects those).
     step_index: HashMap<String, usize>,
     entry: String,
+    /// Optional telemetry sink. When present, every completed step is
+    /// recorded as one JSONL line under `$session_id.jsonl`. 1.7.
+    telemetry: Option<Arc<Telemetry>>,
+    /// Domain id attached to every StepTrace produced by this engine.
+    /// 1.7.
+    domain_id: String,
 }
 
 impl WorkflowEngine {
@@ -76,6 +84,17 @@ impl WorkflowEngine {
     /// references a known step, and that the implied graph is acyclic
     /// (linear, so trivially true for 1.2 but enforced via petgraph).
     pub fn new(workflow: Workflow, agents: HashMap<String, Arc<dyn Agent>>) -> Result<Self> {
+        Self::new_with_telemetry(workflow, agents, None, String::new())
+    }
+
+    /// Build an engine that also writes per-step traces to `telemetry`.
+    /// `domain_id` is attached to every record.
+    pub fn new_with_telemetry(
+        workflow: Workflow,
+        agents: HashMap<String, Arc<dyn Agent>>,
+        telemetry: Option<Arc<Telemetry>>,
+        domain_id: String,
+    ) -> Result<Self> {
         if workflow.steps.is_empty() {
             return Err(Error::InvalidSpec("workflow has no steps".into()));
         }
@@ -110,12 +129,16 @@ impl WorkflowEngine {
             agents,
             step_index,
             entry: workflow.entry,
+            telemetry,
+            domain_id,
         })
     }
 
     /// Execute the workflow against `trigger`, returning a chunk stream.
     pub fn execute(&self, trigger: Value) -> BoxStream<'static, Chunk> {
         let engine = self.clone();
+        // Single session id per execution, attached to every step trace.
+        let session_id = Uuid::new_v4().to_string();
         Box::pin(stream! {
             let mut ctx = ExecutionContext::new(trigger, engine.workflow_variables());
             let mut current_index = engine.step_index[&engine.entry];
@@ -153,12 +176,13 @@ impl WorkflowEngine {
 
                 // 4. Invoke agent and stream chunks.
                 let invoke_ctx = InvokeContext {
-                    session_id: String::new(),
-                    domain_id: String::new(),
+                    session_id: session_id.clone(),
+                    domain_id: engine.domain_id.clone(),
                     agent_id: step.agent.clone(),
                 };
 
-                let mut stream = match agent.invoke(input, invoke_ctx).await {
+                let started_at_ms = now_ms();
+                let mut stream = match agent.invoke(input.clone(), invoke_ctx).await {
                     Ok(s) => s,
                     Err(e) => {
                         yield Chunk::error(format!("step '{}' invoke failed: {e}", step.id));
@@ -174,6 +198,25 @@ impl WorkflowEngine {
                     result.chunks.push(chunk.clone());
                     yield chunk;
                 }
+
+                // 5. Emit telemetry (1.7): one record per completed step.
+                if let Some(tel) = engine.telemetry.as_ref() {
+                    let trace = StepTrace {
+                        session_id: session_id.clone(),
+                        domain_id: engine.domain_id.clone(),
+                        step_id: step.id.clone(),
+                        agent_id: step.agent.clone(),
+                        started_at_ms,
+                        duration_ms: now_ms().saturating_sub(started_at_ms),
+                        input: input.clone(),
+                        output: result.output.clone(),
+                    };
+                    if let Err(e) = tel.record_step(&trace) {
+                        yield Chunk::error(format!("telemetry record failed: {e}"));
+                        return;
+                    }
+                }
+
                 ctx.steps.insert(step.id.clone(), result);
                 current_index += 1;
             }
