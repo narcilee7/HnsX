@@ -10,7 +10,7 @@ pub mod claude_code;
 pub mod codex;
 pub mod custom;
 pub mod genai;
-pub mod ollama;
+pub mod tools;
 pub mod openai;
 
 pub use claude_code::ClaudeCodeAgent;

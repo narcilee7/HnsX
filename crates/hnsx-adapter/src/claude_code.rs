@@ -166,7 +166,6 @@ impl Agent for ClaudeCodeAgent {
 mod tests {
     use super::*;
     use hnsx_core::agent::{AgentSpec, ModelRef, PromptTemplate, Provider};
-    use hnsx_core::sandbox::SandboxInstance;
     use serde_json::json;
 
     fn dummy_spec() -> AgentSpec {

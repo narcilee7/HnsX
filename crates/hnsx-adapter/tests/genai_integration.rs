@@ -10,6 +10,7 @@ use genai::{Client, ServiceTarget};
 use hnsx_adapter::GenaiAgent;
 use hnsx_core::agent::{Agent, InvokeContext};
 use hnsx_core::chunk::Chunk;
+use hnsx_core::tool::ToolRegistry;
 use serde_json::json;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -69,6 +70,7 @@ async fn genai_agent_streams_text_chunks() {
         client,
         "openai::gpt-4o-mini".into(),
         "you are a test".into(),
+        ToolRegistry::new(),
     );
 
     let mut stream = agent
@@ -115,6 +117,7 @@ async fn genai_agent_streams_anthropic_response() {
         client,
         "anthropic::claude-haiku-4-5".into(),
         "you are a test".into(),
+        ToolRegistry::new(),
     );
 
     let mut stream = agent
@@ -156,7 +159,7 @@ async fn genai_agent_surfaces_error_on_http_failure() {
         .await;
 
     let client = client_pointing_at(format!("{}/v1/", server.uri()));
-    let agent = GenaiAgent::new(client, "openai::gpt-4o-mini".into(), "test".into());
+    let agent = GenaiAgent::new(client, "openai::gpt-4o-mini".into(), "test".into(), ToolRegistry::new());
 
     // genai's openai adapter surfaces HTTP errors either at the first
     // await (return Err from exec_chat_stream) or as an error event in
