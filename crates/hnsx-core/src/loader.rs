@@ -15,25 +15,36 @@ use async_trait::async_trait;
 use futures::stream::BoxStream;
 use serde_json::Value;
 
-use crate::agent::AgentSpec;
+use crate::agent::{Agent, AgentSpec};
 use crate::chunk::Chunk;
 use crate::domain::{Domain, DomainSpec};
 use crate::error::{Error, Result};
+use crate::noop::NoopAgent;
+use crate::workflow::WorkflowEngine;
 
 /// A loaded (parsed + validated) domain.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LoadedDomain {
     spec: DomainSpec,
     /// Agents indexed by id. The full `Arc<dyn Agent>` impls are constructed
     /// once the adapter factory exists (Phase 1.4+).
     agents: HashMap<String, AgentSpec>,
+    /// Pre-built workflow engine, holding one noop agent per spec agent.
+    /// Lands in Phase 1.2 so `Domain::invoke` can run end-to-end against
+    /// stubbed agents; real adapters swap in at Phase 1.4+.
+    engine: WorkflowEngine,
 }
 
 impl LoadedDomain {
     /// Build a `LoadedDomain` from a parsed spec, validating it first.
     pub fn new(spec: DomainSpec) -> Result<Self> {
         let agents = validate(&spec)?;
-        Ok(Self { spec, agents })
+        let engine = build_engine(&spec, &agents)?;
+        Ok(Self {
+            spec,
+            agents,
+            engine,
+        })
     }
 
     /// Borrow the agent spec for the given id, if any.
@@ -49,18 +60,18 @@ impl LoadedDomain {
 
 #[async_trait]
 impl Domain for LoadedDomain {
-    async fn invoke(&self, _trigger: Value) -> Result<BoxStream<'static, Chunk>> {
-        // Real execution lands in Phase 1.2 (workflow engine) once adapters
-        // are wired up in Phase 1.4+.
-        Err(Error::Unimplemented(
-            "Domain::invoke lands in Phase 1.2 (workflow engine)",
-        ))
+    async fn invoke(&self, trigger: Value) -> Result<BoxStream<'static, Chunk>> {
+        // Each chunk is flattened into the stream, errors short-circuit the run.
+        let inner = self.engine.execute(trigger);
+        Ok(Box::pin(inner))
     }
 
-    fn get_agent(&self, _id: &str) -> Option<Arc<dyn crate::agent::Agent>> {
+    fn get_agent(&self, id: &str) -> Option<Arc<dyn Agent>> {
         // Real Agent impls (wrapping an Adapter + Sandbox) are constructed by
         // the loader once `hnsx-adapter` and `hnsx-sandbox` ship their first
-        // implementations. Until then, callers should use `agent_spec(id)`.
+        // implementations. For 1.2 the engine uses noop agents internally;
+        // we do not expose them via this method yet.
+        let _ = id;
         None
     }
 
@@ -153,6 +164,18 @@ fn validate(spec: &DomainSpec) -> Result<HashMap<String, AgentSpec>> {
     }
 
     Ok(agents)
+}
+
+/// Build a workflow engine by wiring one noop agent per spec agent.
+///
+/// Phase 1.2 keeps this simple — every spec agent maps to the same noop.
+/// Phase 1.4+ will replace this with an `AdapterFactory`-driven dispatch.
+fn build_engine(spec: &DomainSpec, agents: &HashMap<String, AgentSpec>) -> Result<WorkflowEngine> {
+    let mut engine_agents: HashMap<String, Arc<dyn Agent>> = HashMap::with_capacity(agents.len());
+    for id in agents.keys() {
+        engine_agents.insert(id.clone(), NoopAgent::arc());
+    }
+    WorkflowEngine::new(spec.workflow.clone(), engine_agents)
 }
 
 #[cfg(test)]
@@ -327,13 +350,25 @@ workflow:
     }
 
     #[test]
-    fn invoke_returns_unimplemented() {
+    fn invoke_streams_noop_output() {
+        use futures::StreamExt;
+        // Phase 1.2: Domain::invoke runs the workflow against noop agents
+        // and yields at least one Chunk::text plus a final Chunk::done.
         let domain = loader().from_str(VALID_YAML).expect("should load");
-        let err = match futures::executor::block_on(domain.invoke(serde_json::json!({}))) {
-            Ok(_) => panic!("expected unimplemented error"),
-            Err(e) => e,
-        };
-        assert!(matches!(err, Error::Unimplemented(_)), "got: {err:?}");
+        let mut stream = futures::executor::block_on(domain.invoke(serde_json::json!({})))
+            .expect("invoke should succeed");
+
+        let mut saw_text = false;
+        let mut saw_done = false;
+        while let Some(chunk) = futures::executor::block_on(stream.next()) {
+            match chunk {
+                Chunk::Text(_) => saw_text = true,
+                Chunk::Done { .. } => saw_done = true,
+                _ => {}
+            }
+        }
+        assert!(saw_text, "expected at least one text chunk");
+        assert!(saw_done, "expected a final done chunk");
     }
 
     #[test]
