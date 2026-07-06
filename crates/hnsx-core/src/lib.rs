@@ -32,3 +32,4 @@ pub use loader::{DomainLoader, LoadedDomain};
 pub use memory::{InMemoryBackend, MemoryBackend, MemoryConfig, Message, Session, Turn};
 pub use noop::NoopAgent;
 pub use sandbox::{ProcessHandle, Sandbox, SandboxInstance, SandboxPolicy, SandboxSpec};
+pub use telemetry::{StepTrace, Telemetry, now_ms};

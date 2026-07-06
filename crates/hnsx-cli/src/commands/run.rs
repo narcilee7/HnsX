@@ -8,6 +8,7 @@ use hnsx_adapter::GenaiAgentFactory;
 use hnsx_core::DomainLoader;
 use hnsx_core::agent_factory::AgentFactory;
 use hnsx_core::chunk::Chunk;
+use hnsx_core::telemetry::Telemetry;
 
 #[derive(ValueEnum, Clone, Copy, Debug, Default)]
 pub enum AdapterKind {
@@ -48,7 +49,15 @@ async fn run(args: RunArgs) -> Result<()> {
         AdapterKind::Noop => Arc::new(hnsx_core::NoopFactory),
     };
 
+    let telemetry = Telemetry::new()
+        .context("failed to initialize telemetry (set HNSX_TRACE_DIR to override)")?;
+    eprintln!(
+        "[hnsx] tracing per-step events to {}",
+        telemetry.trace_dir().display()
+    );
+
     let domain = DomainLoader::with_factory(factory)
+        .with_telemetry(Arc::new(telemetry))
         .from_path(&args.domain)
         .with_context(|| format!("failed to load domain {}", args.domain))?;
 
