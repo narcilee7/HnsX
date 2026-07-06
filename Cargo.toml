@@ -1,0 +1,57 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/hnsx-core",
+    "crates/hnsx-sandbox",
+    "crates/hnsx-adapter",
+    "crates/hnsx-tool",
+    "crates/hnsx-cli",
+    "crates/hnsx-control-plane",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+publish = false
+
+[workspace.lints.rust]
+warnings = "warn"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "allow", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+[workspace.dependencies]
+# Internal
+hnsx-core = { path = "crates/hnsx-core" }
+hnsx-sandbox = { path = "crates/hnsx-sandbox" }
+hnsx-adapter = { path = "crates/hnsx-adapter" }
+hnsx-tool = { path = "crates/hnsx-tool" }
+hnsx-cli = { path = "crates/hnsx-cli" }
+hnsx-control-plane = { path = "crates/hnsx-control-plane" }
+
+# Async
+async-trait = "0.1"
+futures = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# Errors
+thiserror = "1"
+anyhow = "1"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

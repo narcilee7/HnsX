@@ -1,0 +1,18 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Tooling
+.env
+.env.local
+
+# Design artifacts (binary sketches, proprietary notes)
+design/
