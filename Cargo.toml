@@ -38,6 +38,7 @@ hnsx-control-plane = { path = "crates/hnsx-control-plane" }
 
 # Async
 async-trait = "0.1"
+async-stream = "0.3"
 futures = "0.3"
 
 # Serialization
@@ -51,6 +52,9 @@ anyhow = "1"
 
 # CLI
 clap = { version = "4", features = ["derive"] }
+
+# Graph
+petgraph = "0.6"
 
 [profile.release]
 lto = "thin"

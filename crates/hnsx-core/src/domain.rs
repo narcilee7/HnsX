@@ -43,6 +43,11 @@ pub struct Step {
     pub input: Value,
     #[serde(default)]
     pub output: Option<String>,
+    /// Optional template string. The step runs iff the rendered value is
+    /// non-empty and not the literal `"false"`. Supports the same
+    /// `${...}` substitution as `input`.
+    #[serde(default)]
+    pub condition: Option<String>,
 }
 
 #[async_trait]
