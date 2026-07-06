@@ -1,0 +1,14 @@
+[package]
+name = "hnsx-control-plane"
+description = "HnsX control-plane service (registry, scheduler, discovery, telemetry aggregation)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+hnsx-core = { workspace = true }
