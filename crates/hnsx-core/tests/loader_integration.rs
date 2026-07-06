@@ -65,3 +65,8 @@ fn loads_code_review() {
 fn loads_financial_analysis() {
     load("financial-analysis");
 }
+
+#[test]
+fn loads_claude_triage() {
+    load("claude-triage");
+}
