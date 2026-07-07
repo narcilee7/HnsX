@@ -1,7 +1,5 @@
 //! Integration tests for memory-aware workflow execution.
 
-use std::path::PathBuf;
-
 use futures::StreamExt;
 use hnsx_core::chunk::Chunk;
 use hnsx_core::memory::{InMemoryBackend, MemoryBackend};

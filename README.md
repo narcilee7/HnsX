@@ -11,7 +11,7 @@ A Domain can run locally (`hnsx run` / `hnsx dev`), be packaged into a portable
 `.hnsx.tar` artifact (`hnsx build`), and deployed as a Docker container that
 registers with the HnsX control plane (`hnsx deploy`).
 
-See [`docs/roadmap.md`](docs/roadmap.md) for the phased roadmap and
+See [`design/ProjectManagement/V1/RoadMap.md`](design/ProjectManagement/V1/RoadMap.md) for the phased roadmap and
 [`design/Tech/V1/Initial_Architectrue.md`](design/Tech/V1/Initial_Architectrue.md)
 for the full architecture.
 
@@ -84,22 +84,23 @@ with `--static-dir web/dist`. For local UI development use `pnpm dev` in `web/`
 
 ## Status
 
-Phase 0-7 are implemented and merged to `feat/init`:
+The project is currently focused on **Phase 1: core runtime**. Earlier phases
+are partial or skeletal; control plane, Web UI, Build/Deploy, and SDK work is
+planned for later phases. See [`design/ProjectManagement/V1/RoadMap.md`](design/ProjectManagement/V1/RoadMap.md)
+for the detailed, honest roadmap.
 
 | Phase | Milestone | Status |
 |---|---|---|
 | 0 | Skeleton (6 crates + CLI) | ✅ |
-| 1 | Local end-to-end runtime | ✅ |
-| 2 | Cross-platform sandbox + Claude Code CLI | ✅ |
-| 3 | Tool layer (HTTP / Shell / SQL / Python) | ✅ |
-| 4 | Remaining adapters + multi-backend Memory | ✅ |
-| 5 | Control-plane gRPC (Registry / Scheduler / Discovery / Telemetry) | ✅ |
-| 6 | Observability + Web UI | ✅ |
-| 7 | Build & Deploy (package + Docker) | ✅ |
+| 1 | Local end-to-end runtime | 🚧 core loops work; Adapter realignment done |
+| 2 | Cross-platform sandbox + Claude Code CLI | 🚧 CLI adapters realigned; real sandbox backends pending |
+| 3 | Tool layer (HTTP / Shell / SQL / Python) | 🚧 HTTP tool works; end-to-end tool calling pending |
+| 4 | Remaining adapters + multi-backend Memory | ✅ Memory done; native HTTP/CLI adapters done |
+| 5 | Control-plane gRPC (Registry / Scheduler / Discovery / Telemetry) | 🚧 skeleton only |
+| 6 | Observability + Web UI | 🚧 local JSONL traces only |
+| 7 | Build & Deploy (package + Docker) | 🚧 skeleton only |
 | 8 | Python SDK | ⏸ planned, not started |
 | 9 | Ecosystem (registry, TS SDK, more adapters) | v2.0 |
-
-See `docs/roadmap.md` for the detailed Phase breakdown and v1.0 exit criteria.
 
 ## Test
 

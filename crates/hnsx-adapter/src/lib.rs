@@ -6,19 +6,29 @@
 //! `hnsx_core::Adapter` trait. See Initial_Architectrue.md §4.3.
 
 pub mod anthropic;
+pub mod anthropic_adapter;
 pub mod claude_code;
 pub mod codex;
 pub mod custom;
+pub mod custom_adapter;
 pub mod genai;
 pub mod genai_adapter;
-pub mod tools;
+pub mod http_common;
+pub mod ollama;
+pub mod ollama_adapter;
 pub mod openai;
+pub mod openai_adapter;
+pub mod tools;
 
-pub use claude_code::ClaudeCodeAgent;
-pub use codex::CodexAgent;
+pub use anthropic_adapter::AnthropicAdapter;
+pub use claude_code::ClaudeCodeAdapter;
+pub use codex::CodexAdapter;
+pub use custom_adapter::CustomAdapter;
 pub use genai::{GenaiAgent, GenaiAgentFactory};
 pub use genai_adapter::{GenaiAdapter, GenaiAdapterFactory};
 pub use hnsx_core::{Adapter, AdapterConfig, AgentFactory, RuntimeContext};
+pub use ollama_adapter::OllamaAdapter;
+pub use openai_adapter::OpenAIAdapter;
 
 use std::sync::Arc;
 
@@ -31,10 +41,10 @@ use hnsx_sandbox::factory::SandboxFactory;
 
 /// Factory that resolves a `Provider` to a concrete `Agent` impl.
 ///
-/// - HTTP providers (OpenAI, Anthropic, Ollama, Custom) go through the
-///   multi-provider `genai` client.
-/// - `claude-code` spawns the local Claude Code CLI inside a sandbox.
-/// - `codex` spawns the local Codex CLI inside a sandbox.
+/// All providers are ultimately composed into an `HnsXAgent` via
+/// `HnsXAgentBuilder`. HTTP providers use native `reqwest`-based adapters by
+/// default; if the agent declares tools we fall back to the `genai` multi-
+/// provider client until Phase 2 lands native tool support.
 #[derive(Clone, Default)]
 pub struct HnsxAgentFactory {
     sandbox_factory: Arc<SandboxFactory>,
@@ -58,27 +68,28 @@ impl CoreAgentFactory for HnsxAgentFactory {
         });
         let sandbox = self.sandbox_factory.create(&sandbox_spec);
 
-        match spec.model.provider {
-            Provider::ClaudeCode | Provider::Codex => {
-                let inner: Arc<dyn Agent> = match spec.model.provider {
-                    Provider::ClaudeCode => Arc::new(crate::claude_code::ClaudeCodeAgent::new(sandbox.clone(), spec)),
-                    Provider::Codex => Arc::new(crate::codex::CodexAgent::new(sandbox.clone(), spec)),
-                    _ => unreachable!(),
-                };
-                Ok(inner)
+        let adapter: Arc<dyn Adapter> = if !spec.tools.is_empty() {
+            // Tool calling is not yet native; fall back to genai.
+            crate::genai_adapter::GenaiAdapterFactory::default().create_adapter(spec)?
+        } else {
+            match spec.model.provider {
+                Provider::Openai => Arc::new(crate::openai_adapter::OpenAIAdapter::new(spec)?),
+                Provider::Anthropic => Arc::new(crate::anthropic_adapter::AnthropicAdapter::new(spec)?),
+                Provider::Ollama => Arc::new(crate::ollama_adapter::OllamaAdapter::new(spec)?),
+                Provider::Custom => Arc::new(crate::custom_adapter::CustomAdapter::new(spec)?),
+                Provider::ClaudeCode => Arc::new(crate::claude_code::ClaudeCodeAdapter::new(sandbox.clone(), spec)),
+                Provider::Codex => Arc::new(crate::codex::CodexAdapter::new(sandbox.clone(), spec)),
             }
-            _ => {
-                let adapter = crate::genai_adapter::GenaiAdapterFactory::default().create_adapter(spec)?;
-                Ok(Arc::new(
-                    HnsXAgentBuilder::new()
-                        .spec(spec.clone())
-                        .adapter(adapter)
-                        .sandbox(sandbox)
-                        .tools(crate::tools::build_tool_registry(&spec.tools).unwrap_or_default())
-                        .build()?,
-                ))
-            }
-        }
+        };
+
+        Ok(Arc::new(
+            HnsXAgentBuilder::new()
+                .spec(spec.clone())
+                .adapter(adapter)
+                .sandbox(sandbox)
+                .tools(crate::tools::build_tool_registry(&spec.tools).unwrap_or_default())
+                .build()?,
+        ))
     }
 }
 

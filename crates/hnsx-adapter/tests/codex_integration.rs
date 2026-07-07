@@ -2,7 +2,7 @@
 //!
 //! The real `codex` CLI may not be installed in CI, so we create a mock
 //! `codex` shell script, prepend its directory to PATH, and verify that
-//! `CodexAgent` spawns it inside the process sandbox and streams stdout.
+//! `CodexAdapter` spawns it inside the process sandbox and streams stdout.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -11,8 +11,9 @@ use std::sync::Arc;
 use futures::StreamExt;
 use serde_json::json;
 
-use hnsx_adapter::CodexAgent;
-use hnsx_core::agent::{Agent, AgentSpec, InvokeContext, ModelRef, PromptTemplate, Provider};
+use hnsx_adapter::CodexAdapter;
+use hnsx_core::adapter::Adapter;
+use hnsx_core::agent::{AgentSpec, ModelRef, PromptTemplate, Provider};
 use hnsx_core::chunk::Chunk;
 use hnsx_sandbox::backend::process::ProcessBackend;
 
@@ -61,7 +62,7 @@ fn mock_codex_path() -> (tempfile::TempDir, std::path::PathBuf) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn codex_agent_spawns_cli_and_streams_stdout() {
+async fn codex_adapter_spawns_cli_and_streams_stdout() {
     let (_dir, script_path) = mock_codex_path();
     let script_dir = script_path.parent().unwrap().to_path_buf();
 
@@ -79,16 +80,12 @@ async fn codex_agent_spawns_cli_and_streams_stdout() {
 
     let sandbox: Arc<dyn hnsx_core::Sandbox + Send + Sync + 'static> =
         Arc::new(ProcessBackend::new());
-    let agent = CodexAgent::new(sandbox, &codex_spec(&script_path.to_string_lossy()));
+    let adapter = CodexAdapter::new(sandbox, &codex_spec(&script_path.to_string_lossy()));
+    let runtime_ctx = adapter.prepare(&json!({})).await.expect("prepare");
 
-    let mut stream = agent
-        .invoke(
-            json!({"task": "hello"}),
-            InvokeContext {
-                session_id: "s1".into(),
-                domain_id: "d1".into(),
-                agent_id: "coder".into(),
-            },
+    let mut stream = adapter
+        .invoke(&json!({"task": "hello"}),
+            &runtime_ctx,
         )
         .await
         .expect("invoke should succeed");
