@@ -105,10 +105,12 @@ async fn customer_service_runs_with_mocked_llms() {
         .expect("read domain.yaml");
     let yaml = yaml.replace(
         "provider: anthropic",
-        &format!("provider: anthropic\n      endpoint: {}", server.uri()));
+        &format!("provider: anthropic\n      endpoint: {}", server.uri()),
+    );
     let yaml = yaml.replace(
         "provider: openai",
-        &format!("provider: openai\n      endpoint: {}", server.uri()));
+        &format!("provider: openai\n      endpoint: {}", server.uri()),
+    );
 
     let factory = build_factory();
     let domain = DomainLoader::with_factory(factory)
@@ -171,13 +173,18 @@ async fn customer_service_writes_traces_and_sqlite_memory() {
         .expect("read domain.yaml");
     let yaml = yaml.replace(
         "provider: anthropic",
-        &format!("provider: anthropic\n      endpoint: {}", server.uri()));
+        &format!("provider: anthropic\n      endpoint: {}", server.uri()),
+    );
     let yaml = yaml.replace(
         "provider: openai",
-        &format!("provider: openai\n      endpoint: {}", server.uri()));
+        &format!("provider: openai\n      endpoint: {}", server.uri()),
+    );
 
     // Add a sqlite memory backend to the domain.
-    let db_path = workspace_root().join("target").join("tmp").join("e2e_sessions.db");
+    let db_path = workspace_root()
+        .join("target")
+        .join("tmp")
+        .join("e2e_sessions.db");
     let _ = tokio::fs::remove_file(&db_path).await;
     let yaml = yaml.replace(
         "workflow:\n",
@@ -187,12 +194,15 @@ async fn customer_service_writes_traces_and_sqlite_memory() {
         ),
     );
 
-    let trace_dir = workspace_root().join("target").join("tmp").join("e2e_traces");
+    let trace_dir = workspace_root()
+        .join("target")
+        .join("tmp")
+        .join("e2e_traces");
     let _ = tokio::fs::remove_dir_all(&trace_dir).await;
-    tokio::fs::create_dir_all(&trace_dir).await.expect("create trace dir");
-    let telemetry = Arc::new(
-        Telemetry::with_dir(trace_dir.clone()).expect("create telemetry dir"),
-    );
+    tokio::fs::create_dir_all(&trace_dir)
+        .await
+        .expect("create trace dir");
+    let telemetry = Arc::new(Telemetry::with_dir(trace_dir.clone()).expect("create telemetry dir"));
 
     let factory = build_factory();
     let memory = MemoryBackendFactory::create(&MemoryConfig::Structured {
@@ -214,7 +224,9 @@ async fn customer_service_writes_traces_and_sqlite_memory() {
     // Verify trace file was written.
     let trace_file = trace_dir.join("s-e2e-1.jsonl");
     assert!(trace_file.exists(), "trace file should exist");
-    let contents = tokio::fs::read_to_string(&trace_file).await.expect("read trace");
+    let contents = tokio::fs::read_to_string(&trace_file)
+        .await
+        .expect("read trace");
     assert!(!contents.is_empty(), "trace file should not be empty");
     let lines: Vec<&str> = contents.lines().collect();
     assert_eq!(lines.len(), 2, "expected one trace line per step");

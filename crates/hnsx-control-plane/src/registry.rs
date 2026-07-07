@@ -54,10 +54,7 @@ impl Registry for RegistryService {
         })
     }
 
-    async fn list_domains(
-        &self,
-        _request: Request<Empty>,
-    ) -> Result<Response<DomainList>, Status> {
+    async fn list_domains(&self, _request: Request<Empty>) -> Result<Response<DomainList>, Status> {
         crate::timed_grpc_async!("list_domains", async {
             let domains = self
                 .store

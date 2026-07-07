@@ -1,6 +1,6 @@
 //! Shared helpers for native adapter tool-call loops.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use hnsx_core::agent::ToolKind;
 use hnsx_core::tool::ToolRegistry;
@@ -26,7 +26,12 @@ pub fn tool_definitions(registry: &ToolRegistry) -> Option<Value> {
 /// Errors are serialized into a JSON object so the LLM can see them and
 /// potentially recover, rather than aborting the whole stream.
 pub async fn execute_tool(registry: &ToolRegistry, name: &str, arguments: Value) -> Value {
-    for kind in [ToolKind::Http, ToolKind::Python, ToolKind::Shell, ToolKind::Sql] {
+    for kind in [
+        ToolKind::Http,
+        ToolKind::Python,
+        ToolKind::Shell,
+        ToolKind::Sql,
+    ] {
         if let Some(tool) = registry.get(kind, name) {
             return match tool.invoke(arguments).await {
                 Ok(value) => value,

@@ -94,14 +94,7 @@ enum EdgeKind {
 impl WorkflowEngine {
     /// Build an engine from a parsed `Workflow` and an agent map.
     pub fn new(workflow: Workflow, agents: HashMap<String, Arc<dyn Agent>>) -> Result<Self> {
-        Self::new_full(
-            workflow,
-            agents,
-            None,
-            String::new(),
-            None,
-            10,
-        )
+        Self::new_full(workflow, agents, None, String::new(), None, 10)
     }
 
     /// Build an engine that also writes per-step traces to `telemetry`.
@@ -111,14 +104,7 @@ impl WorkflowEngine {
         telemetry: Option<Arc<Telemetry>>,
         domain_id: String,
     ) -> Result<Self> {
-        Self::new_full(
-            workflow,
-            agents,
-            telemetry,
-            domain_id,
-            None,
-            10,
-        )
+        Self::new_full(workflow, agents, telemetry, domain_id, None, 10)
     }
 
     /// Build an engine with memory backend.
@@ -152,8 +138,7 @@ impl WorkflowEngine {
             return Err(Error::InvalidSpec("workflow has no steps".into()));
         }
 
-        let mut step_index: HashMap<String, usize> =
-            HashMap::with_capacity(workflow.steps.len());
+        let mut step_index: HashMap<String, usize> = HashMap::with_capacity(workflow.steps.len());
         for (i, step) in workflow.steps.iter().enumerate() {
             step_index.insert(step.id.clone(), i);
         }
@@ -919,7 +904,10 @@ mod tests {
             Chunk::Done { variables } => variables,
             _ => panic!(),
         };
-        let s1 = vars.get("steps.s1.output").and_then(|v| v.as_str()).unwrap();
+        let s1 = vars
+            .get("steps.s1.output")
+            .and_then(|v| v.as_str())
+            .unwrap();
         assert!(s1.contains("alpha"), "s1={s1}");
     }
 
@@ -949,7 +937,10 @@ mod tests {
             Chunk::Done { variables } => variables,
             _ => panic!(),
         };
-        let s1 = vars.get("steps.s1.output").and_then(|v| v.as_str()).unwrap();
+        let s1 = vars
+            .get("steps.s1.output")
+            .and_then(|v| v.as_str())
+            .unwrap();
         assert!(s1.contains("fallback"), "s1={s1}");
     }
 
@@ -1053,7 +1044,10 @@ mod tests {
             _ => panic!(),
         };
         assert!(vars.get("steps.s1.output").is_some());
-        assert!(vars.get("steps.s2.output").is_none(), "s2 should be skipped");
+        assert!(
+            vars.get("steps.s2.output").is_none(),
+            "s2 should be skipped"
+        );
         assert!(vars.get("steps.s3.output").is_some());
     }
 

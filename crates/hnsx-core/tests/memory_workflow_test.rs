@@ -1,9 +1,9 @@
 //! Integration tests for memory-aware workflow execution.
 
 use futures::StreamExt;
+use hnsx_core::DomainLoader;
 use hnsx_core::chunk::Chunk;
 use hnsx_core::memory::{InMemoryBackend, MemoryBackend};
-use hnsx_core::DomainLoader;
 use serde_json::json;
 
 const MEMORY_YAML: &str = r#"
@@ -100,7 +100,8 @@ fn sqlite_memory_persists_across_invocations() {
         backend: "sqlite".into(),
         options: json!({"path": path.to_string_lossy().to_string()}),
     };
-    let memory = hnsx_core::memory::MemoryBackendFactory::create(&config).expect("create sqlite backend");
+    let memory =
+        hnsx_core::memory::MemoryBackendFactory::create(&config).expect("create sqlite backend");
 
     let loader = DomainLoader::with_factory(std::sync::Arc::new(hnsx_core::NoopFactory))
         .with_memory(memory.clone())
@@ -118,7 +119,8 @@ fn sqlite_memory_persists_across_invocations() {
     let _chunks = collect(Box::pin(stream));
 
     // Re-open the same SQLite file to simulate a fresh process.
-    let memory2 = hnsx_core::memory::MemoryBackendFactory::create(&config).expect("create sqlite backend");
+    let memory2 =
+        hnsx_core::memory::MemoryBackendFactory::create(&config).expect("create sqlite backend");
     let session = rt
         .block_on(memory2.load_session("test-memory", "s2"))
         .expect("load session");

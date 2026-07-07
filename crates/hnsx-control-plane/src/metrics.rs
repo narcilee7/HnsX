@@ -3,7 +3,9 @@
 //! Records counters and histograms around gRPC calls and aggregates
 //! invocation-level telemetry from the SQLite store.
 
-use metrics::{Unit, counter, describe_counter, describe_gauge, describe_histogram, gauge, histogram};
+use metrics::{
+    Unit, counter, describe_counter, describe_gauge, describe_histogram, gauge, histogram,
+};
 use metrics_exporter_prometheus::PrometheusBuilder;
 
 /// Initialize the global metrics recorder and return an HTTP handler that
@@ -34,18 +36,9 @@ pub fn install() -> anyhow::Result<metrics_exporter_prometheus::PrometheusHandle
         Unit::Milliseconds,
         "Domain invocation latency in milliseconds"
     );
-    describe_gauge!(
-        "hnsx_instances",
-        "Number of registered agent instances"
-    );
-    describe_counter!(
-        "hnsx_tokens_total",
-        "Total number of tokens consumed"
-    );
-    describe_counter!(
-        "hnsx_cost_usd_total",
-        "Total estimated cost in USD"
-    );
+    describe_gauge!("hnsx_instances", "Number of registered agent instances");
+    describe_counter!("hnsx_tokens_total", "Total number of tokens consumed");
+    describe_counter!("hnsx_cost_usd_total", "Total estimated cost in USD");
 
     Ok(handle)
 }

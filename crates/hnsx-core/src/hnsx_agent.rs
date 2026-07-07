@@ -50,11 +50,7 @@ impl HnsXAgent {
 
 #[async_trait]
 impl Agent for HnsXAgent {
-    async fn invoke(
-        &self,
-        input: Value,
-        ctx: InvokeContext,
-    ) -> Result<BoxStream<'static, Chunk>> {
+    async fn invoke(&self, input: Value, ctx: InvokeContext) -> Result<BoxStream<'static, Chunk>> {
         let adapter = self.adapter.clone();
         let _sandbox = self.sandbox.clone();
         let memory = self.memory.clone();
@@ -73,7 +69,8 @@ impl Agent for HnsXAgent {
         // 2. Load memory context for this agent/session.
         let memory_messages: Vec<Message> = if let Some(mem) = &memory {
             let session = mem.load_session(&ctx.domain_id, &ctx.session_id).await?;
-            mem.build_context(&session, &agent_id, memory_window).await?
+            mem.build_context(&session, &agent_id, memory_window)
+                .await?
         } else {
             Vec::new()
         };
@@ -188,10 +185,22 @@ impl HnsXAgentBuilder {
     }
 
     pub fn build(self) -> Result<HnsXAgent> {
-        let spec = self.spec.ok_or_else(|| Error::InvalidSpec("HnsXAgentBuilder: spec is required".into()))?;
-        let adapter = self.adapter.ok_or_else(|| Error::InvalidSpec("HnsXAgentBuilder: adapter is required".into()))?;
-        let sandbox = self.sandbox.ok_or_else(|| Error::InvalidSpec("HnsXAgentBuilder: sandbox is required".into()))?;
+        let spec = self
+            .spec
+            .ok_or_else(|| Error::InvalidSpec("HnsXAgentBuilder: spec is required".into()))?;
+        let adapter = self
+            .adapter
+            .ok_or_else(|| Error::InvalidSpec("HnsXAgentBuilder: adapter is required".into()))?;
+        let sandbox = self
+            .sandbox
+            .ok_or_else(|| Error::InvalidSpec("HnsXAgentBuilder: sandbox is required".into()))?;
         let tool_registry = self.tool_registry.unwrap_or_default();
-        Ok(HnsXAgent::new(spec, adapter, sandbox, self.memory, tool_registry))
+        Ok(HnsXAgent::new(
+            spec,
+            adapter,
+            sandbox,
+            self.memory,
+            tool_registry,
+        ))
     }
 }

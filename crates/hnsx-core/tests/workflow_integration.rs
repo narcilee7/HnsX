@@ -111,7 +111,9 @@ fn example_customer_service_runs_end_to_end() {
         .enable_time()
         .build()
         .expect("tokio runtime");
-    let stream = rt.block_on(domain.invoke(json!({"message": "test"}))).expect("invoke");
+    let stream = rt
+        .block_on(domain.invoke(json!({"message": "test"})))
+        .expect("invoke");
     let chunks = collect(Box::pin(stream));
 
     let text_count = chunks

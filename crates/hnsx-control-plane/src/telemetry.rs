@@ -7,8 +7,8 @@ use tonic::{Request, Response, Status};
 
 use crate::{
     proto::{
-        Empty, InvocationMetrics, InvocationMetricsRequest, InvocationRecord,
-        QueryTraceRequest, TraceList, TraceRecord, telemetry_server::Telemetry,
+        Empty, InvocationMetrics, InvocationMetricsRequest, InvocationRecord, QueryTraceRequest,
+        TraceList, TraceRecord, telemetry_server::Telemetry,
     },
     store::SqliteStore,
 };
@@ -26,10 +26,7 @@ impl TelemetryService {
 
 #[tonic::async_trait]
 impl Telemetry for TelemetryService {
-    async fn record_trace(
-        &self,
-        request: Request<TraceRecord>,
-    ) -> Result<Response<Empty>, Status> {
+    async fn record_trace(&self, request: Request<TraceRecord>) -> Result<Response<Empty>, Status> {
         crate::timed_grpc_async!("record_trace", async {
             let trace = request.into_inner();
             self.store

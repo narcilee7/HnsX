@@ -49,12 +49,7 @@ pub struct GenaiAgent {
 }
 
 impl GenaiAgent {
-    pub fn new(
-        client: Client,
-        model: String,
-        system: String,
-        tools: ToolRegistry,
-    ) -> Self {
+    pub fn new(client: Client, model: String, system: String, tools: ToolRegistry) -> Self {
         Self {
             client,
             model,
@@ -74,11 +69,7 @@ impl GenaiAgent {
             .iter()
             .filter_map(|(_, _, tool)| to_genai_tool(tool.as_ref()))
             .collect();
-        if tools.is_empty() {
-            None
-        } else {
-            Some(tools)
-        }
+        if tools.is_empty() { None } else { Some(tools) }
     }
 }
 
@@ -201,7 +192,12 @@ impl Agent for GenaiAgent {
 /// The `genai` tool name is a plain string, so we try each `ToolKind` bucket
 /// in turn. The first match wins.
 async fn execute_tool_call(registry: &ToolRegistry, call: &ToolCall) -> Result<Value> {
-    for kind in [ToolKind::Http, ToolKind::Python, ToolKind::Shell, ToolKind::Sql] {
+    for kind in [
+        ToolKind::Http,
+        ToolKind::Python,
+        ToolKind::Shell,
+        ToolKind::Sql,
+    ] {
         if let Some(tool) = registry.get(kind, &call.fn_name) {
             return tool.invoke(call.fn_arguments.clone()).await;
         }

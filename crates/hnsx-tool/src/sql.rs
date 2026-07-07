@@ -7,7 +7,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use rusqlite::types::Value as SqliteValue;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use hnsx_core::agent::ToolKind;
 use hnsx_core::error::{Error, Result};
@@ -60,10 +60,7 @@ impl Tool for SqlTool {
             .and_then(Value::as_array)
             .cloned()
             .unwrap_or_default();
-        let sqlite_params: Vec<SqliteValue> = params
-            .iter()
-            .map(json_value_to_sqlite)
-            .collect();
+        let sqlite_params: Vec<SqliteValue> = params.iter().map(json_value_to_sqlite).collect();
 
         let path = self.path.clone();
         let query = self.query.clone();
@@ -77,11 +74,8 @@ impl Tool for SqlTool {
             let mut stmt = conn
                 .prepare(&query)
                 .map_err(|e| Error::Adapter(format!("SqlTool prepare: {e}")))?;
-            let column_names: Vec<String> = stmt
-                .column_names()
-                .into_iter()
-                .map(String::from)
-                .collect();
+            let column_names: Vec<String> =
+                stmt.column_names().into_iter().map(String::from).collect();
             let mapped = stmt
                 .query_map(&*sqlite_refs, |row| {
                     let mut obj = serde_json::Map::new();
@@ -178,7 +172,8 @@ mod tests {
             let conn = rusqlite::Connection::open(&path).expect("open");
             conn.execute("CREATE TABLE t (x INT)", []).expect("create");
         }
-        let tool = SqlTool::new("q", json!({"path": path, "query": "SELECT * FROM t"})).expect("build");
+        let tool =
+            SqlTool::new("q", json!({"path": path, "query": "SELECT * FROM t"})).expect("build");
         let out = tool.invoke(json!({})).await.expect("invoke");
         assert_eq!(out["count"], 0);
         assert_eq!(out["rows"].as_array().unwrap().len(), 0);
@@ -190,9 +185,12 @@ mod tests {
         let path = dir.path().join("params.db").to_string_lossy().to_string();
         {
             let conn = rusqlite::Connection::open(&path).expect("open");
-            conn.execute("CREATE TABLE users (id INT, name TEXT)", []).expect("create");
-            conn.execute("INSERT INTO users VALUES (1, 'alice')", []).expect("insert");
-            conn.execute("INSERT INTO users VALUES (2, 'bob')", []).expect("insert");
+            conn.execute("CREATE TABLE users (id INT, name TEXT)", [])
+                .expect("create");
+            conn.execute("INSERT INTO users VALUES (1, 'alice')", [])
+                .expect("insert");
+            conn.execute("INSERT INTO users VALUES (2, 'bob')", [])
+                .expect("insert");
         }
 
         let tool = SqlTool::new(
@@ -201,10 +199,7 @@ mod tests {
         )
         .expect("build");
 
-        let out = tool
-            .invoke(json!({"params": [1]}))
-            .await
-            .expect("invoke");
+        let out = tool.invoke(json!({"params": [1]})).await.expect("invoke");
         let rows = out["rows"].as_array().expect("rows");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0]["name"], "alice");

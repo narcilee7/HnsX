@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use genai::chat::Tool as GenaiTool;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use hnsx_core::agent::{ToolKind, ToolRef};
 use hnsx_core::error::Result;
@@ -21,16 +21,17 @@ use hnsx_tool::sql::SqlTool;
 pub fn build_tool_registry(tool_refs: &[ToolRef]) -> Result<ToolRegistry> {
     let mut registry = ToolRegistry::new();
     for tool_ref in tool_refs {
-        let tool: Arc<dyn Tool> = match tool_ref.kind {
-            ToolKind::Http => HttpTool::new(&tool_ref.name, tool_ref.config.clone())
-                .map(|t| t as Arc<dyn Tool>),
-            ToolKind::Python => PythonTool::new(&tool_ref.name, tool_ref.config.clone())
-                .map(|t| t as Arc<dyn Tool>),
-            ToolKind::Shell => ShellTool::new(&tool_ref.name, tool_ref.config.clone())
-                .map(|t| t as Arc<dyn Tool>),
-            ToolKind::Sql => SqlTool::new(&tool_ref.name, tool_ref.config.clone())
-                .map(|t| t as Arc<dyn Tool>),
-        }?;
+        let tool: Arc<dyn Tool> =
+            match tool_ref.kind {
+                ToolKind::Http => HttpTool::new(&tool_ref.name, tool_ref.config.clone())
+                    .map(|t| t as Arc<dyn Tool>),
+                ToolKind::Python => PythonTool::new(&tool_ref.name, tool_ref.config.clone())
+                    .map(|t| t as Arc<dyn Tool>),
+                ToolKind::Shell => ShellTool::new(&tool_ref.name, tool_ref.config.clone())
+                    .map(|t| t as Arc<dyn Tool>),
+                ToolKind::Sql => SqlTool::new(&tool_ref.name, tool_ref.config.clone())
+                    .map(|t| t as Arc<dyn Tool>),
+            }?;
         registry.register(tool);
     }
     Ok(registry)
@@ -274,7 +275,11 @@ mod tests {
         let tool = HttpTool::new("ping", json!({"base_url": "http://example.com"})).expect("build");
         let genai = to_genai_tool(tool.as_ref()).expect("convert");
         assert_eq!(genai.name.as_str(), "ping");
-        assert!(genai.schema.as_ref().unwrap()["properties"].get("method").is_some());
+        assert!(
+            genai.schema.as_ref().unwrap()["properties"]
+                .get("method")
+                .is_some()
+        );
     }
 
     #[test]
@@ -293,7 +298,11 @@ mod tests {
         assert_eq!(openai["type"], "function");
         assert_eq!(openai["function"]["name"], "api");
         assert_eq!(openai["function"]["description"], "Call the internal API");
-        assert!(openai["function"]["parameters"]["properties"].get("foo").is_some());
+        assert!(
+            openai["function"]["parameters"]["properties"]
+                .get("foo")
+                .is_some()
+        );
     }
 
     #[test]

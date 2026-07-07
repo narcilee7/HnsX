@@ -10,12 +10,10 @@ use std::time::Duration;
 use async_stream::stream;
 use async_trait::async_trait;
 use futures::stream::{BoxStream, StreamExt};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::http_common::{
-    classify_http_error, estimate_tokens, parse_sse_stream, value_to_string,
-};
-use crate::tool_chat::{execute_tool, tool_definitions, MAX_TOOL_ROUNDS};
+use crate::http_common::{classify_http_error, estimate_tokens, parse_sse_stream, value_to_string};
+use crate::tool_chat::{MAX_TOOL_ROUNDS, execute_tool, tool_definitions};
 use hnsx_core::adapter::{Adapter, RuntimeContext};
 use hnsx_core::agent::{AgentSpec, HealthStatus};
 use hnsx_core::chunk::{Artifact, Chunk};
@@ -52,7 +50,11 @@ impl AnthropicAdapter {
             .endpoint
             .clone()
             .unwrap_or_else(|| ANTHROPIC_BASE_URL.into());
-        let timeout = Duration::from_secs(spec.adapter.timeout_seconds.unwrap_or(DEFAULT_TIMEOUT_SECONDS));
+        let timeout = Duration::from_secs(
+            spec.adapter
+                .timeout_seconds
+                .unwrap_or(DEFAULT_TIMEOUT_SECONDS),
+        );
         let client = reqwest::Client::builder()
             .timeout(timeout)
             .build()
@@ -114,16 +116,16 @@ impl AnthropicAdapter {
         to_anthropic_tool_defs(self.tool_defs.as_ref()?)
     }
 
-    async fn invoke_with_tools(
-        &self,
-        input: &Value,
-    ) -> Result<BoxStream<'static, Chunk>> {
+    async fn invoke_with_tools(&self, input: &Value) -> Result<BoxStream<'static, Chunk>> {
         let mut messages = self.build_messages(input);
         let anthropic_tool_defs = match self.anthropic_tool_defs() {
             Some(t) => t,
             None => return self.invoke_without_tools(input).await,
         };
-        let registry = self.tools.clone().expect("invoke_with_tools requires tools");
+        let registry = self
+            .tools
+            .clone()
+            .expect("invoke_with_tools requires tools");
         let client = self.client.clone();
         let api_key = self.api_key.clone();
         let model = self.model.clone();
@@ -300,10 +302,7 @@ impl AnthropicAdapter {
         }))
     }
 
-    async fn invoke_without_tools(
-        &self,
-        input: &Value,
-    ) -> Result<BoxStream<'static, Chunk>> {
+    async fn invoke_without_tools(&self, input: &Value) -> Result<BoxStream<'static, Chunk>> {
         let messages = self.build_messages(input);
         let body = serde_json::json!({
             "model": self.model,
@@ -413,7 +412,11 @@ impl Adapter for AnthropicAdapter {
         })
     }
 
-    async fn invoke(&self, input: &Value, _ctx: &RuntimeContext) -> Result<BoxStream<'static, Chunk>> {
+    async fn invoke(
+        &self,
+        input: &Value,
+        _ctx: &RuntimeContext,
+    ) -> Result<BoxStream<'static, Chunk>> {
         if self.has_tools() {
             self.invoke_with_tools(input).await
         } else {
@@ -512,7 +515,11 @@ fn anthropic_assistant_message(blocks: &BTreeMap<usize, AnthropicBlockAccum>) ->
         .values()
         .map(|b| match b {
             AnthropicBlockAccum::Text(t) => json!({"type": "text", "text": t}),
-            AnthropicBlockAccum::ToolUse { id, name, input_json } => {
+            AnthropicBlockAccum::ToolUse {
+                id,
+                name,
+                input_json,
+            } => {
                 let input: Value = parse_arguments(input_json);
                 json!({
                     "type": "tool_use",
@@ -570,8 +577,8 @@ mod tests {
 
     #[test]
     fn build_messages_maps_system_to_user() {
-        let adapter = AnthropicAdapter::new_with_key(
-            &spec("claude-3-haiku"), "test-key".into()).unwrap();
+        let adapter =
+            AnthropicAdapter::new_with_key(&spec("claude-3-haiku"), "test-key".into()).unwrap();
         let input = json!({
             "task": "hello",
             "_memory": [
