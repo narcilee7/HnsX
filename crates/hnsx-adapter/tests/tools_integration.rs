@@ -59,6 +59,7 @@ fn spec_with_tool(endpoint: String) -> AgentSpec {
             variables: json!({}),
         },
         sandbox: None,
+        memory_window: None,
     }
 }
 

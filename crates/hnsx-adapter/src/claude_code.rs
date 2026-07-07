@@ -12,20 +12,21 @@ use async_trait::async_trait;
 use futures::stream::{BoxStream, StreamExt};
 use serde_json::Value;
 
-use hnsx_core::agent::{Agent, AgentSchema, HealthStatus, InvokeContext};
+use hnsx_core::adapter::{Adapter, RuntimeContext};
+use hnsx_core::agent::{AgentSpec, HealthStatus};
 use hnsx_core::chunk::Chunk;
 use hnsx_core::error::{Error, Result};
 use hnsx_core::sandbox::{Sandbox, SandboxPolicy, SandboxRuntime, SandboxSpec};
 
-/// Agent that shells out to the Claude Code CLI.
-pub struct ClaudeCodeAgent {
+/// Adapter that shells out to the Claude Code CLI.
+pub struct ClaudeCodeAdapter {
     sandbox: Arc<dyn Sandbox + Send + Sync + 'static>,
     system_prompt: String,
     sandbox_spec: SandboxSpec,
 }
 
-impl ClaudeCodeAgent {
-    pub fn new(sandbox: Arc<dyn Sandbox>, spec: &hnsx_core::agent::AgentSpec) -> Self {
+impl ClaudeCodeAdapter {
+    pub fn new(sandbox: Arc<dyn Sandbox>, spec: &AgentSpec) -> Self {
         let sandbox_spec = spec.sandbox.clone().unwrap_or(SandboxSpec {
             policy: SandboxPolicy::Namespace,
             runtime: SandboxRuntime::Auto,
@@ -43,12 +44,15 @@ fn shell_escape(s: &str) -> String {
 }
 
 #[async_trait]
-impl Agent for ClaudeCodeAgent {
-    async fn invoke(
-        &self,
-        input: Value,
-        _ctx: InvokeContext,
-    ) -> Result<BoxStream<'static, Chunk>> {
+impl Adapter for ClaudeCodeAdapter {
+    async fn prepare(&self, _config: &Value) -> Result<RuntimeContext> {
+        Ok(RuntimeContext {
+            session_id: uuid::Uuid::new_v4().to_string(),
+            config: Value::Null,
+        })
+    }
+
+    async fn invoke(&self, input: &Value, _ctx: &RuntimeContext) -> Result<BoxStream<'static, Chunk>> {
         let sandbox = self.sandbox.clone();
         let sandbox_spec = self.sandbox_spec.clone();
         let system_prompt = self.system_prompt.clone();
@@ -117,7 +121,19 @@ impl Agent for ClaudeCodeAgent {
             }
 
             // Wait for graceful exit so list_changes is meaningful.
-            let _ = handle.wait().await;
+            let exit_status = match handle.wait().await {
+                Ok(s) => s,
+                Err(e) => {
+                    yield Chunk::error(format!("claude-code wait failed: {e}"));
+                    return;
+                }
+            };
+
+            if !exit_status.success() {
+                let code = exit_status.code().map(|c| c.to_string()).unwrap_or_else(|| "signal".into());
+                yield Chunk::error(format!("claude-code exited with code {code}"));
+                return;
+            }
 
             match sandbox.list_changes().await {
                 Ok(changes) if !changes.is_empty() => {
@@ -127,6 +143,10 @@ impl Agent for ClaudeCodeAgent {
                 Err(e) => yield Chunk::error(format!("list_changes failed: {e}")),
             }
         }))
+    }
+
+    async fn teardown(&self, _ctx: &RuntimeContext) -> Result<()> {
+        Ok(())
     }
 
     async fn health(&self) -> HealthStatus {
@@ -152,20 +172,12 @@ impl Agent for ClaudeCodeAgent {
             },
         }
     }
-
-    async fn schema(&self) -> AgentSchema {
-        AgentSchema {
-            name: "claude-code".to_string(),
-            input_schema: serde_json::json!({"type": "object"}),
-            output_schema: serde_json::json!({"type": "string"}),
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hnsx_core::agent::{AgentSpec, ModelRef, PromptTemplate, Provider};
+    use hnsx_core::agent::{AdapterConfig, ModelRef, PromptTemplate, Provider};
     use serde_json::json;
 
     fn dummy_spec() -> AgentSpec {
@@ -177,7 +189,7 @@ mod tests {
                 model: "sonnet".into(),
                 endpoint: None,
             },
-            adapter: hnsx_core::agent::AdapterConfig {
+            adapter: AdapterConfig {
                 timeout_seconds: None,
                 extra: json!({}),
             },
@@ -187,6 +199,7 @@ mod tests {
                 variables: json!({}),
             },
             sandbox: None,
+            memory_window: None,
         }
     }
 

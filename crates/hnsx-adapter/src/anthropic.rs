@@ -1,7 +1,7 @@
 //! Anthropic API adapter.
 //!
-//! `genai` client (`hnsx-adapter/src/genai.rs`). This module re-exports that
-//! implementation so callers can still reference `hnsx_adapter::anthropic` if
-//! desired, without maintaining a separate HTTP client here.
+//! Phase 1.4 provides a native `reqwest` + SSE implementation in
+//! `anthropic_adapter::AnthropicAdapter`. This module re-exports it for
+//! ergonomic imports.
 
-pub use crate::genai::{GenaiAgent, GenaiAgentFactory};
+pub use crate::anthropic_adapter::AnthropicAdapter;

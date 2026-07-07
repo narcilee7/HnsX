@@ -1,33 +1,37 @@
 //! `WorkflowEngine`: executes a `Workflow` over a set of agents, yielding
 //! a stream of `Chunk`s.
 //!
-//! Phase 1.2 scope:
-//! - Linear execution (steps in YAML order).
+//! Phase 1.1+ scope:
+//! - DAG execution with explicit success (`next`) and failure (`on_error`) edges.
 //! - `output` binding: each step's aggregated text is exposed as
 //!   `steps.<step_id>.output`.
 //! - Input rendering: recursive `${...}` substitution for
-//!   `trigger.<path>`, `steps.<id>.output`, and `variables.<name>`.
+//!   `trigger.<path>`, `steps.<id>.output`, `variables.<name>`, array indices,
+//!   and `| default("...")` filters.
 //! - `condition`: optional template; step runs iff the rendered value is
 //!   non-empty and not the literal `"false"`.
-//!
-//! `petgraph` is used to back the structure (so cycle detection and
-//! branching in 1.2.1+ are a small addition), but for 1.2 the graph is
-//! implicit-linear and the execution order matches the input order.
+//! - Step-level `timeout_seconds` and `retry` with exponential backoff.
+//! - Workflow-level `error_policy`: `fail_fast` (default), `continue`,
+//!   `fallback_step`.
+//! - PII detection on text output.
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_stream::stream;
 use futures::stream::{BoxStream, StreamExt};
 use petgraph::algo::toposort;
 use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::visit::EdgeRef;
 use serde_json::Value;
 use uuid::Uuid;
 
 use crate::agent::{Agent, InvokeContext};
 use crate::chunk::Chunk;
-use crate::domain::{Step, Workflow};
+use crate::domain::{ErrorPolicy, Step, Workflow};
 use crate::error::{Error, Result};
+use crate::memory::MemoryBackend;
 use crate::telemetry::{StepTrace, Telemetry, now_ms};
 
 /// Outcome of a single step: concatenated text + all chunks received.
@@ -37,6 +41,8 @@ pub struct StepResult {
     pub output: String,
     /// Full chunk history (for debugging / replay).
     pub chunks: Vec<Chunk>,
+    /// Whether the step succeeded.
+    pub success: bool,
 }
 
 /// Mutable state carried through workflow execution.
@@ -65,42 +71,89 @@ impl ExecutionContext {
 pub struct WorkflowEngine {
     steps: Vec<Step>,
     agents: HashMap<String, Arc<dyn Agent>>,
-    /// Same steps, indexed by id for O(1) lookup and as a sanity check
-    /// against duplicates (the loader already rejects those).
+    /// step id -> index in `steps`.
     step_index: HashMap<String, usize>,
+    /// Graph edges: success edges from `next` or default order; failure edges from `on_error`.
+    graph: DiGraph<String, EdgeKind>,
+    /// Map step id -> graph node index.
+    node_index: HashMap<String, NodeIndex>,
     entry: String,
-    /// Optional telemetry sink. When present, every completed step is
-    /// recorded as one JSONL line under `$session_id.jsonl`. 1.7.
+    error_policy: ErrorPolicy,
     telemetry: Option<Arc<Telemetry>>,
-    /// Domain id attached to every StepTrace produced by this engine.
-    /// 1.7.
     domain_id: String,
+    memory: Option<Arc<dyn MemoryBackend>>,
+    default_memory_window: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EdgeKind {
+    Success,
+    Failure,
 }
 
 impl WorkflowEngine {
     /// Build an engine from a parsed `Workflow` and an agent map.
-    ///
-    /// Validates that the workflow has at least one step, that `entry`
-    /// references a known step, and that the implied graph is acyclic
-    /// (linear, so trivially true for 1.2 but enforced via petgraph).
     pub fn new(workflow: Workflow, agents: HashMap<String, Arc<dyn Agent>>) -> Result<Self> {
-        Self::new_with_telemetry(workflow, agents, None, String::new())
+        Self::new_full(
+            workflow,
+            agents,
+            None,
+            String::new(),
+            None,
+            10,
+        )
     }
 
     /// Build an engine that also writes per-step traces to `telemetry`.
-    /// `domain_id` is attached to every record.
     pub fn new_with_telemetry(
         workflow: Workflow,
         agents: HashMap<String, Arc<dyn Agent>>,
         telemetry: Option<Arc<Telemetry>>,
         domain_id: String,
     ) -> Result<Self> {
+        Self::new_full(
+            workflow,
+            agents,
+            telemetry,
+            domain_id,
+            None,
+            10,
+        )
+    }
+
+    /// Build an engine with memory backend.
+    pub fn new_with_memory(
+        workflow: Workflow,
+        agents: HashMap<String, Arc<dyn Agent>>,
+        telemetry: Option<Arc<Telemetry>>,
+        domain_id: String,
+        memory: Arc<dyn MemoryBackend>,
+        default_memory_window: usize,
+    ) -> Result<Self> {
+        Self::new_full(
+            workflow,
+            agents,
+            telemetry,
+            domain_id,
+            Some(memory),
+            default_memory_window,
+        )
+    }
+
+    fn new_full(
+        workflow: Workflow,
+        agents: HashMap<String, Arc<dyn Agent>>,
+        telemetry: Option<Arc<Telemetry>>,
+        domain_id: String,
+        memory: Option<Arc<dyn MemoryBackend>>,
+        default_memory_window: usize,
+    ) -> Result<Self> {
         if workflow.steps.is_empty() {
             return Err(Error::InvalidSpec("workflow has no steps".into()));
         }
 
-        // Build step index, preserving YAML order as the execution order.
-        let mut step_index: HashMap<String, usize> = HashMap::with_capacity(workflow.steps.len());
+        let mut step_index: HashMap<String, usize> =
+            HashMap::with_capacity(workflow.steps.len());
         for (i, step) in workflow.steps.iter().enumerate() {
             step_index.insert(step.id.clone(), i);
         }
@@ -112,14 +165,53 @@ impl WorkflowEngine {
             )));
         }
 
-        // Build the petgraph and assert no cycles. For 1.2 the graph has
-        // no edges (linear); topo sort just returns the insertion order.
-        let mut graph: DiGraph<String, ()> = DiGraph::new();
-        let mut nodes: HashMap<&str, NodeIndex> = HashMap::new();
+        // Validate step agent references.
+        for step in &workflow.steps {
+            if !agents.contains_key(&step.agent) {
+                return Err(Error::InvalidSpec(format!(
+                    "step '{}' references unknown agent '{}'",
+                    step.id, step.agent
+                )));
+            }
+        }
+
+        // Build graph.
+        let mut graph: DiGraph<String, EdgeKind> = DiGraph::new();
+        let mut node_index: HashMap<String, NodeIndex> = HashMap::new();
         for step in &workflow.steps {
             let idx = graph.add_node(step.id.clone());
-            nodes.insert(step.id.as_str(), idx);
+            node_index.insert(step.id.clone(), idx);
         }
+
+        for (i, step) in workflow.steps.iter().enumerate() {
+            let from = node_index[&step.id];
+
+            // Success edge.
+            let target = step
+                .next
+                .as_ref()
+                .and_then(|id| step_index.get(id).copied())
+                .unwrap_or(i + 1);
+            if target < workflow.steps.len() {
+                let to = node_index[&workflow.steps[target].id];
+                graph.add_edge(from, to, EdgeKind::Success);
+            }
+
+            // Failure edge.
+            if let Some(err_id) = &step.on_error {
+                if let Some(&err_idx) = step_index.get(err_id) {
+                    let to = node_index[&workflow.steps[err_idx].id];
+                    graph.add_edge(from, to, EdgeKind::Failure);
+                } else {
+                    return Err(Error::InvalidSpec(format!(
+                        "step '{}' on_error references unknown step '{}'",
+                        step.id, err_id
+                    )));
+                }
+            }
+        }
+
+        // Cycle detection.
         if toposort(&graph, None).is_err() {
             return Err(Error::InvalidSpec("workflow graph has a cycle".into()));
         }
@@ -128,40 +220,59 @@ impl WorkflowEngine {
             steps: workflow.steps,
             agents,
             step_index,
+            graph,
+            node_index,
             entry: workflow.entry,
+            error_policy: workflow.error_policy,
             telemetry,
             domain_id,
+            memory,
+            default_memory_window,
         })
     }
 
     /// Execute the workflow against `trigger`, returning a chunk stream.
     #[tracing::instrument(skip(self, trigger), fields(domain_id = %self.domain_id))]
-    pub fn execute(&self,
-        trigger: Value,
-    ) -> BoxStream<'static, Chunk> {
+    pub fn execute(&self, trigger: Value) -> BoxStream<'static, Chunk> {
         let engine = self.clone();
-        // Single session id per execution, attached to every step trace.
-        let session_id = Uuid::new_v4().to_string();
         Box::pin(stream! {
             let workflow_started_at_ms = now_ms();
             let mut total_prompt_tokens: u64 = 0;
             let mut total_completion_tokens: u64 = 0;
             let mut total_cost_usd: f64 = 0.0;
-            let mut ctx = ExecutionContext::new(trigger, engine.workflow_variables());
-            let mut current_index = engine.step_index[&engine.entry];
 
-            loop {
-                if current_index >= engine.steps.len() {
-                    break;
+            // Resolve session id from trigger or generate a new one.
+            let session_id = trigger
+                .get("session_id")
+                .and_then(Value::as_str)
+                .map(String::from)
+                .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+            let mut session = if let Some(mem) = engine.memory.as_ref() {
+                match mem.load_session(&engine.domain_id, &session_id).await {
+                    Ok(s) => Some(s),
+                    Err(e) => {
+                        yield Chunk::error(format!("failed to load session: {e}"));
+                        return;
+                    }
                 }
-                let step = engine.steps[current_index].clone();
+            } else {
+                None
+            };
+
+            let mut ctx = ExecutionContext::new(trigger.clone(), engine.workflow_variables());
+            let mut current = Some(engine.node_index[&engine.entry]);
+
+            while let Some(node) = current {
+                let step_index = *engine.step_index.get(&engine.graph[node]).unwrap();
+                let step = engine.steps[step_index].clone();
 
                 // 1. Condition gate.
                 if let Some(cond) = &step.condition {
                     let rendered = render_template_string(cond, &ctx);
                     let run = !rendered.is_empty() && rendered != "false";
                     if !run {
-                        current_index += 1;
+                        current = engine.successor(node, true);
                         continue;
                     }
                 }
@@ -179,9 +290,27 @@ impl WorkflowEngine {
                 };
 
                 // 3. Render input.
-                let input = render_value(&step.input, &ctx);
+                let mut input = render_value(&step.input, &ctx);
 
-                // 4. Invoke agent and stream chunks.
+                // 4. Inject memory context if available.
+                if let (Some(mem), Some(session)) = (engine.memory.as_ref(), session.as_ref()) {
+                    let window = engine.default_memory_window;
+                    match mem.build_context(session, &step.agent, window).await {
+                        Ok(messages) if !messages.is_empty() => {
+                            if let Value::Object(ref mut map) = input {
+                                let mem_val = serde_json::to_value(&messages).unwrap_or_default();
+                                map.insert("_memory".to_string(), mem_val);
+                            }
+                        }
+                        Ok(_) => {}
+                        Err(e) => {
+                            yield Chunk::error(format!("memory build_context failed: {e}"));
+                            return;
+                        }
+                    }
+                }
+
+                // 5. Invoke agent with timeout and retry.
                 let invoke_ctx = InvokeContext {
                     session_id: session_id.clone(),
                     domain_id: engine.domain_id.clone(),
@@ -189,62 +318,117 @@ impl WorkflowEngine {
                 };
 
                 let started_at_ms = now_ms();
-                let mut stream = match agent.invoke(input.clone(), invoke_ctx).await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        yield Chunk::error(format!("step '{}' invoke failed: {e}", step.id));
-                        return;
-                    }
-                };
+                let timeout = Duration::from_secs(step.timeout_seconds.unwrap_or(300));
+                let retry = step.retry.unwrap_or_default();
 
                 let mut result = StepResult::default();
-                while let Some(chunk) = stream.next().await {
-                    if let Chunk::Text(t) = &chunk {
-                        if crate::pii::contains_pii(t) {
-                            yield Chunk::error("PII detected in agent output; stream halted".to_string());
-                            return;
+                let mut failed_with: Option<String> = None;
+
+                for attempt in 0..=retry.count {
+                    if attempt > 0 {
+                        let backoff = Duration::from_millis(retry.backoff_ms * 2_u64.pow(attempt - 1));
+                        tokio::time::sleep(backoff).await;
+                    }
+
+                    let invoke_fut = agent.invoke(input.clone(), invoke_ctx.clone());
+                    let mut stream = match tokio::time::timeout(timeout, invoke_fut).await {
+                        Ok(Ok(s)) => s,
+                        Ok(Err(e)) => {
+                            failed_with = Some(format!("{e}"));
+                            continue;
                         }
-                        result.output.push_str(t);
+                        Err(_) => {
+                            failed_with = Some(format!("step '{}' timed out after {}s", step.id, timeout.as_secs()));
+                            continue;
+                        }
+                    };
+
+                    result = StepResult::default();
+                    while let Some(chunk) = stream.next().await {
+                        if let Chunk::Text(t) = &chunk {
+                            if crate::pii::contains_pii(t) {
+                                yield Chunk::error("PII detected in agent output; stream halted".to_string());
+                                return;
+                            }
+                            result.output.push_str(t);
+                        }
+                        if let Chunk::Artifact(crate::chunk::Artifact::TokenUsage { prompt, completion, cost_usd }) = &chunk {
+                            total_prompt_tokens += prompt;
+                            total_completion_tokens += completion;
+                            total_cost_usd += cost_usd;
+                        }
+                        result.chunks.push(chunk.clone());
+                        if step.stream {
+                            yield chunk;
+                        }
                     }
-                    if let Chunk::Artifact(crate::chunk::Artifact::TokenUsage { prompt, completion, cost_usd }) = &chunk {
-                        total_prompt_tokens += prompt;
-                        total_completion_tokens += completion;
-                        total_cost_usd += cost_usd;
-                    }
-                    result.chunks.push(chunk.clone());
-                    yield chunk;
+                    failed_with = None;
+                    result.success = true;
+                    break;
                 }
 
-                // 5. Emit telemetry (1.7): one record per completed step.
-                if let Some(tel) = engine.telemetry.as_ref() {
-                    let trace = StepTrace {
-                        session_id: session_id.clone(),
-                        domain_id: engine.domain_id.clone(),
-                        step_id: step.id.clone(),
-                        agent_id: step.agent.clone(),
-                        started_at_ms,
-                        duration_ms: now_ms().saturating_sub(started_at_ms),
-                        input: input.clone(),
-                        output: result.output.clone(),
-                    };
-                    if let Err(e) = tel.record_step(&trace) {
-                        yield Chunk::error(format!("telemetry record failed: {e}"));
+                // 6. Handle failure.
+                if let Some(err) = failed_with {
+                    result.success = false;
+                    if !step.stream {
+                        yield Chunk::error(err.clone());
+                    }
+
+                    // Emit telemetry for failed step too.
+                    engine.record_step(&step, &session_id, started_at_ms, input.clone(), result.output.clone()).await;
+
+                    // Save a turn with the error as assistant output for observability.
+                    if let (Some(mem), Some(ref mut session)) = (engine.memory.as_ref(), session.as_mut()) {
+                        let _ = mem.save_turn(session, &step.agent, "assistant", &format!("ERROR: {err}")).await;
+                    }
+
+                    ctx.steps.insert(step.id.clone(), result);
+
+                    // Failure edge has priority.
+                    if let Some(next) = engine.failure_successor(node) {
+                        current = Some(next);
+                        continue;
+                    }
+
+                    match &engine.error_policy {
+                        ErrorPolicy::FailFast => {
+                            yield Chunk::error(format!("workflow failed at step '{}': {err}", step.id));
+                            return;
+                        }
+                        ErrorPolicy::Continue => {
+                            current = engine.successor(node, false);
+                            continue;
+                        }
+                        ErrorPolicy::FallbackStep(fallback) => {
+                            current = engine.node_index.get(fallback).copied();
+                            continue;
+                        }
+                    }
+                }
+
+                // 7. Successful step: telemetry + memory + context.
+                engine.record_step(&step, &session_id, started_at_ms, input.clone(), result.output.clone()).await;
+
+                if let (Some(mem), Some(ref mut session)) = (engine.memory.as_ref(), session.as_mut()) {
+                    if let Err(e) = mem.save_turn(session, &step.agent, "assistant", &result.output).await {
+                        yield Chunk::error(format!("memory save_turn failed: {e}"));
                         return;
                     }
                 }
 
                 ctx.steps.insert(step.id.clone(), result);
-                current_index += 1;
+                current = engine.successor(node, true);
             }
 
-            // 6. Final Chunk::done carries the step outputs as a flat object.
+            // 8. Final Chunk::done carries the step outputs as a flat object.
             let mut done_vars = serde_json::Map::new();
             for (k, v) in &ctx.steps {
                 done_vars.insert(format!("steps.{k}.output"), Value::String(v.output.clone()));
             }
+            done_vars.insert("session_id".to_string(), Value::String(session_id.clone()));
             yield Chunk::done(Value::Object(done_vars));
 
-            // 7. Report invocation-level telemetry (Phase 6).
+            // 9. Report invocation-level telemetry.
             if let Some(tel) = engine.telemetry.as_ref() {
                 let duration_ms = now_ms().saturating_sub(workflow_started_at_ms);
                 tel.record_invocation(&hnsx_proto::v1::InvocationRecord {
@@ -260,10 +444,48 @@ impl WorkflowEngine {
         })
     }
 
-    /// Workflow-level variables. Exposed as `${variables.<name>}` in templates.
-    /// For 1.2 the variables are not in `Workflow` itself (they are still
-    /// on the spec); we read from each step's already-rendered context,
-    /// not from the workflow spec, so this is a no-op for now.
+    /// Find the success successor of a node. `skip` means the step was skipped via condition.
+    fn successor(&self, node: NodeIndex, _skipped: bool) -> Option<NodeIndex> {
+        // If skipped, follow the first success edge (which normally means "next").
+        // We do not follow failure edges for skipped steps.
+        self.graph
+            .edges(node)
+            .find(|e| *e.weight() == EdgeKind::Success)
+            .map(|e| e.target())
+    }
+
+    fn failure_successor(&self, node: NodeIndex) -> Option<NodeIndex> {
+        self.graph
+            .edges(node)
+            .find(|e| *e.weight() == EdgeKind::Failure)
+            .map(|e| e.target())
+    }
+
+    async fn record_step(
+        &self,
+        step: &Step,
+        session_id: &str,
+        started_at_ms: u64,
+        input: Value,
+        output: String,
+    ) {
+        if let Some(tel) = self.telemetry.as_ref() {
+            let trace = StepTrace {
+                session_id: session_id.to_string(),
+                domain_id: self.domain_id.clone(),
+                step_id: step.id.clone(),
+                agent_id: step.agent.clone(),
+                started_at_ms,
+                duration_ms: now_ms().saturating_sub(started_at_ms),
+                input,
+                output,
+            };
+            if let Err(e) = tel.record_step(&trace) {
+                tracing::warn!(error = %e, "failed to record step trace");
+            }
+        }
+    }
+
     fn workflow_variables(&self) -> HashMap<String, Value> {
         HashMap::new()
     }
@@ -271,6 +493,7 @@ impl WorkflowEngine {
 
 // ---------------------------------------------------------------------------
 // Template rendering: ${trigger.x.y}, ${steps.<id>.output}, ${variables.x}
+// plus array indices and | default("...") filters.
 // ---------------------------------------------------------------------------
 
 /// Render every `${...}` occurrence in a JSON string.
@@ -280,29 +503,62 @@ fn render_template_string(template: &str, ctx: &ExecutionContext) -> String {
     let mut i = 0;
     while i < bytes.len() {
         if i + 1 < bytes.len() && bytes[i] == b'$' && bytes[i + 1] == b'{' {
-            // Find matching `}` (no nesting in 1.2).
             let start = i + 2;
             let mut end = start;
             while end < bytes.len() && bytes[end] != b'}' {
                 end += 1;
             }
             if end < bytes.len() {
-                let path = &template[start..end];
-                out.push_str(&resolve_path(path, ctx));
+                let expr = &template[start..end];
+                out.push_str(&render_expression(expr, ctx));
                 i = end + 1;
             } else {
-                // Unterminated `${` — keep as literal.
                 out.push_str(&template[i..]);
                 i = bytes.len();
             }
         } else {
-            // Push the next char (could be multi-byte; push the char).
             let c = template[i..].chars().next().expect("valid char boundary");
             out.push(c);
             i += c.len_utf8();
         }
     }
     out
+}
+
+fn render_expression(expr: &str, ctx: &ExecutionContext) -> String {
+    // Support a single filter: | default("...")
+    let (path_part, default_value) = if let Some(pipe_pos) = expr.find("|") {
+        let path = expr[..pipe_pos].trim();
+        let filter = expr[pipe_pos + 1..].trim();
+        let default_value = parse_default_filter(filter);
+        (path, default_value)
+    } else {
+        (expr.trim(), None)
+    };
+
+    let resolved = resolve_path(path_part, ctx);
+    if resolved.is_empty() {
+        default_value.unwrap_or_default()
+    } else {
+        resolved
+    }
+}
+
+fn parse_default_filter(filter: &str) -> Option<String> {
+    let filter = filter.trim();
+    if !filter.starts_with("default(") || !filter.ends_with(")") {
+        return None;
+    }
+    let inner = &filter[8..filter.len() - 1].trim();
+    // Supports default("...") and default('...')
+    if inner.len() >= 2 {
+        let first = inner.chars().next().unwrap();
+        let last = inner.chars().last().unwrap();
+        if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
+            return Some(inner[1..inner.len() - 1].to_string());
+        }
+    }
+    None
 }
 
 fn render_value(value: &Value, ctx: &ExecutionContext) -> Value {
@@ -324,7 +580,6 @@ fn resolve_path(path: &str, ctx: &ExecutionContext) -> String {
     if let Some(rest) = path.strip_prefix("trigger.") {
         json_path_to_string(&ctx.trigger, rest)
     } else if let Some(rest) = path.strip_prefix("steps.") {
-        // Expected form: `<step_id>.output`
         if let Some(step_id) = rest.strip_suffix(".output") {
             ctx.steps
                 .get(step_id)
@@ -346,12 +601,31 @@ fn resolve_path(path: &str, ctx: &ExecutionContext) -> String {
 fn json_path_to_string(value: &Value, path: &str) -> String {
     let mut current = value;
     for segment in path.split('.') {
+        // Handle array indices like items[0]
+        let (key, index) = if let Some(open) = segment.find('[') {
+            let close = segment.find(']').unwrap_or(segment.len());
+            let k = &segment[..open];
+            let idx: Option<usize> = segment[open + 1..close].parse().ok();
+            (k, idx)
+        } else {
+            (segment, None)
+        };
+
         match current {
-            Value::Object(map) => match map.get(segment) {
+            Value::Object(map) => match map.get(key) {
                 Some(v) => current = v,
                 None => return String::new(),
             },
             _ => return String::new(),
+        }
+
+        if let Some(idx) = index {
+            match current {
+                Value::Array(arr) => {
+                    current = arr.get(idx).unwrap_or(&Value::Null);
+                }
+                _ => return String::new(),
+            }
         }
     }
     json_value_to_string(current)
@@ -368,6 +642,7 @@ fn json_value_to_string(v: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::RetryPolicy;
     use crate::domain::Workflow;
     use crate::noop::NoopAgent;
     use futures::StreamExt;
@@ -382,8 +657,14 @@ mod tests {
                 input: json!({"task": "hello"}),
                 output: None,
                 condition: None,
+                next: None,
+                on_error: None,
+                timeout_seconds: None,
+                retry: None,
+                stream: true,
             }],
             variables: json!({}),
+            error_policy: ErrorPolicy::default(),
         }
     }
 
@@ -397,6 +678,11 @@ mod tests {
                     input: json!({"task": "first"}),
                     output: None,
                     condition: None,
+                    next: None,
+                    on_error: None,
+                    timeout_seconds: None,
+                    retry: None,
+                    stream: true,
                 },
                 Step {
                     id: "s2".into(),
@@ -404,9 +690,15 @@ mod tests {
                     input: json!({"prev": "${steps.s1.output}"}),
                     output: None,
                     condition: None,
+                    next: None,
+                    on_error: None,
+                    timeout_seconds: None,
+                    retry: None,
+                    stream: true,
                 },
             ],
             variables: json!({}),
+            error_policy: ErrorPolicy::default(),
         }
     }
 
@@ -418,7 +710,11 @@ mod tests {
     }
 
     fn collect_chunks(stream: BoxStream<'static, Chunk>) -> Vec<Chunk> {
-        futures::executor::block_on(async {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .expect("tokio runtime");
+        rt.block_on(async {
             let mut s = stream;
             let mut out = Vec::new();
             while let Some(c) = s.next().await {
@@ -434,6 +730,7 @@ mod tests {
             entry: "s1".into(),
             steps: vec![],
             variables: json!({}),
+            error_policy: ErrorPolicy::default(),
         };
         let err = match WorkflowEngine::new(wf, noop_agents()) {
             Ok(_) => panic!("expected error"),
@@ -460,6 +757,78 @@ mod tests {
     }
 
     #[test]
+    fn new_rejects_unknown_agent_reference() {
+        let wf = Workflow {
+            entry: "s1".into(),
+            steps: vec![Step {
+                id: "s1".into(),
+                agent: "ghost".into(),
+                input: json!({}),
+                output: None,
+                condition: None,
+                next: None,
+                on_error: None,
+                timeout_seconds: None,
+                retry: None,
+                stream: true,
+            }],
+            variables: json!({}),
+            error_policy: ErrorPolicy::default(),
+        };
+        let err = match WorkflowEngine::new(wf, noop_agents()) {
+            Ok(_) => panic!("expected error"),
+            Err(e) => e,
+        };
+        assert!(
+            matches!(err, Error::InvalidSpec(ref m) if m.contains("unknown agent")),
+            "got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn new_rejects_cycle() {
+        let wf = Workflow {
+            entry: "s1".into(),
+            steps: vec![
+                Step {
+                    id: "s1".into(),
+                    agent: "a".into(),
+                    input: json!({}),
+                    output: None,
+                    condition: None,
+                    next: Some("s2".into()),
+                    on_error: None,
+                    timeout_seconds: None,
+                    retry: None,
+                    stream: true,
+                },
+                Step {
+                    id: "s2".into(),
+                    agent: "b".into(),
+                    input: json!({}),
+                    output: None,
+                    condition: None,
+                    next: Some("s1".into()),
+                    on_error: None,
+                    timeout_seconds: None,
+                    retry: None,
+                    stream: true,
+                },
+            ],
+            variables: json!({}),
+            error_policy: ErrorPolicy::default(),
+        };
+        let err = match WorkflowEngine::new(wf, noop_agents()) {
+            Ok(_) => panic!("expected error"),
+            Err(e) => e,
+        };
+        assert!(
+            matches!(err, Error::InvalidSpec(ref m) if m.contains("cycle")),
+            "got: {err:?}"
+        );
+    }
+
+    #[test]
     fn single_step_emits_text_then_done() {
         let engine = WorkflowEngine::new(single_step_workflow(), noop_agents()).unwrap();
         let chunks = collect_chunks(engine.execute(json!({})));
@@ -471,7 +840,6 @@ mod tests {
     fn two_step_chains_output_through_template() {
         let engine = WorkflowEngine::new(two_step_workflow(), noop_agents()).unwrap();
         let chunks = collect_chunks(engine.execute(json!({})));
-        // Last chunk is Chunk::done with the variables map.
         let done = chunks.last().expect("should have done chunk");
         let done_vars = match done {
             Chunk::Done { variables } => variables.clone(),
@@ -485,8 +853,6 @@ mod tests {
             .get("steps.s2.output")
             .and_then(|v| v.as_str())
             .expect("s2 output");
-        // s2's input was `${steps.s1.output}`, so the rendered value is the
-        // JSON-serialized form of s1. s2's noop echoes that as a string.
         let s1_json = serde_json::to_string(s1).expect("serialize s1");
         assert!(
             s2.contains(&s1_json),
@@ -504,8 +870,14 @@ mod tests {
                 input: json!({"msg": "${trigger.message}"}),
                 output: None,
                 condition: None,
+                next: None,
+                on_error: None,
+                timeout_seconds: None,
+                retry: None,
+                stream: true,
             }],
             variables: json!({}),
+            error_policy: ErrorPolicy::default(),
         };
         let engine = WorkflowEngine::new(wf, noop_agents()).unwrap();
         let chunks = collect_chunks(engine.execute(json!({"message": "hi there"})));
@@ -522,6 +894,66 @@ mod tests {
     }
 
     #[test]
+    fn array_index_substitution() {
+        let wf = Workflow {
+            entry: "s1".into(),
+            steps: vec![Step {
+                id: "s1".into(),
+                agent: "a".into(),
+                input: json!({"msg": "${trigger.items[0].name}"}),
+                output: None,
+                condition: None,
+                next: None,
+                on_error: None,
+                timeout_seconds: None,
+                retry: None,
+                stream: true,
+            }],
+            variables: json!({}),
+            error_policy: ErrorPolicy::default(),
+        };
+        let engine = WorkflowEngine::new(wf, noop_agents()).unwrap();
+        let chunks = collect_chunks(engine.execute(json!({"items": [{"name": "alpha"}]})));
+        let done = chunks.last().expect("done");
+        let vars = match done {
+            Chunk::Done { variables } => variables,
+            _ => panic!(),
+        };
+        let s1 = vars.get("steps.s1.output").and_then(|v| v.as_str()).unwrap();
+        assert!(s1.contains("alpha"), "s1={s1}");
+    }
+
+    #[test]
+    fn default_filter_substitution() {
+        let wf = Workflow {
+            entry: "s1".into(),
+            steps: vec![Step {
+                id: "s1".into(),
+                agent: "a".into(),
+                input: json!({"msg": "${trigger.missing | default(\"fallback\")}"}),
+                output: None,
+                condition: None,
+                next: None,
+                on_error: None,
+                timeout_seconds: None,
+                retry: None,
+                stream: true,
+            }],
+            variables: json!({}),
+            error_policy: ErrorPolicy::default(),
+        };
+        let engine = WorkflowEngine::new(wf, noop_agents()).unwrap();
+        let chunks = collect_chunks(engine.execute(json!({})));
+        let done = chunks.last().expect("done");
+        let vars = match done {
+            Chunk::Done { variables } => variables,
+            _ => panic!(),
+        };
+        let s1 = vars.get("steps.s1.output").and_then(|v| v.as_str()).unwrap();
+        assert!(s1.contains("fallback"), "s1={s1}");
+    }
+
+    #[test]
     fn condition_false_skips_step() {
         let wf = Workflow {
             entry: "s1".into(),
@@ -532,6 +964,11 @@ mod tests {
                     input: json!({}),
                     output: None,
                     condition: Some("false".into()),
+                    next: None,
+                    on_error: None,
+                    timeout_seconds: None,
+                    retry: None,
+                    stream: true,
                 },
                 Step {
                     id: "s2".into(),
@@ -539,9 +976,15 @@ mod tests {
                     input: json!({}),
                     output: None,
                     condition: None,
+                    next: None,
+                    on_error: None,
+                    timeout_seconds: None,
+                    retry: None,
+                    stream: true,
                 },
             ],
             variables: json!({}),
+            error_policy: ErrorPolicy::default(),
         };
         let engine = WorkflowEngine::new(wf, noop_agents()).unwrap();
         let chunks = collect_chunks(engine.execute(json!({})));
@@ -558,17 +1001,49 @@ mod tests {
     }
 
     #[test]
-    fn condition_true_runs_step() {
+    fn next_edge_jumps_over_step() {
         let wf = Workflow {
             entry: "s1".into(),
-            steps: vec![Step {
-                id: "s1".into(),
-                agent: "a".into(),
-                input: json!({}),
-                output: None,
-                condition: Some("true".into()),
-            }],
+            steps: vec![
+                Step {
+                    id: "s1".into(),
+                    agent: "a".into(),
+                    input: json!({}),
+                    output: None,
+                    condition: None,
+                    next: Some("s3".into()),
+                    on_error: None,
+                    timeout_seconds: None,
+                    retry: None,
+                    stream: true,
+                },
+                Step {
+                    id: "s2".into(),
+                    agent: "b".into(),
+                    input: json!({}),
+                    output: None,
+                    condition: None,
+                    next: None,
+                    on_error: None,
+                    timeout_seconds: None,
+                    retry: None,
+                    stream: true,
+                },
+                Step {
+                    id: "s3".into(),
+                    agent: "b".into(),
+                    input: json!({}),
+                    output: None,
+                    condition: None,
+                    next: None,
+                    on_error: None,
+                    timeout_seconds: None,
+                    retry: None,
+                    stream: true,
+                },
+            ],
             variables: json!({}),
+            error_policy: ErrorPolicy::default(),
         };
         let engine = WorkflowEngine::new(wf, noop_agents()).unwrap();
         let chunks = collect_chunks(engine.execute(json!({})));
@@ -578,5 +1053,155 @@ mod tests {
             _ => panic!(),
         };
         assert!(vars.get("steps.s1.output").is_some());
+        assert!(vars.get("steps.s2.output").is_none(), "s2 should be skipped");
+        assert!(vars.get("steps.s3.output").is_some());
+    }
+
+    #[test]
+    fn on_error_jumps_to_recovery_step() {
+        use crate::agent::{AgentSchema, HealthStatus};
+        use async_trait::async_trait;
+
+        struct FailingAgent;
+
+        #[async_trait]
+        impl Agent for FailingAgent {
+            async fn invoke(
+                &self,
+                _input: Value,
+                _ctx: InvokeContext,
+            ) -> Result<BoxStream<'static, Chunk>> {
+                Err(Error::Adapter("boom".into()))
+            }
+            async fn health(&self) -> HealthStatus {
+                HealthStatus {
+                    healthy: true,
+                    message: None,
+                }
+            }
+            async fn schema(&self) -> AgentSchema {
+                AgentSchema {
+                    name: "failing".into(),
+                    input_schema: json!({"type": "object"}),
+                    output_schema: json!({"type": "string"}),
+                }
+            }
+        }
+
+        let wf = Workflow {
+            entry: "s1".into(),
+            steps: vec![
+                Step {
+                    id: "s1".into(),
+                    agent: "failing".into(),
+                    input: json!({}),
+                    output: None,
+                    condition: None,
+                    next: None,
+                    on_error: Some("s2".into()),
+                    timeout_seconds: None,
+                    retry: None,
+                    stream: true,
+                },
+                Step {
+                    id: "s2".into(),
+                    agent: "a".into(),
+                    input: json!({"recovered": true}),
+                    output: None,
+                    condition: None,
+                    next: None,
+                    on_error: None,
+                    timeout_seconds: None,
+                    retry: None,
+                    stream: true,
+                },
+            ],
+            variables: json!({}),
+            error_policy: ErrorPolicy::default(),
+        };
+        let mut agents = noop_agents();
+        agents.insert("failing".into(), Arc::new(FailingAgent));
+        let engine = WorkflowEngine::new(wf, agents).unwrap();
+        let chunks = collect_chunks(engine.execute(json!({})));
+        let done = chunks.last().expect("done");
+        let vars = match done {
+            Chunk::Done { variables } => variables,
+            _ => panic!(),
+        };
+        assert!(
+            vars.get("steps.s1.output").is_some(),
+            "s1 should have an error output"
+        );
+        assert!(
+            vars.get("steps.s2.output").is_some(),
+            "s2 recovery should run"
+        );
+    }
+
+    #[test]
+    fn retry_then_success() {
+        use crate::agent::{AgentSchema, HealthStatus};
+        use async_trait::async_trait;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        static CALLS: AtomicUsize = AtomicUsize::new(0);
+
+        struct SometimesAgent;
+
+        #[async_trait]
+        impl Agent for SometimesAgent {
+            async fn invoke(
+                &self,
+                input: Value,
+                _ctx: InvokeContext,
+            ) -> Result<BoxStream<'static, Chunk>> {
+                let n = CALLS.fetch_add(1, Ordering::SeqCst);
+                if n == 0 {
+                    return Err(Error::Adapter("first call fails".into()));
+                }
+                Ok(crate::noop::NoopAgent::arc().invoke(input, _ctx).await?)
+            }
+            async fn health(&self) -> HealthStatus {
+                HealthStatus {
+                    healthy: true,
+                    message: None,
+                }
+            }
+            async fn schema(&self) -> AgentSchema {
+                AgentSchema {
+                    name: "sometimes".into(),
+                    input_schema: json!({"type": "object"}),
+                    output_schema: json!({"type": "string"}),
+                }
+            }
+        }
+
+        let wf = Workflow {
+            entry: "s1".into(),
+            steps: vec![Step {
+                id: "s1".into(),
+                agent: "sometimes".into(),
+                input: json!({}),
+                output: None,
+                condition: None,
+                next: None,
+                on_error: None,
+                timeout_seconds: None,
+                retry: Some(RetryPolicy {
+                    count: 2,
+                    backoff_ms: 1,
+                }),
+                stream: true,
+            }],
+            variables: json!({}),
+            error_policy: ErrorPolicy::default(),
+        };
+        CALLS.store(0, Ordering::SeqCst);
+        let mut agents = noop_agents();
+        agents.insert("sometimes".into(), Arc::new(SometimesAgent));
+        let engine = WorkflowEngine::new(wf, agents).unwrap();
+        let chunks = collect_chunks(engine.execute(json!({})));
+        assert!(matches!(chunks.last(), Some(Chunk::Done { .. })));
+        assert_eq!(CALLS.load(Ordering::SeqCst), 2);
     }
 }

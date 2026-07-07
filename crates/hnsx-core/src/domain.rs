@@ -7,11 +7,24 @@ use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::agent::{Agent, AgentSpec};
+use crate::agent::{Agent, AgentSpec, RetryPolicy};
 use crate::chunk::Chunk;
 use crate::error::Result;
 use crate::memory::MemoryConfig;
 use crate::sandbox::SandboxPolicy;
+
+/// How the workflow should behave when a step fails after all retries.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorPolicy {
+    /// Stop the workflow immediately (default).
+    #[default]
+    FailFast,
+    /// Record the failure and continue with the next step.
+    Continue,
+    /// Jump to the named fallback step.
+    FallbackStep(String),
+}
 
 /// A complete domain definition, loaded from YAML.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +46,9 @@ pub struct Workflow {
     pub steps: Vec<Step>,
     #[serde(default)]
     pub variables: Value,
+    /// How the workflow behaves when a step fails after retries.
+    #[serde(default)]
+    pub error_policy: ErrorPolicy,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +64,26 @@ pub struct Step {
     /// `${...}` substitution as `input`.
     #[serde(default)]
     pub condition: Option<String>,
+    /// Step id to jump to after a successful execution.
+    /// If omitted, execution continues with the next step in YAML order.
+    #[serde(default)]
+    pub next: Option<String>,
+    /// Step id to jump to after execution fails (after retries are exhausted).
+    #[serde(default)]
+    pub on_error: Option<String>,
+    /// Maximum time the step is allowed to run, in seconds.
+    #[serde(default)]
+    pub timeout_seconds: Option<u64>,
+    /// Retry policy for this step.
+    #[serde(default)]
+    pub retry: Option<RetryPolicy>,
+    /// Whether to stream step chunks in real time. Defaults to true.
+    #[serde(default = "default_stream")]
+    pub stream: bool,
+}
+
+fn default_stream() -> bool {
+    true
 }
 
 #[async_trait]

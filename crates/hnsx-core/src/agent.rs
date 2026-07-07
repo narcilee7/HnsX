@@ -53,6 +53,9 @@ pub struct AgentSpec {
     pub prompt: PromptTemplate,
     #[serde(default)]
     pub sandbox: Option<SandboxSpec>,
+    /// Number of recent turns this agent keeps in memory context.
+    #[serde(default)]
+    pub memory_window: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +85,32 @@ pub struct AdapterConfig {
     pub timeout_seconds: Option<u64>,
     #[serde(default)]
     pub extra: Value,
+}
+
+/// Retry policy for a single step or agent invocation.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RetryPolicy {
+    #[serde(default = "default_retry_count")]
+    pub count: u32,
+    #[serde(default = "default_retry_backoff_ms")]
+    pub backoff_ms: u64,
+}
+
+impl Default for RetryPolicy {
+    fn default() -> Self {
+        Self {
+            count: default_retry_count(),
+            backoff_ms: default_retry_backoff_ms(),
+        }
+    }
+}
+
+fn default_retry_count() -> u32 {
+    0
+}
+
+fn default_retry_backoff_ms() -> u64 {
+    1000
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
