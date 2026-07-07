@@ -1209,6 +1209,7 @@ dependencies = [
  "nix",
  "tempfile",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

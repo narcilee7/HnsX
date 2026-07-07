@@ -44,6 +44,10 @@ async fn run(args: ControlPlaneArgs) -> Result<()> {
         server = server.with_static_dir(dir);
     }
 
-    println!("[control-plane] serving gRPC on {} and HTTP on {}", addr, addr.port() + 1);
+    println!(
+        "[control-plane] serving gRPC on {} and HTTP on {}",
+        addr,
+        addr.port() + 1
+    );
     server.serve(addr).await.context("serve control plane")
 }

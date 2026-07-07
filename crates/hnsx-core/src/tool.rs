@@ -87,9 +87,7 @@ impl ToolRegistry {
 
     /// Iterate over all registered tools.
     pub fn iter(&self) -> impl Iterator<Item = (&ToolKind, &str, &Arc<dyn Tool>)> {
-        self.inner
-            .iter()
-            .map(|((k, n), t)| (k, n.as_str(), t))
+        self.inner.iter().map(|((k, n), t)| (k, n.as_str(), t))
     }
 }
 

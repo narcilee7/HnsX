@@ -9,13 +9,9 @@ use serde_json::json;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use hnsx_adapter::{
-    AnthropicAdapter, CustomAdapter, OllamaAdapter, OpenAIAdapter,
-};
+use hnsx_adapter::{AnthropicAdapter, CustomAdapter, OllamaAdapter, OpenAIAdapter};
 use hnsx_core::adapter::Adapter;
-use hnsx_core::agent::{
-    AdapterConfig, AgentSpec, ModelRef, PromptTemplate, Provider,
-};
+use hnsx_core::agent::{AdapterConfig, AgentSpec, ModelRef, PromptTemplate, Provider};
 use hnsx_core::chunk::{Artifact, Chunk};
 
 fn spec(provider: Provider, model: &str, endpoint: Option<String>) -> AgentSpec {
@@ -70,7 +66,10 @@ async fn openai_adapter_streams_text_and_usage() {
     .unwrap()
     .with_client(reqwest::Client::new());
     let ctx = adapter.prepare(&json!({})).await.unwrap();
-    let mut stream = adapter.invoke(&json!({"task": "say hi"}), &ctx).await.unwrap();
+    let mut stream = adapter
+        .invoke(&json!({"task": "say hi"}), &ctx)
+        .await
+        .unwrap();
 
     let mut texts = Vec::new();
     let mut usage: Option<Artifact> = None;
@@ -85,7 +84,11 @@ async fn openai_adapter_streams_text_and_usage() {
 
     assert_eq!(texts.join(""), "Hello world");
     let (prompt, completion, cost_usd) = match usage.unwrap() {
-        Artifact::TokenUsage { prompt, completion, cost_usd } => (prompt, completion, cost_usd),
+        Artifact::TokenUsage {
+            prompt,
+            completion,
+            cost_usd,
+        } => (prompt, completion, cost_usd),
         other => panic!("expected TokenUsage, got {other:?}"),
     };
     assert_eq!(prompt, 10);
@@ -129,7 +132,10 @@ async fn anthropic_adapter_streams_text_and_usage() {
     .unwrap()
     .with_client(reqwest::Client::new());
     let ctx = adapter.prepare(&json!({})).await.unwrap();
-    let mut stream = adapter.invoke(&json!({"task": "say hi"}), &ctx).await.unwrap();
+    let mut stream = adapter
+        .invoke(&json!({"task": "say hi"}), &ctx)
+        .await
+        .unwrap();
 
     let mut texts = Vec::new();
     let mut usage: Option<Artifact> = None;
@@ -144,7 +150,9 @@ async fn anthropic_adapter_streams_text_and_usage() {
 
     assert_eq!(texts.join(""), "Hi there");
     let (prompt, completion) = match usage.unwrap() {
-        Artifact::TokenUsage { prompt, completion, .. } => (prompt, completion),
+        Artifact::TokenUsage {
+            prompt, completion, ..
+        } => (prompt, completion),
         other => panic!("expected TokenUsage, got {other:?}"),
     };
     assert_eq!(prompt, 15);
@@ -171,13 +179,14 @@ async fn ollama_adapter_streams_text_and_usage() {
         .mount(&server)
         .await;
 
-    let adapter = OllamaAdapter::new(
-        &spec(Provider::Ollama, "llama3.1", Some(server.uri())),
-    )
-    .unwrap()
-    .with_client(reqwest::Client::new());
+    let adapter = OllamaAdapter::new(&spec(Provider::Ollama, "llama3.1", Some(server.uri())))
+        .unwrap()
+        .with_client(reqwest::Client::new());
     let ctx = adapter.prepare(&json!({})).await.unwrap();
-    let mut stream = adapter.invoke(&json!({"task": "say hi"}), &ctx).await.unwrap();
+    let mut stream = adapter
+        .invoke(&json!({"task": "say hi"}), &ctx)
+        .await
+        .unwrap();
 
     let mut texts = Vec::new();
     let mut usage: Option<Artifact> = None;
@@ -192,7 +201,11 @@ async fn ollama_adapter_streams_text_and_usage() {
 
     assert_eq!(texts.join(""), "Hey!");
     let (prompt, completion, cost_usd) = match usage.unwrap() {
-        Artifact::TokenUsage { prompt, completion, cost_usd } => (prompt, completion, cost_usd),
+        Artifact::TokenUsage {
+            prompt,
+            completion,
+            cost_usd,
+        } => (prompt, completion, cost_usd),
         other => panic!("expected TokenUsage, got {other:?}"),
     };
     assert_eq!(prompt, 20);
@@ -243,7 +256,9 @@ async fn custom_adapter_streams_via_openai_compatible_endpoint() {
 
     assert_eq!(texts.join(""), "OK");
     let (prompt, completion) = match usage.unwrap() {
-        Artifact::TokenUsage { prompt, completion, .. } => (prompt, completion),
+        Artifact::TokenUsage {
+            prompt, completion, ..
+        } => (prompt, completion),
         other => panic!("expected TokenUsage, got {other:?}"),
     };
     assert_eq!(prompt, 5);

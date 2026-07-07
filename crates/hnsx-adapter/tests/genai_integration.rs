@@ -159,7 +159,12 @@ async fn genai_agent_surfaces_error_on_http_failure() {
         .await;
 
     let client = client_pointing_at(format!("{}/v1/", server.uri()));
-    let agent = GenaiAgent::new(client, "openai::gpt-4o-mini".into(), "test".into(), ToolRegistry::new());
+    let agent = GenaiAgent::new(
+        client,
+        "openai::gpt-4o-mini".into(),
+        "test".into(),
+        ToolRegistry::new(),
+    );
 
     // genai's openai adapter surfaces HTTP errors either at the first
     // await (return Err from exec_chat_stream) or as an error event in

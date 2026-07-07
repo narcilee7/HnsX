@@ -1,8 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Args;
-use hnsx_proto::v1::{
-    QueryTraceRequest, telemetry_client::TelemetryClient,
-};
+use hnsx_proto::v1::{QueryTraceRequest, telemetry_client::TelemetryClient};
 use tonic::transport::Channel;
 
 #[derive(Args, Debug)]
@@ -46,11 +44,7 @@ async fn run(args: TracesArgs) -> Result<()> {
     for trace in resp.traces {
         println!(
             "[{}] session={} step={} agent={} duration={}ms",
-            trace.started_at_ms,
-            trace.session_id,
-            trace.step_id,
-            trace.agent_id,
-            trace.duration_ms
+            trace.started_at_ms, trace.session_id, trace.step_id, trace.agent_id, trace.duration_ms
         );
         println!("  input: {}", trace.input);
         println!("  output: {}", trace.output);

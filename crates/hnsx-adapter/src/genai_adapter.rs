@@ -52,11 +52,7 @@ impl GenaiAdapter {
             .iter()
             .filter_map(|(_, _, tool)| to_genai_tool(tool.as_ref()))
             .collect();
-        if tools.is_empty() {
-            None
-        } else {
-            Some(tools)
-        }
+        if tools.is_empty() { None } else { Some(tools) }
     }
 }
 
@@ -173,7 +169,12 @@ impl Adapter for GenaiAdapter {
 }
 
 async fn execute_tool_call(registry: &ToolRegistry, call: &ToolCall) -> Result<Value> {
-    for kind in [ToolKind::Http, ToolKind::Python, ToolKind::Shell, ToolKind::Sql] {
+    for kind in [
+        ToolKind::Http,
+        ToolKind::Python,
+        ToolKind::Shell,
+        ToolKind::Sql,
+    ] {
         if let Some(tool) = registry.get(kind, &call.fn_name) {
             return tool.invoke(call.fn_arguments.clone()).await;
         }
@@ -199,9 +200,7 @@ impl GenaiAdapterFactory {
         Self { client }
     }
 
-    pub fn create_adapter(&self,
-        spec: &AgentSpec,
-    ) -> Result<Arc<dyn Adapter>> {
+    pub fn create_adapter(&self, spec: &AgentSpec) -> Result<Arc<dyn Adapter>> {
         let model = super::genai::genai_model_name(spec)?;
         let system = spec.prompt.template.clone();
         let tools = build_tool_registry(&spec.tools)?;

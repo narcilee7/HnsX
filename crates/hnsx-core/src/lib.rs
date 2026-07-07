@@ -44,6 +44,8 @@ pub use noop::NoopAgent;
 pub use package::{PackageFile, PackageManifest, pack_domain, unpack_domain};
 pub use pii::{contains_pii, detect};
 pub use reporter::{GrpcReporter, NoopReporter, Reporter, SharedReporter};
-pub use sandbox::{LineStream, ProcessHandle, Sandbox, SandboxInstance, SandboxPolicy, SandboxRuntime, SandboxSpec};
+pub use sandbox::{
+    LineStream, ProcessHandle, Sandbox, SandboxInstance, SandboxPolicy, SandboxRuntime, SandboxSpec,
+};
 pub use telemetry::{StepTrace, Telemetry, now_ms};
 pub use tool::{Tool, ToolRegistry, ToolSpec};

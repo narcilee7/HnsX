@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use hnsx_core::agent::ToolKind;
 use hnsx_core::error::{Error, Result};
@@ -122,11 +122,9 @@ impl Tool for PythonTool {
         // Write args to stdin and close it.
         if let Some(stdin) = child.stdin.take() {
             let mut stdin = stdin;
-            tokio::io::AsyncWriteExt::write_all(&mut stdin,
-                args_json.as_bytes(),
-            )
-            .await
-            .map_err(|e| Error::Adapter(format!("PythonTool write stdin: {e}")))?;
+            tokio::io::AsyncWriteExt::write_all(&mut stdin, args_json.as_bytes())
+                .await
+                .map_err(|e| Error::Adapter(format!("PythonTool write stdin: {e}")))?;
             // drop stdin to close the pipe
         }
 
@@ -139,7 +137,8 @@ impl Tool for PythonTool {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
         // Try to parse stdout as JSON; fall back to string.
-        let result: Value = serde_json::from_str(&stdout).unwrap_or_else(|_| Value::String(stdout.clone()));
+        let result: Value =
+            serde_json::from_str(&stdout).unwrap_or_else(|_| Value::String(stdout.clone()));
 
         Ok(json!({
             "ok": output.status.success(),
@@ -155,11 +154,8 @@ impl Tool for PythonTool {
 fn apply_unix_limits(command: &mut tokio::process::Command) {
     unsafe {
         command.pre_exec(|| {
-            let _ = nix::sys::resource::setrlimit(
-                nix::sys::resource::Resource::RLIMIT_CPU,
-                300,
-                600,
-            );
+            let _ =
+                nix::sys::resource::setrlimit(nix::sys::resource::Resource::RLIMIT_CPU, 300, 600);
             let _ = nix::sys::resource::setrlimit(
                 nix::sys::resource::Resource::RLIMIT_AS,
                 1024 * 1024 * 1024,
@@ -190,24 +186,45 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn missing_python_binary_is_error() {
+    async fn timeout_kills_long_running_script() {
         let tool = PythonTool::new(
-            "x",
-            json!({"script": "print('hello')"}),
+            "slow",
+            json!({
+                "script": "import time; time.sleep(10)",
+                "timeout_ms": 100
+            }),
         )
         .expect("build");
-        // We assume python3 exists on the test machine. If it does not, the
-        // invoke should return an Adapter error rather than panic.
-        let _ = tool.invoke(json!({})).await;
+
+        let err = tool.invoke(json!({})).await.unwrap_err();
+        assert!(format!("{err}").contains("timed out"), "got: {err:?}");
+    }
+
+    #[tokio::test]
+    async fn entrypoint_invokes_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let script = dir.path().join("echo.py");
+        tokio::fs::write(
+            &script,
+            "import sys, json; args = json.load(sys.stdin); print(json.dumps({'echo': args['msg']}))",
+        )
+        .await
+        .expect("write script");
+
+        let tool = PythonTool::new(
+            "echo",
+            json!({"entrypoint": script.to_string_lossy().to_string()}),
+        )
+        .expect("build");
+
+        let out = tool.invoke(json!({"msg": "hi"})).await.expect("invoke");
+        assert_eq!(out["ok"], true);
+        assert_eq!(out["result"]["echo"], "hi");
     }
 
     #[test]
     fn rejects_both_script_and_entrypoint() {
-        let err = PythonTool::new(
-            "x",
-            json!({"script": "x", "entrypoint": "y.py"}),
-        )
-        .unwrap_err();
+        let err = PythonTool::new("x", json!({"script": "x", "entrypoint": "y.py"})).unwrap_err();
         assert!(
             matches!(err, Error::Adapter(ref m) if m.contains("not both")),
             "got: {err:?}"

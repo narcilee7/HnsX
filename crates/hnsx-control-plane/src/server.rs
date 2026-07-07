@@ -18,10 +18,8 @@ use crate::{
     discovery::DiscoveryService,
     http_api,
     proto::{
-        discovery_server::DiscoveryServer,
-        registry_server::RegistryServer,
-        scheduler_server::SchedulerServer,
-        telemetry_server::TelemetryServer,
+        discovery_server::DiscoveryServer, registry_server::RegistryServer,
+        scheduler_server::SchedulerServer, telemetry_server::TelemetryServer,
     },
     registry::RegistryService,
     scheduler::SchedulerService,
@@ -70,7 +68,8 @@ impl ControlPlaneServer {
         self
     }
 
-    fn services(&self,
+    fn services(
+        &self,
     ) -> (
         RegistryServer<RegistryService>,
         SchedulerServer<SchedulerService>,
@@ -89,18 +88,14 @@ impl ControlPlaneServer {
     }
 
     /// Build the axum router for `/metrics`, the REST API and the Web UI.
-    fn http_router(&self,
-    ) -> Router {
+    fn http_router(&self) -> Router {
         let mut router = http_api::router(self.store.clone());
         if let Some(handle) = self.metrics_handle.clone() {
             router = router.route("/metrics", get(move || async move { handle.render() }));
         }
         if let Some(dir) = self.static_dir.as_ref() {
             let index = dir.join("index.html");
-            router = router.nest_service(
-                "/",
-                ServeDir::new(dir).fallback(ServeFile::new(index)),
-            );
+            router = router.nest_service("/", ServeDir::new(dir).fallback(ServeFile::new(index)));
         }
         router
     }
@@ -110,9 +105,7 @@ impl ControlPlaneServer {
     /// # Errors
     ///
     /// Returns an error if either server cannot bind or run.
-    pub async fn serve(&self,
-        addr: SocketAddr,
-    ) -> anyhow::Result<()> {
+    pub async fn serve(&self, addr: SocketAddr) -> anyhow::Result<()> {
         let grpc_addr = addr;
         let http_addr = SocketAddr::new(addr.ip(), addr.port() + 1);
 
@@ -127,7 +120,9 @@ impl ControlPlaneServer {
         let http = async {
             let listener = TcpListener::bind(http_addr).await?;
             let router = self.http_router();
-            axum::serve(listener, router).await.map_err(anyhow::Error::from)
+            axum::serve(listener, router)
+                .await
+                .map_err(anyhow::Error::from)
         };
 
         tokio::try_join!(grpc.map_err(anyhow::Error::from), http)?;

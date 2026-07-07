@@ -63,10 +63,7 @@ impl Telemetry {
     }
 
     /// Build a telemetry sink with an explicit reporter (e.g. gRPC).
-    pub fn with_dir_and_reporter(
-        dir: PathBuf,
-        reporter: Arc<dyn Reporter>,
-    ) -> Result<Self> {
+    pub fn with_dir_and_reporter(dir: PathBuf, reporter: Arc<dyn Reporter>) -> Result<Self> {
         create_dir_all(&dir).map_err(|e| {
             Error::Adapter(format!(
                 "failed to create trace directory {}: {e}",
@@ -74,14 +71,15 @@ impl Telemetry {
             ))
         })?;
         Ok(Self {
-            inner: Arc::new(Mutex::new(TelemetryInner { trace_dir: dir, reporter })),
+            inner: Arc::new(Mutex::new(TelemetryInner {
+                trace_dir: dir,
+                reporter,
+            })),
         })
     }
 
     /// Replace the reporter.
-    pub fn set_reporter(&self,
-        reporter: Arc<dyn Reporter>,
-    ) {
+    pub fn set_reporter(&self, reporter: Arc<dyn Reporter>) {
         if let Ok(mut inner) = self.inner.lock() {
             inner.reporter = reporter;
         }
@@ -89,9 +87,7 @@ impl Telemetry {
 
     /// Append a step trace to `<dir>/<session_id>.jsonl` and forward it to
     /// the configured reporter.
-    pub fn record_step(&self,
-        trace: &StepTrace,
-    ) -> Result<()> {
+    pub fn record_step(&self, trace: &StepTrace) -> Result<()> {
         let (path, reporter) = {
             let inner = self
                 .inner
@@ -122,9 +118,7 @@ impl Telemetry {
     }
 
     /// Report a completed invocation summary.
-    pub fn record_invocation(&self,
-        record: &InvocationRecord,
-    ) {
+    pub fn record_invocation(&self, record: &InvocationRecord) {
         let reporter = self
             .inner
             .lock()

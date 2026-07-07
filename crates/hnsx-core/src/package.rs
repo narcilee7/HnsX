@@ -9,9 +9,9 @@ use std::fs::File;
 use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 
+use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
-use flate2::Compression;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tar::Archive;
@@ -126,7 +126,9 @@ pub fn pack_domain(domain_path: impl AsRef<Path>, output: impl AsRef<Path>) -> R
 
     for (pkg_file, data) in collected {
         let mut header = tar::Header::new_gnu();
-        header.set_path(&pkg_file.path).map_err(|e| Error::InvalidSpec(format!("tar path: {e}")))?;
+        header
+            .set_path(&pkg_file.path)
+            .map_err(|e| Error::InvalidSpec(format!("tar path: {e}")))?;
         header.set_size(pkg_file.size);
         header.set_mode(0o644);
         header.set_cksum();

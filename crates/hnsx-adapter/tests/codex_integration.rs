@@ -46,7 +46,8 @@ fn mock_codex_path() -> (tempfile::TempDir, std::path::PathBuf) {
     #[cfg(unix)]
     {
         let mut f = std::fs::File::create(&script_path).expect("create script");
-        f.write_all(b"#!/bin/sh\necho 'Codex says hi'\n").expect("write");
+        f.write_all(b"#!/bin/sh\necho 'Codex says hi'\n")
+            .expect("write");
         use std::os::unix::fs::PermissionsExt;
         let mut perms = std::fs::metadata(&script_path).unwrap().permissions();
         perms.set_mode(0o755);
@@ -55,8 +56,10 @@ fn mock_codex_path() -> (tempfile::TempDir, std::path::PathBuf) {
     #[cfg(not(unix))]
     {
         // Windows: use a .cmd wrapper.
-        let mut f = std::fs::File::create(&script_path.with_extension("cmd")).expect("create script");
-        f.write_all(b"@echo off\necho Codex says hi\n").expect("write");
+        let mut f =
+            std::fs::File::create(&script_path.with_extension("cmd")).expect("create script");
+        f.write_all(b"@echo off\necho Codex says hi\n")
+            .expect("write");
     }
     (dir, script_path)
 }
@@ -84,9 +87,7 @@ async fn codex_adapter_spawns_cli_and_streams_stdout() {
     let runtime_ctx = adapter.prepare(&json!({})).await.expect("prepare");
 
     let mut stream = adapter
-        .invoke(&json!({"task": "hello"}),
-            &runtime_ctx,
-        )
+        .invoke(&json!({"task": "hello"}), &runtime_ctx)
         .await
         .expect("invoke should succeed");
 

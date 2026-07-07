@@ -31,7 +31,9 @@ impl SqliteStore {
     pub async fn open(path: &str) -> anyhow::Result<Self> {
         let path = path.to_owned();
         tokio::task::spawn_blocking(move || {
-            let parent = std::path::Path::new(&path).parent().map(std::path::Path::to_owned);
+            let parent = std::path::Path::new(&path)
+                .parent()
+                .map(std::path::Path::to_owned);
             if let Some(parent) = parent {
                 std::fs::create_dir_all(parent)?;
             }
@@ -147,9 +149,8 @@ impl SqliteStore {
     /// Return all registered domains.
     pub async fn list_domains(&self) -> anyhow::Result<Vec<DomainSpec>> {
         let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare(
-            "SELECT id, version, yaml_body FROM domains ORDER BY id, version",
-        )?;
+        let mut stmt =
+            conn.prepare("SELECT id, version, yaml_body FROM domains ORDER BY id, version")?;
         let rows = stmt.query_map([], |row| {
             Ok(DomainSpec {
                 id: row.get(0)?,
@@ -157,8 +158,7 @@ impl SqliteStore {
                 yaml_body: row.get(2)?,
             })
         })?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(Into::into)
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
     // ------------------------------------------------------------------
@@ -236,8 +236,7 @@ impl SqliteStore {
                 capabilities: serde_json::from_str(&caps_json).unwrap_or_default(),
             })
         })?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(Into::into)
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
     /// Return instances matching domain, optional tags and optional region.
@@ -287,10 +286,7 @@ impl SqliteStore {
     // ------------------------------------------------------------------
 
     /// Persist an invocation summary.
-    pub async fn record_invocation(
-        &self,
-        record: &InvocationRecord,
-    ) -> anyhow::Result<()> {
+    pub async fn record_invocation(&self, record: &InvocationRecord) -> anyhow::Result<()> {
         let conn = self.conn.lock().await;
         conn.execute(
             "INSERT INTO invocations
@@ -388,8 +384,7 @@ impl SqliteStore {
                  ORDER BY started_at_ms, rowid",
             )?;
             let rows = stmt.query_map(params![domain_id, session], trace_from_row)?;
-            rows.collect::<Result<Vec<_>, _>>()
-                .map_err(Into::into)
+            rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
         } else {
             let mut stmt = conn.prepare(
                 "SELECT session_id, domain_id, step_id, agent_id,
@@ -399,8 +394,7 @@ impl SqliteStore {
                  ORDER BY started_at_ms, rowid",
             )?;
             let rows = stmt.query_map(params![domain_id], trace_from_row)?;
-            rows.collect::<Result<Vec<_>, _>>()
-                .map_err(Into::into)
+            rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
         }
     }
 }

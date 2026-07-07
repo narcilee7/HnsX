@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use hnsx_core::sandbox::{SandboxPolicy, SandboxRuntime, SandboxSpec};
 use hnsx_core::Sandbox;
+use hnsx_core::sandbox::{SandboxPolicy, SandboxRuntime, SandboxSpec};
 
 use crate::backend::{none::NoneBackend, process::ProcessBackend};
 
@@ -19,18 +19,14 @@ impl SandboxFactory {
     }
 
     /// Select and instantiate a backend for `spec`.
-    pub fn create(&self,
-        spec: &SandboxSpec,
-    ) -> Arc<dyn Sandbox> {
+    pub fn create(&self, spec: &SandboxSpec) -> Arc<dyn Sandbox> {
         let runtime = resolve_runtime(spec);
 
         match runtime {
-            SandboxRuntime::None | SandboxRuntime::Auto
-                if spec.policy == SandboxPolicy::None =>
-            {
+            SandboxRuntime::None | SandboxRuntime::Auto if spec.policy == SandboxPolicy::None => {
                 Arc::new(NoneBackend)
             }
-            SandboxRuntime::Process | SandboxRuntime::Auto => Arc::new(ProcessBackend),
+            SandboxRuntime::Process | SandboxRuntime::Auto => Arc::new(ProcessBackend::new()),
             #[cfg(target_os = "linux")]
             SandboxRuntime::LinuxNamespace => Arc::new(LinuxNamespaceBackend::new()),
             #[cfg(not(target_os = "linux"))]
@@ -40,7 +36,7 @@ impl SandboxFactory {
             }
             // Fallback to process-level hardening when a stronger backend is
             // requested but not compiled in for this platform.
-            _ => Arc::new(ProcessBackend),
+            _ => Arc::new(ProcessBackend::new()),
         }
     }
 }

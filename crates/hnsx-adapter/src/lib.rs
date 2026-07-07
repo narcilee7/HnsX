@@ -18,6 +18,7 @@ pub mod ollama;
 pub mod ollama_adapter;
 pub mod openai;
 pub mod openai_adapter;
+pub mod tool_chat;
 pub mod tools;
 
 pub use anthropic_adapter::AnthropicAdapter;
@@ -32,19 +33,18 @@ pub use openai_adapter::OpenAIAdapter;
 
 use std::sync::Arc;
 
+use hnsx_core::Result;
 use hnsx_core::agent::{AgentSpec, Provider};
 use hnsx_core::agent_factory::AgentFactory as CoreAgentFactory;
 use hnsx_core::sandbox::{SandboxPolicy, SandboxRuntime, SandboxSpec};
 use hnsx_core::{Agent, HnsXAgentBuilder};
-use hnsx_core::Result;
 use hnsx_sandbox::factory::SandboxFactory;
 
 /// Factory that resolves a `Provider` to a concrete `Agent` impl.
 ///
 /// All providers are ultimately composed into an `HnsXAgent` via
-/// `HnsXAgentBuilder`. HTTP providers use native `reqwest`-based adapters by
-/// default; if the agent declares tools we fall back to the `genai` multi-
-/// provider client until Phase 2 lands native tool support.
+/// `HnsXAgentBuilder`. HTTP providers use native `reqwest`-based adapters with
+/// native tool-call support.
 #[derive(Clone, Default)]
 pub struct HnsxAgentFactory {
     sandbox_factory: Arc<SandboxFactory>,
@@ -65,21 +65,33 @@ impl CoreAgentFactory for HnsxAgentFactory {
         let sandbox_spec = spec.sandbox.clone().unwrap_or(SandboxSpec {
             policy: SandboxPolicy::None,
             runtime: SandboxRuntime::Auto,
+            ..Default::default()
         });
         let sandbox = self.sandbox_factory.create(&sandbox_spec);
+        let tool_registry = crate::tools::build_tool_registry(&spec.tools).unwrap_or_default();
 
-        let adapter: Arc<dyn Adapter> = if !spec.tools.is_empty() {
-            // Tool calling is not yet native; fall back to genai.
-            crate::genai_adapter::GenaiAdapterFactory::default().create_adapter(spec)?
-        } else {
-            match spec.model.provider {
-                Provider::Openai => Arc::new(crate::openai_adapter::OpenAIAdapter::new(spec)?),
-                Provider::Anthropic => Arc::new(crate::anthropic_adapter::AnthropicAdapter::new(spec)?),
-                Provider::Ollama => Arc::new(crate::ollama_adapter::OllamaAdapter::new(spec)?),
-                Provider::Custom => Arc::new(crate::custom_adapter::CustomAdapter::new(spec)?),
-                Provider::ClaudeCode => Arc::new(crate::claude_code::ClaudeCodeAdapter::new(sandbox.clone(), spec)),
-                Provider::Codex => Arc::new(crate::codex::CodexAdapter::new(sandbox.clone(), spec)),
-            }
+        let adapter: Arc<dyn Adapter> = match spec.model.provider {
+            Provider::Openai => Arc::new(
+                crate::openai_adapter::OpenAIAdapter::new(spec)?.with_tools(tool_registry.clone()),
+            ),
+            Provider::Anthropic => Arc::new(
+                crate::anthropic_adapter::AnthropicAdapter::new(spec)?
+                    .with_tools(tool_registry.clone()),
+            ),
+            Provider::Ollama => Arc::new(
+                crate::ollama_adapter::OllamaAdapter::new(spec)?.with_tools(tool_registry.clone()),
+            ),
+            Provider::Custom => Arc::new(
+                crate::custom_adapter::CustomAdapter::new(spec)?.with_tools(tool_registry.clone()),
+            ),
+            Provider::ClaudeCode => Arc::new(
+                crate::claude_code::ClaudeCodeAdapter::new(sandbox.clone(), spec)
+                    .with_tools(tool_registry.clone()),
+            ),
+            Provider::Codex => Arc::new(
+                crate::codex::CodexAdapter::new(sandbox.clone(), spec)
+                    .with_tools(tool_registry.clone()),
+            ),
         };
 
         Ok(Arc::new(
@@ -87,7 +99,7 @@ impl CoreAgentFactory for HnsxAgentFactory {
                 .spec(spec.clone())
                 .adapter(adapter)
                 .sandbox(sandbox)
-                .tools(crate::tools::build_tool_registry(&spec.tools).unwrap_or_default())
+                .tools(tool_registry)
                 .build()?,
         ))
     }
