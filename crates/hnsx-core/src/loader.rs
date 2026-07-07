@@ -1,8 +1,6 @@
 //! `DomainLoader`: parses a [`DomainSpec`] YAML and returns an `Arc<dyn Domain>`.
 //!
-//! Phase 1.1 — constructs the domain but does not execute it. Execution lands
-//! in Phase 1.2 (workflow engine) and adapter wiring in Phase 1.4+. The
-//! returned [`Domain`] impl surfaces the spec and validation results, while
+//! The returned [`Domain`] impl surfaces the spec and validation results, while
 //! `invoke` and `get_agent` return `Error::Unimplemented` until later phases
 //! fill in those pieces.
 
