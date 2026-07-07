@@ -71,8 +71,7 @@ mod tests {
                 tags: vec!["blue".into()],
                 region: "us-east".into(),
                 capabilities: vec![],
-            },
-            )
+            })
             .await
             .unwrap();
         store
@@ -82,8 +81,7 @@ mod tests {
                 tags: vec!["red".into()],
                 region: "us-west".into(),
                 capabilities: vec![],
-            },
-            )
+            })
             .await
             .unwrap();
 

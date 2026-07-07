@@ -74,6 +74,8 @@ mod tests {
 
     #[test]
     fn clean_text_is_safe() {
-        assert!(!contains_pii("The quick brown fox jumps over the lazy dog."));
+        assert!(!contains_pii(
+            "The quick brown fox jumps over the lazy dog."
+        ));
     }
 }

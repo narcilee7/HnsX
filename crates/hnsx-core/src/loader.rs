@@ -64,8 +64,7 @@ impl LoadedDomain {
         memory_window: usize,
     ) -> Result<Self> {
         let agents = validate(&spec)?;
-        let engine = build_engine(&spec, &agents, factory, telemetry, memory, memory_window,
-        )?;
+        let engine = build_engine(&spec, &agents, factory, telemetry, memory, memory_window)?;
         Ok(Self {
             spec,
             agents,
@@ -279,7 +278,9 @@ fn build_engine(
 /// Defaults to `InMemoryBackend` when the spec does not mention memory.
 fn build_memory(config: &Option<MemoryConfig>) -> Option<Arc<dyn MemoryBackend>> {
     match config {
-        Some(cfg) => MemoryBackendFactory::create(cfg).ok().map(|b| b as Arc<dyn MemoryBackend>),
+        Some(cfg) => MemoryBackendFactory::create(cfg)
+            .ok()
+            .map(|b| b as Arc<dyn MemoryBackend>),
         None => Some(Arc::new(crate::memory::InMemoryBackend::new())),
     }
 }
@@ -465,7 +466,8 @@ workflow:
             .enable_time()
             .build()
             .expect("tokio runtime");
-        let mut stream = rt.block_on(domain.invoke(serde_json::json!({})))
+        let mut stream = rt
+            .block_on(domain.invoke(serde_json::json!({})))
             .expect("invoke should succeed");
 
         let mut saw_text = false;

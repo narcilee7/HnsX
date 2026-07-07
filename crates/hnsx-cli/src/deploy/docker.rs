@@ -32,8 +32,7 @@ pub fn deploy(
         .context("artifact path must have a file name")?;
 
     // Resolve the hnsx binary that is running this command.
-    let hnsx_bin = std::env::current_exe()
-        .context("resolve current hnsx binary path")?;
+    let hnsx_bin = std::env::current_exe().context("resolve current hnsx binary path")?;
     let hnsx_bin = hnsx_bin
         .canonicalize()
         .context("canonicalize hnsx binary path")?;
@@ -65,8 +64,7 @@ ENTRYPOINT ["hnsx", "dev", "--artifact", "/app/domain.hnsx.tar", "--bind", "0.0.
         artifact_name = artifact_name,
         control_plane = control_plane
     );
-    fs::write(build_dir.path().join("Dockerfile"), dockerfile)
-        .context("write Dockerfile")?;
+    fs::write(build_dir.path().join("Dockerfile"), dockerfile).context("write Dockerfile")?;
 
     // docker build.
     let mut build = Command::new("docker");
@@ -88,9 +86,7 @@ ENTRYPOINT ["hnsx", "dev", "--artifact", "/app/domain.hnsx.tar", "--bind", "0.0.
     }
     run.arg(&image_tag);
 
-    let output = run
-        .output()
-        .context("run docker run")?;
+    let output = run.output().context("run docker run")?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         bail!("docker run failed: {stderr}");
@@ -119,8 +115,7 @@ fn verify_docker() -> Result<()> {
 /// Clean up a deployed container by name or id.
 pub fn remove_container(name_or_id: &str) -> Result<()> {
     let status = Command::new("docker")
-        .args(["rm", "-f", name_or_id,
-        ])
+        .args(["rm", "-f", name_or_id])
         .status()
         .context("run docker rm")?;
     if !status.success() {

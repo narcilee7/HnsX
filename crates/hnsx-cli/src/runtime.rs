@@ -33,11 +33,7 @@ pub struct DomainRuntime {
 
 impl DomainRuntime {
     /// Create a runtime for the given domain.
-    pub fn new(
-        domain: Arc<dyn Domain>,
-        instance_id: String,
-        control_plane: String,
-    ) -> Self {
+    pub fn new(domain: Arc<dyn Domain>, instance_id: String, control_plane: String) -> Self {
         Self {
             domain,
             instance_id,

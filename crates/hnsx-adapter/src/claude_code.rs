@@ -17,6 +17,7 @@ use hnsx_core::agent::{AgentSpec, HealthStatus};
 use hnsx_core::chunk::Chunk;
 use hnsx_core::error::{Error, Result};
 use hnsx_core::sandbox::{Sandbox, SandboxPolicy, SandboxRuntime, SandboxSpec};
+use hnsx_core::tool::ToolRegistry;
 
 /// Adapter that shells out to the Claude Code CLI.
 pub struct ClaudeCodeAdapter {
@@ -30,12 +31,19 @@ impl ClaudeCodeAdapter {
         let sandbox_spec = spec.sandbox.clone().unwrap_or(SandboxSpec {
             policy: SandboxPolicy::Namespace,
             runtime: SandboxRuntime::Auto,
+            ..Default::default()
         });
         Self {
             sandbox,
             system_prompt: spec.prompt.template.clone(),
             sandbox_spec,
         }
+    }
+
+    /// No-op for interface consistency: the Claude Code CLI handles its own
+    /// tool use internally.
+    pub fn with_tools(self, _tools: ToolRegistry) -> Self {
+        self
     }
 }
 
@@ -52,12 +60,16 @@ impl Adapter for ClaudeCodeAdapter {
         })
     }
 
-    async fn invoke(&self, input: &Value, _ctx: &RuntimeContext) -> Result<BoxStream<'static, Chunk>> {
+    async fn invoke(
+        &self,
+        input: &Value,
+        _ctx: &RuntimeContext,
+    ) -> Result<BoxStream<'static, Chunk>> {
         let sandbox = self.sandbox.clone();
         let sandbox_spec = self.sandbox_spec.clone();
         let system_prompt = self.system_prompt.clone();
 
-        let _instance = sandbox.create(&sandbox_spec).await?;
+        let instance = sandbox.create(&sandbox_spec).await?;
 
         // Build the prompt from the configured system prompt plus the task
         // input. The system prompt carries the agent's role; the input carries
@@ -76,7 +88,7 @@ impl Adapter for ClaudeCodeAdapter {
         );
 
         let handle = sandbox
-            .execute(&cmd, &HashMap::new())
+            .execute(&instance, &cmd, &HashMap::new())
             .await
             .map_err(|e| Error::Adapter(format!("claude-code execute: {e}")))?;
 
@@ -135,13 +147,16 @@ impl Adapter for ClaudeCodeAdapter {
                 return;
             }
 
-            match sandbox.list_changes().await {
+            match sandbox.list_changes(&instance).await {
                 Ok(changes) if !changes.is_empty() => {
                     yield Chunk::artifact(hnsx_core::chunk::Artifact::FileChanges(changes));
                 }
                 Ok(_) => {}
                 Err(e) => yield Chunk::error(format!("list_changes failed: {e}")),
             }
+
+            // Best-effort cleanup.
+            let _ = sandbox.destroy(&instance).await;
         }))
     }
 
@@ -154,18 +169,27 @@ impl Adapter for ClaudeCodeAdapter {
         let probe_spec = SandboxSpec {
             policy: SandboxPolicy::None,
             runtime: SandboxRuntime::None,
+            ..Default::default()
         };
         match self.sandbox.create(&probe_spec).await {
-            Ok(_) => match self.sandbox.execute("claude --version", &HashMap::new()).await {
-                Ok(_) => HealthStatus {
-                    healthy: true,
-                    message: Some("claude CLI found".to_string()),
-                },
-                Err(e) => HealthStatus {
-                    healthy: false,
-                    message: Some(format!("claude CLI not available: {e}")),
-                },
-            },
+            Ok(instance) => {
+                let result = match self
+                    .sandbox
+                    .execute(&instance, "claude --version", &HashMap::new())
+                    .await
+                {
+                    Ok(_) => HealthStatus {
+                        healthy: true,
+                        message: Some("claude CLI found".to_string()),
+                    },
+                    Err(e) => HealthStatus {
+                        healthy: false,
+                        message: Some(format!("claude CLI not available: {e}")),
+                    },
+                };
+                let _ = self.sandbox.destroy(&instance).await;
+                result
+            }
             Err(e) => HealthStatus {
                 healthy: false,
                 message: Some(format!("sandbox create failed: {e}")),

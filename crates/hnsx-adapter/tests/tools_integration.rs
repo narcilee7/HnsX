@@ -65,11 +65,13 @@ fn spec_with_tool(endpoint: String) -> AgentSpec {
 
 fn openai_client(base_url: String) -> genai::Client {
     genai::Client::builder()
-        .with_service_target_resolver(ServiceTargetResolver::from_resolver_fn(move |mut target: ServiceTarget| {
-            target.endpoint = Endpoint::from_owned(base_url.clone());
-            target.auth = AuthData::Key("sk-test".into());
-            Ok(target)
-        }))
+        .with_service_target_resolver(ServiceTargetResolver::from_resolver_fn(
+            move |mut target: ServiceTarget| {
+                target.endpoint = Endpoint::from_owned(base_url.clone());
+                target.auth = AuthData::Key("sk-test".into());
+                Ok(target)
+            },
+        ))
         .build()
 }
 

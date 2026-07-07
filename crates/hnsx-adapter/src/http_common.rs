@@ -103,7 +103,8 @@ pub fn openai_cost(model: &str, prompt_tokens: u64, completion_tokens: u64) -> f
         m if m.contains("gpt-3.5-turbo") => (0.50, 1.50),
         _ => (0.0, 0.0),
     };
-    (prompt_tokens as f64 * prompt_per_1m + completion_tokens as f64 * completion_per_1m) / 1_000_000.0
+    (prompt_tokens as f64 * prompt_per_1m + completion_tokens as f64 * completion_per_1m)
+        / 1_000_000.0
 }
 
 /// Cost in USD for Anthropic models (per 1M tokens). Unknown models report 0.
@@ -116,7 +117,8 @@ pub fn anthropic_cost(model: &str, prompt_tokens: u64, completion_tokens: u64) -
         m if m.contains("claude-haiku") => (0.25, 1.25),
         _ => (0.0, 0.0),
     };
-    (prompt_tokens as f64 * prompt_per_1m + completion_tokens as f64 * completion_per_1m) / 1_000_000.0
+    (prompt_tokens as f64 * prompt_per_1m + completion_tokens as f64 * completion_per_1m)
+        / 1_000_000.0
 }
 
 /// Estimate tokens when the API does not report usage. This is intentionally

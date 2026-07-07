@@ -19,10 +19,7 @@ use crate::error::{Error, Result};
 
 #[async_trait]
 pub trait MemoryBackend: Send + Sync {
-    async fn load_session(&self,
-        domain_id: &str,
-        session_id: &str,
-    ) -> Result<Session>;
+    async fn load_session(&self, domain_id: &str, session_id: &str) -> Result<Session>;
     async fn save_turn(
         &self,
         session: &Session,
@@ -156,10 +153,7 @@ impl InMemoryBackend {
 
 #[async_trait]
 impl MemoryBackend for InMemoryBackend {
-    async fn load_session(&self,
-        domain_id: &str,
-        session_id: &str,
-    ) -> Result<Session> {
+    async fn load_session(&self, domain_id: &str, session_id: &str) -> Result<Session> {
         let key = Self::key(domain_id, session_id);
         let map = self.inner.lock().expect("memory mutex poisoned");
         Ok(map.get(&key).cloned().unwrap_or_else(|| Session {
@@ -265,27 +259,28 @@ impl SqliteBackend {
 
 #[async_trait]
 impl MemoryBackend for SqliteBackend {
-    async fn load_session(
-        &self,
-        domain_id: &str,
-        session_id: &str,
-    ) -> Result<Session> {
+    async fn load_session(&self, domain_id: &str, session_id: &str) -> Result<Session> {
         self.with_conn(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT agent_id, role, content FROM turns
+            let mut stmt = conn
+                .prepare(
+                    "SELECT agent_id, role, content FROM turns
                  WHERE domain_id = ? AND session_id = ?
-                 ORDER BY ordinal"
-            ).map_err(|e| Error::Adapter(format!("SqliteBackend prepare: {e}")))?;
-            let rows = stmt.query_map([domain_id, session_id], |row| {
-                Ok(Turn {
-                    agent_id: row.get(0)?,
-                    role: row.get(1)?,
-                    content: row.get(2)?,
+                 ORDER BY ordinal",
+                )
+                .map_err(|e| Error::Adapter(format!("SqliteBackend prepare: {e}")))?;
+            let rows = stmt
+                .query_map([domain_id, session_id], |row| {
+                    Ok(Turn {
+                        agent_id: row.get(0)?,
+                        role: row.get(1)?,
+                        content: row.get(2)?,
+                    })
                 })
-            }).map_err(|e| Error::Adapter(format!("SqliteBackend query: {e}")))?;
+                .map_err(|e| Error::Adapter(format!("SqliteBackend query: {e}")))?;
             let mut turns = Vec::new();
             for row in rows {
-                turns.push(row.map_err(|e| Error::Adapter(format!("SqliteBackend load row: {e}")))?);
+                turns
+                    .push(row.map_err(|e| Error::Adapter(format!("SqliteBackend load row: {e}")))?);
             }
             Ok(Session {
                 domain_id: domain_id.to_string(),
@@ -308,13 +303,17 @@ impl MemoryBackend for SqliteBackend {
         let role = role.to_string();
         let content = content.to_string();
         self.with_conn(move |conn| {
-            let ordinal: i64 = conn.query_row(
-                "SELECT COALESCE(MAX(ordinal), 0) + 1 FROM turns
+            let ordinal: i64 = conn
+                .query_row(
+                    "SELECT COALESCE(MAX(ordinal), 0) + 1 FROM turns
                  WHERE domain_id = ? AND session_id = ?",
-                [&domain_id as &dyn rusqlite::ToSql,
-                    &session_id as &dyn rusqlite::ToSql],
-                |row| row.get(0),
-            ).map_err(|e| Error::Adapter(format!("SqliteBackend query_row: {e}")))?;
+                    [
+                        &domain_id as &dyn rusqlite::ToSql,
+                        &session_id as &dyn rusqlite::ToSql,
+                    ],
+                    |row| row.get(0),
+                )
+                .map_err(|e| Error::Adapter(format!("SqliteBackend query_row: {e}")))?;
             conn.execute(
                 "INSERT INTO turns (domain_id, session_id, agent_id, role, content, ordinal)
                  VALUES (?, ?, ?, ?, ?, ?)",
@@ -326,7 +325,8 @@ impl MemoryBackend for SqliteBackend {
                     &content as &dyn rusqlite::ToSql,
                     &ordinal as &dyn rusqlite::ToSql,
                 ],
-            ).map_err(|e| Error::Adapter(format!("SqliteBackend insert: {e}")))?;
+            )
+            .map_err(|e| Error::Adapter(format!("SqliteBackend insert: {e}")))?;
             Ok(())
         })
     }
@@ -338,30 +338,36 @@ impl MemoryBackend for SqliteBackend {
         window: usize,
     ) -> Result<Vec<Message>> {
         self.with_conn(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT role, content FROM turns
+            let mut stmt = conn
+                .prepare(
+                    "SELECT role, content FROM turns
                  WHERE domain_id = ? AND session_id = ? AND agent_id = ?
                  ORDER BY ordinal DESC
-                 LIMIT ?"
-            ).map_err(|e| Error::Adapter(format!("SqliteBackend prepare: {e}")))?;
+                 LIMIT ?",
+                )
+                .map_err(|e| Error::Adapter(format!("SqliteBackend prepare: {e}")))?;
             let window = window as i64;
-            let rows = stmt.query_map(
-                [
-                    &session.domain_id as &dyn rusqlite::ToSql,
-                    &session.session_id as &dyn rusqlite::ToSql,
-                    &agent_id as &dyn rusqlite::ToSql,
-                    &window as &dyn rusqlite::ToSql,
-                ],
-                |row| {
-                    Ok(Message {
-                        role: row.get(0)?,
-                        content: row.get(1)?,
-                    })
-                },
-            ).map_err(|e| Error::Adapter(format!("SqliteBackend query: {e}")))?;
+            let rows = stmt
+                .query_map(
+                    [
+                        &session.domain_id as &dyn rusqlite::ToSql,
+                        &session.session_id as &dyn rusqlite::ToSql,
+                        &agent_id as &dyn rusqlite::ToSql,
+                        &window as &dyn rusqlite::ToSql,
+                    ],
+                    |row| {
+                        Ok(Message {
+                            role: row.get(0)?,
+                            content: row.get(1)?,
+                        })
+                    },
+                )
+                .map_err(|e| Error::Adapter(format!("SqliteBackend query: {e}")))?;
             let mut messages = Vec::new();
             for row in rows {
-                messages.push(row.map_err(|e| Error::Adapter(format!("SqliteBackend context row: {e}")))?);
+                messages.push(
+                    row.map_err(|e| Error::Adapter(format!("SqliteBackend context row: {e}")))?,
+                );
             }
             // Reverse to oldest-first.
             messages.reverse();
@@ -392,11 +398,7 @@ impl RedisBackend {
 
 #[async_trait]
 impl MemoryBackend for RedisBackend {
-    async fn load_session(
-        &self,
-        _domain_id: &str,
-        _session_id: &str,
-    ) -> Result<Session> {
+    async fn load_session(&self, _domain_id: &str, _session_id: &str) -> Result<Session> {
         Err(Error::Unimplemented(
             "RedisBackend is a placeholder in this version",
         ))
@@ -448,11 +450,7 @@ impl PostgresBackend {
 
 #[async_trait]
 impl MemoryBackend for PostgresBackend {
-    async fn load_session(
-        &self,
-        _domain_id: &str,
-        _session_id: &str,
-    ) -> Result<Session> {
+    async fn load_session(&self, _domain_id: &str, _session_id: &str) -> Result<Session> {
         Err(Error::Unimplemented(
             "PostgresBackend is a placeholder in this version",
         ))
@@ -567,8 +565,8 @@ mod tests {
 
     #[test]
     fn factory_creates_in_memory() {
-        let backend = MemoryBackendFactory::create(&MemoryConfig::Short("in_memory".into()))
-            .expect("create");
+        let backend =
+            MemoryBackendFactory::create(&MemoryConfig::Short("in_memory".into())).expect("create");
         let s = block_on(backend.load_session("d", "s")).expect("load");
         assert!(s.turns.is_empty());
     }
@@ -599,8 +597,7 @@ mod tests {
 
     #[test]
     fn factory_rejects_unknown_backend() {
-        let err = match MemoryBackendFactory::create(&MemoryConfig::Short("unknown".into()),
-        ) {
+        let err = match MemoryBackendFactory::create(&MemoryConfig::Short("unknown".into())) {
             Ok(_) => panic!("expected error"),
             Err(e) => e,
         };

@@ -13,6 +13,7 @@ use hnsx_core::adapter::{Adapter, RuntimeContext};
 use hnsx_core::agent::{AgentSpec, HealthStatus};
 use hnsx_core::chunk::Chunk;
 use hnsx_core::error::{Error, Result};
+use hnsx_core::tool::ToolRegistry;
 
 pub struct CustomAdapter {
     inner: OpenAIAdapter,
@@ -50,6 +51,11 @@ impl CustomAdapter {
         self.inner = self.inner.with_client(client);
         self
     }
+
+    pub fn with_tools(mut self, tools: ToolRegistry) -> Self {
+        self.inner = self.inner.with_tools(tools);
+        self
+    }
 }
 
 #[async_trait]
@@ -58,7 +64,11 @@ impl Adapter for CustomAdapter {
         self.inner.prepare(config).await
     }
 
-    async fn invoke(&self, input: &Value, ctx: &RuntimeContext) -> Result<BoxStream<'static, Chunk>> {
+    async fn invoke(
+        &self,
+        input: &Value,
+        ctx: &RuntimeContext,
+    ) -> Result<BoxStream<'static, Chunk>> {
         self.inner.invoke(input, ctx).await
     }
 
