@@ -33,11 +33,11 @@ pub use openai_adapter::OpenAIAdapter;
 
 use std::sync::Arc;
 
+use hnsx_core::Result;
 use hnsx_core::agent::{AgentSpec, Provider};
 use hnsx_core::agent_factory::AgentFactory as CoreAgentFactory;
 use hnsx_core::sandbox::{SandboxPolicy, SandboxRuntime, SandboxSpec};
 use hnsx_core::{Agent, HnsXAgentBuilder};
-use hnsx_core::Result;
 use hnsx_sandbox::factory::SandboxFactory;
 
 /// Factory that resolves a `Provider` to a concrete `Agent` impl.
@@ -65,6 +65,7 @@ impl CoreAgentFactory for HnsxAgentFactory {
         let sandbox_spec = spec.sandbox.clone().unwrap_or(SandboxSpec {
             policy: SandboxPolicy::None,
             runtime: SandboxRuntime::Auto,
+            ..Default::default()
         });
         let sandbox = self.sandbox_factory.create(&sandbox_spec);
         let tool_registry = crate::tools::build_tool_registry(&spec.tools).unwrap_or_default();

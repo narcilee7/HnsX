@@ -15,7 +15,7 @@ use serde_json::Value;
 use crate::http_common::{
     bearer, classify_http_error, openai_cost, parse_sse_stream, value_to_string,
 };
-use crate::tool_chat::{execute_tool, tool_definitions, MAX_TOOL_ROUNDS, PartialToolCall};
+use crate::tool_chat::{MAX_TOOL_ROUNDS, PartialToolCall, execute_tool, tool_definitions};
 use hnsx_core::adapter::{Adapter, RuntimeContext};
 use hnsx_core::agent::{AgentSpec, HealthStatus};
 use hnsx_core::chunk::{Artifact, Chunk};
@@ -51,7 +51,11 @@ impl OpenAIAdapter {
             .endpoint
             .clone()
             .unwrap_or_else(|| OPENAI_BASE_URL.into());
-        let timeout = Duration::from_secs(spec.adapter.timeout_seconds.unwrap_or(DEFAULT_TIMEOUT_SECONDS));
+        let timeout = Duration::from_secs(
+            spec.adapter
+                .timeout_seconds
+                .unwrap_or(DEFAULT_TIMEOUT_SECONDS),
+        );
         let client = reqwest::Client::builder()
             .timeout(timeout)
             .build()
@@ -108,17 +112,23 @@ impl OpenAIAdapter {
         self.tools.is_some() && self.tool_defs.is_some()
     }
 
-    async fn invoke_with_tools(
-        &self,
-        input: &Value,
-    ) -> Result<BoxStream<'static, Chunk>> {
+    async fn invoke_with_tools(&self, input: &Value) -> Result<BoxStream<'static, Chunk>> {
         let mut messages = self.build_messages(input);
-        let tool_defs = self.tool_defs.clone().expect("invoke_with_tools requires tools");
-        let registry = self.tools.clone().expect("invoke_with_tools requires tools");
+        let tool_defs = self
+            .tool_defs
+            .clone()
+            .expect("invoke_with_tools requires tools");
+        let registry = self
+            .tools
+            .clone()
+            .expect("invoke_with_tools requires tools");
         let client = self.client.clone();
         let api_key = self.api_key.clone();
         let model = self.model.clone();
-        let url = format!("{}/v1/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/v1/chat/completions",
+            self.base_url.trim_end_matches('/')
+        );
 
         Ok(Box::pin(stream! {
             let mut prompt_tokens: u64 = 0;
@@ -258,7 +268,8 @@ impl Adapter for OpenAIAdapter {
         })
     }
 
-    async fn invoke(&self,
+    async fn invoke(
+        &self,
         input: &Value,
         _ctx: &RuntimeContext,
     ) -> Result<BoxStream<'static, Chunk>> {
@@ -274,7 +285,10 @@ impl Adapter for OpenAIAdapter {
             "stream_options": { "include_usage": true },
         });
 
-        let url = format!("{}/v1/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/v1/chat/completions",
+            self.base_url.trim_end_matches('/')
+        );
         let request = self
             .client
             .post(&url)
@@ -442,8 +456,7 @@ fn assistant_tool_message(content: &str, tool_calls: &BTreeMap<u32, PartialToolC
 }
 
 fn tool_message(id: &str, content: Value) -> Value {
-    let text = serde_json::to_string(&content)
-        .unwrap_or_else(|e| format!("{{\"error\":\"{e}\"}}"));
+    let text = serde_json::to_string(&content).unwrap_or_else(|e| format!("{{\"error\":\"{e}\"}}"));
     serde_json::json!({
         "role": "tool",
         "tool_call_id": id,
@@ -555,16 +568,23 @@ mod tests {
 
         let llm_server = MockServer::start().await;
 
-        let tool_call_sse = sse_event(r#"{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"gpt-4o-mini","choices":[{"index":0,"delta":{"role":"assistant","content":null},"finish_reason":null}]}"#)
-            + &sse_event(r#"{"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"api","arguments":""}}]},"finish_reason":null}]}"#)
-            + &sse_event(r#"{"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\":\"/data\"}"}}]},"finish_reason":null}]}"#)
-            + &sse_event(r#"{"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}"#)
-            + "data: [DONE]\n\n";
+        let tool_call_sse = sse_event(
+            r#"{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"gpt-4o-mini","choices":[{"index":0,"delta":{"role":"assistant","content":null},"finish_reason":null}]}"#,
+        ) + &sse_event(
+            r#"{"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"api","arguments":""}}]},"finish_reason":null}]}"#,
+        ) + &sse_event(
+            r#"{"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\":\"/data\"}"}}]},"finish_reason":null}]}"#,
+        ) + &sse_event(
+            r#"{"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}"#,
+        ) + "data: [DONE]\n\n";
 
-        let final_sse = sse_event(r#"{"id":"chatcmpl-2","object":"chat.completion.chunk","created":2,"model":"gpt-4o-mini","choices":[{"index":0,"delta":{"role":"assistant","content":"Done"},"finish_reason":null}]}"#)
-            + &sse_event(r#"{"id":"chatcmpl-2","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#)
-            + &sse_event(r#"{"id":"chatcmpl-2","object":"chat.completion.chunk","usage":{"prompt_tokens":10,"completion_tokens":1}}"#)
-            + "data: [DONE]\n\n";
+        let final_sse = sse_event(
+            r#"{"id":"chatcmpl-2","object":"chat.completion.chunk","created":2,"model":"gpt-4o-mini","choices":[{"index":0,"delta":{"role":"assistant","content":"Done"},"finish_reason":null}]}"#,
+        ) + &sse_event(
+            r#"{"id":"chatcmpl-2","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#,
+        ) + &sse_event(
+            r#"{"id":"chatcmpl-2","object":"chat.completion.chunk","usage":{"prompt_tokens":10,"completion_tokens":1}}"#,
+        ) + "data: [DONE]\n\n";
 
         // Register the final-answer mock first: it only matches once tool
         // results have been added to the conversation.
@@ -603,7 +623,11 @@ mod tests {
         while let Some(chunk) = stream.next().await {
             match chunk {
                 Chunk::Text(t) => texts.push(t),
-                Chunk::Artifact(Artifact::TokenUsage { prompt, completion, cost_usd }) => {
+                Chunk::Artifact(Artifact::TokenUsage {
+                    prompt,
+                    completion,
+                    cost_usd,
+                }) => {
                     usage = Some((prompt, completion, cost_usd));
                 }
                 Chunk::Error(e) => panic!("unexpected error chunk: {e}"),
@@ -618,8 +642,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn tool_call_unknown_tool_yields_error() {
         let llm_server = MockServer::start().await;
-        let tool_call_sse = sse_event(r#"{"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_x","type":"function","function":{"name":"missing","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}"#)
-            + "data: [DONE]\n\n";
+        let tool_call_sse = sse_event(
+            r#"{"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_x","type":"function","function":{"name":"missing","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}"#,
+        ) + "data: [DONE]\n\n";
 
         Mock::given(method("POST"))
             .and(path("/v1/chat/completions"))

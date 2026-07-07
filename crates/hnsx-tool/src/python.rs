@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use hnsx_core::agent::ToolKind;
 use hnsx_core::error::{Error, Result};
@@ -122,11 +122,9 @@ impl Tool for PythonTool {
         // Write args to stdin and close it.
         if let Some(stdin) = child.stdin.take() {
             let mut stdin = stdin;
-            tokio::io::AsyncWriteExt::write_all(&mut stdin,
-                args_json.as_bytes(),
-            )
-            .await
-            .map_err(|e| Error::Adapter(format!("PythonTool write stdin: {e}")))?;
+            tokio::io::AsyncWriteExt::write_all(&mut stdin, args_json.as_bytes())
+                .await
+                .map_err(|e| Error::Adapter(format!("PythonTool write stdin: {e}")))?;
             // drop stdin to close the pipe
         }
 
@@ -139,7 +137,8 @@ impl Tool for PythonTool {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
         // Try to parse stdout as JSON; fall back to string.
-        let result: Value = serde_json::from_str(&stdout).unwrap_or_else(|_| Value::String(stdout.clone()));
+        let result: Value =
+            serde_json::from_str(&stdout).unwrap_or_else(|_| Value::String(stdout.clone()));
 
         Ok(json!({
             "ok": output.status.success(),
@@ -155,11 +154,8 @@ impl Tool for PythonTool {
 fn apply_unix_limits(command: &mut tokio::process::Command) {
     unsafe {
         command.pre_exec(|| {
-            let _ = nix::sys::resource::setrlimit(
-                nix::sys::resource::Resource::RLIMIT_CPU,
-                300,
-                600,
-            );
+            let _ =
+                nix::sys::resource::setrlimit(nix::sys::resource::Resource::RLIMIT_CPU, 300, 600);
             let _ = nix::sys::resource::setrlimit(
                 nix::sys::resource::Resource::RLIMIT_AS,
                 1024 * 1024 * 1024,
@@ -228,11 +224,7 @@ mod tests {
 
     #[test]
     fn rejects_both_script_and_entrypoint() {
-        let err = PythonTool::new(
-            "x",
-            json!({"script": "x", "entrypoint": "y.py"}),
-        )
-        .unwrap_err();
+        let err = PythonTool::new("x", json!({"script": "x", "entrypoint": "y.py"})).unwrap_err();
         assert!(
             matches!(err, Error::Adapter(ref m) if m.contains("not both")),
             "got: {err:?}"

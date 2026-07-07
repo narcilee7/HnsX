@@ -1,8 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Args;
-use hnsx_proto::v1::{
-    InvocationMetricsRequest, telemetry_client::TelemetryClient,
-};
+use hnsx_proto::v1::{InvocationMetricsRequest, telemetry_client::TelemetryClient};
 use tonic::transport::Channel;
 
 #[derive(Args, Debug)]

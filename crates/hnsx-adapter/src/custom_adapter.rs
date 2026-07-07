@@ -64,7 +64,11 @@ impl Adapter for CustomAdapter {
         self.inner.prepare(config).await
     }
 
-    async fn invoke(&self, input: &Value, ctx: &RuntimeContext) -> Result<BoxStream<'static, Chunk>> {
+    async fn invoke(
+        &self,
+        input: &Value,
+        ctx: &RuntimeContext,
+    ) -> Result<BoxStream<'static, Chunk>> {
         self.inner.invoke(input, ctx).await
     }
 

@@ -20,18 +20,14 @@ pub fn exec(args: BuildArgs) -> Result<()> {
             // Derive default output name from the domain spec.
             let yaml = std::fs::read_to_string(&args.domain)
                 .with_context(|| format!("read {}", args.domain))?;
-            let spec: hnsx_core::DomainSpec = serde_yaml::from_str(&yaml)
-                .with_context(|| format!("parse {}", args.domain))?;
+            let spec: hnsx_core::DomainSpec =
+                serde_yaml::from_str(&yaml).with_context(|| format!("parse {}", args.domain))?;
             format!("{}-{}.hnsx.tar", spec.id, spec.version)
         }
     };
 
-    pack_domain(&args.domain, &output).with_context(|| {
-        format!(
-            "failed to pack domain {} into {}",
-            args.domain, output
-        )
-    })?;
+    pack_domain(&args.domain, &output)
+        .with_context(|| format!("failed to pack domain {} into {}", args.domain, output))?;
 
     println!("Built {}", output);
     Ok(())

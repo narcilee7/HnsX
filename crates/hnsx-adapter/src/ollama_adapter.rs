@@ -10,10 +10,10 @@ use std::time::Duration;
 use async_stream::stream;
 use async_trait::async_trait;
 use futures::stream::{BoxStream, StreamExt};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::http_common::{estimate_tokens, value_to_string};
-use crate::tool_chat::{execute_tool, tool_definitions, MAX_TOOL_ROUNDS};
+use crate::tool_chat::{MAX_TOOL_ROUNDS, execute_tool, tool_definitions};
 use hnsx_core::adapter::{Adapter, RuntimeContext};
 use hnsx_core::agent::{AgentSpec, HealthStatus};
 use hnsx_core::chunk::{Artifact, Chunk};
@@ -42,7 +42,11 @@ impl OllamaAdapter {
             .endpoint
             .clone()
             .unwrap_or_else(|| OLLAMA_BASE_URL.into());
-        let timeout = Duration::from_secs(spec.adapter.timeout_seconds.unwrap_or(DEFAULT_TIMEOUT_SECONDS));
+        let timeout = Duration::from_secs(
+            spec.adapter
+                .timeout_seconds
+                .unwrap_or(DEFAULT_TIMEOUT_SECONDS),
+        );
         let client = reqwest::Client::builder()
             .timeout(timeout)
             .build()
@@ -98,13 +102,16 @@ impl OllamaAdapter {
         self.tools.is_some() && self.tool_defs.is_some()
     }
 
-    async fn invoke_with_tools(
-        &self,
-        input: &Value,
-    ) -> Result<BoxStream<'static, Chunk>> {
+    async fn invoke_with_tools(&self, input: &Value) -> Result<BoxStream<'static, Chunk>> {
         let mut messages = self.build_messages(input);
-        let tool_defs = self.tool_defs.clone().expect("invoke_with_tools requires tools");
-        let registry = self.tools.clone().expect("invoke_with_tools requires tools");
+        let tool_defs = self
+            .tool_defs
+            .clone()
+            .expect("invoke_with_tools requires tools");
+        let registry = self
+            .tools
+            .clone()
+            .expect("invoke_with_tools requires tools");
         let client = self.client.clone();
         let model = self.model.clone();
         let system = self.system.clone();
@@ -259,7 +266,11 @@ impl Adapter for OllamaAdapter {
         })
     }
 
-    async fn invoke(&self, input: &Value, _ctx: &RuntimeContext) -> Result<BoxStream<'static, Chunk>> {
+    async fn invoke(
+        &self,
+        input: &Value,
+        _ctx: &RuntimeContext,
+    ) -> Result<BoxStream<'static, Chunk>> {
         if self.has_tools() {
             return self.invoke_with_tools(input).await;
         }

@@ -6,7 +6,9 @@
 use tonic::{Request, Response, Status};
 
 use crate::{
-    proto::{DomainRef, Empty, InstanceInfo, InstanceList, InstanceRef, scheduler_server::Scheduler},
+    proto::{
+        DomainRef, Empty, InstanceInfo, InstanceList, InstanceRef, scheduler_server::Scheduler,
+    },
     store::SqliteStore,
 };
 
@@ -43,10 +45,7 @@ impl Scheduler for SchedulerService {
         })
     }
 
-    async fn heartbeat(
-        &self,
-        request: Request<InstanceRef>,
-    ) -> Result<Response<Empty>, Status> {
+    async fn heartbeat(&self, request: Request<InstanceRef>) -> Result<Response<Empty>, Status> {
         crate::timed_grpc_async!("heartbeat", async {
             let req = request.into_inner();
             let ok = self

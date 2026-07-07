@@ -1,8 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Args;
-use hnsx_proto::v1::{
-    QueryTraceRequest, telemetry_client::TelemetryClient,
-};
+use hnsx_proto::v1::{QueryTraceRequest, telemetry_client::TelemetryClient};
 use tonic::transport::Channel;
 
 #[derive(Args, Debug)]
@@ -45,7 +43,10 @@ async fn run(args: LogsArgs) -> Result<()> {
                 .context("query traces")?
                 .into_inner();
             for trace in resp.traces {
-                let key = format!("{}:{}:{}:{}", trace.session_id, trace.step_id, trace.started_at_ms, trace.duration_ms);
+                let key = format!(
+                    "{}:{}:{}:{}",
+                    trace.session_id, trace.step_id, trace.started_at_ms, trace.duration_ms
+                );
                 if seen.insert(key) {
                     print_log(&trace);
                 }

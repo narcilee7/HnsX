@@ -8,10 +8,8 @@ use std::net::SocketAddr;
 use hnsx_control_plane::{
     proto::{
         DiscoverRequest, DomainRef, DomainSpec, Empty, InstanceInfo, InstanceRef,
-        QueryTraceRequest, TraceRecord,
-        discovery_client::DiscoveryClient,
-        registry_client::RegistryClient,
-        scheduler_client::SchedulerClient,
+        QueryTraceRequest, TraceRecord, discovery_client::DiscoveryClient,
+        registry_client::RegistryClient, scheduler_client::SchedulerClient,
         telemetry_client::TelemetryClient,
     },
     server::ControlPlaneServer,
@@ -29,12 +27,9 @@ async fn start_server() -> (SocketAddr, tokio::sync::oneshot::Sender<()>) {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     tokio::spawn(async move {
         let server = ControlPlaneServer::new(store);
-        let serve = server.serve_with_incoming(
-            incoming,
-            async {
-                let _ = shutdown_rx.await;
-            },
-        );
+        let serve = server.serve_with_incoming(incoming, async {
+            let _ = shutdown_rx.await;
+        });
         let _ = serve.await;
     });
 
@@ -44,7 +39,9 @@ async fn start_server() -> (SocketAddr, tokio::sync::oneshot::Sender<()>) {
 #[tokio::test]
 async fn registry_round_trip() {
     let (addr, _shutdown) = start_server().await;
-    let mut client = RegistryClient::connect(format!("http://{addr}")).await.unwrap();
+    let mut client = RegistryClient::connect(format!("http://{addr}"))
+        .await
+        .unwrap();
 
     client
         .register_domain(DomainSpec {
@@ -74,8 +71,12 @@ async fn registry_round_trip() {
 #[tokio::test]
 async fn scheduler_and_discovery_round_trip() {
     let (addr, _shutdown) = start_server().await;
-    let mut scheduler = SchedulerClient::connect(format!("http://{addr}")).await.unwrap();
-    let mut discovery = DiscoveryClient::connect(format!("http://{addr}")).await.unwrap();
+    let mut scheduler = SchedulerClient::connect(format!("http://{addr}"))
+        .await
+        .unwrap();
+    let mut discovery = DiscoveryClient::connect(format!("http://{addr}"))
+        .await
+        .unwrap();
 
     scheduler
         .register_instance(InstanceInfo {
@@ -139,7 +140,9 @@ async fn scheduler_and_discovery_round_trip() {
 #[tokio::test]
 async fn telemetry_round_trip() {
     let (addr, _shutdown) = start_server().await;
-    let mut client = TelemetryClient::connect(format!("http://{addr}")).await.unwrap();
+    let mut client = TelemetryClient::connect(format!("http://{addr}"))
+        .await
+        .unwrap();
 
     client
         .record_trace(TraceRecord {

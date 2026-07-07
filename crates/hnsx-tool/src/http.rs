@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use hnsx_core::agent::ToolKind;
 use hnsx_core::error::{Error, Result};
@@ -107,16 +107,16 @@ impl Tool for HttpTool {
             .to_ascii_uppercase();
 
         let mut url: reqwest::Url = match args.get("url").and_then(Value::as_str) {
-            Some(u) => u.parse().map_err(|e| Error::Adapter(format!("HttpTool bad url: {e}")))?,
+            Some(u) => u
+                .parse()
+                .map_err(|e| Error::Adapter(format!("HttpTool bad url: {e}")))?,
             None => {
-                let path = args
-                    .get("path")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| Error::Adapter("HttpTool: either `url` or `path` is required".into()))?;
-                let base = cfg
-                    .base_url
-                    .as_deref()
-                    .ok_or_else(|| Error::Adapter("HttpTool: `path` given but no `base_url` in config".into()))?;
+                let path = args.get("path").and_then(Value::as_str).ok_or_else(|| {
+                    Error::Adapter("HttpTool: either `url` or `path` is required".into())
+                })?;
+                let base = cfg.base_url.as_deref().ok_or_else(|| {
+                    Error::Adapter("HttpTool: `path` given but no `base_url` in config".into())
+                })?;
                 let base = base.trim_end_matches('/');
                 format!("{base}{path}")
                     .parse()
@@ -133,7 +133,11 @@ impl Tool for HttpTool {
         }
 
         let auth = resolve_auth(&args, &cfg)?;
-        if let Some(HttpAuth::Query { ref name, ref value }) = auth {
+        if let Some(HttpAuth::Query {
+            ref name,
+            ref value,
+        }) = auth
+        {
             query.push((name.clone(), value.clone()));
         }
         if !query.is_empty() {
@@ -211,10 +215,14 @@ fn resolve_auth(args: &Value, cfg: &HttpConfig) -> Result<Option<HttpAuth>> {
             .map(Some);
     }
     if let Some(token) = args.get("token").and_then(Value::as_str) {
-        return Ok(Some(HttpAuth::Bearer { token: token.into() }));
+        return Ok(Some(HttpAuth::Bearer {
+            token: token.into(),
+        }));
     }
     if let Some(token) = cfg.default_token.as_deref() {
-        return Ok(Some(HttpAuth::Bearer { token: token.into() }));
+        return Ok(Some(HttpAuth::Bearer {
+            token: token.into(),
+        }));
     }
     Ok(cfg.default_auth.clone())
 }

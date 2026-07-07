@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use hnsx_core::agent::ToolKind;
 use hnsx_core::error::{Error, Result};
@@ -109,7 +109,12 @@ impl Tool for ShellTool {
 
         let output = tokio::time::timeout(self.timeout, command.output())
             .await
-            .map_err(|_| Error::Adapter(format!("ShellTool `{cmd}` timed out after {:?}", self.timeout)))?
+            .map_err(|_| {
+                Error::Adapter(format!(
+                    "ShellTool `{cmd}` timed out after {:?}",
+                    self.timeout
+                ))
+            })?
             .map_err(|e| Error::Adapter(format!("ShellTool spawn `{cmd}`: {e}")))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -131,11 +136,8 @@ impl Tool for ShellTool {
 fn apply_unix_limits(command: &mut tokio::process::Command) {
     unsafe {
         command.pre_exec(|| {
-            let _ = nix::sys::resource::setrlimit(
-                nix::sys::resource::Resource::RLIMIT_CPU,
-                300,
-                600,
-            );
+            let _ =
+                nix::sys::resource::setrlimit(nix::sys::resource::Resource::RLIMIT_CPU, 300, 600);
             let _ = nix::sys::resource::setrlimit(
                 nix::sys::resource::Resource::RLIMIT_AS,
                 1024 * 1024 * 1024,
@@ -160,7 +162,10 @@ mod tests {
             Ok(_) => panic!("expected error"),
             Err(e) => e,
         };
-        assert!(matches!(err, Error::Adapter(ref m) if m.contains("allow")), "got: {err:?}");
+        assert!(
+            matches!(err, Error::Adapter(ref m) if m.contains("allow")),
+            "got: {err:?}"
+        );
     }
 
     #[test]
@@ -170,13 +175,19 @@ mod tests {
             Ok(_) => panic!("expected error"),
             Err(e) => e,
         };
-        assert!(matches!(err, Error::Adapter(ref m) if m.contains("whitelist")), "got: {err:?}");
+        assert!(
+            matches!(err, Error::Adapter(ref m) if m.contains("whitelist")),
+            "got: {err:?}"
+        );
     }
 
     #[tokio::test]
     async fn runs_whitelisted_cat() {
         let tool = ShellTool::new("s", allow(&["cat"])).expect("build");
-        let out = tool.invoke(json!({"cmd": "cat", "args": []})).await.expect("invoke");
+        let out = tool
+            .invoke(json!({"cmd": "cat", "args": []}))
+            .await
+            .expect("invoke");
         // No stdin -> cat exits 0 with empty stdout.
         assert_eq!(out["ok"], true);
         assert_eq!(out["exit_code"], 0);
@@ -189,17 +200,20 @@ mod tests {
             Ok(_) => panic!("expected error"),
             Err(e) => e,
         };
-        assert!(matches!(err, Error::Adapter(ref m) if m.contains("`cmd`")), "got: {err:?}");
+        assert!(
+            matches!(err, Error::Adapter(ref m) if m.contains("`cmd`")),
+            "got: {err:?}"
+        );
     }
 
     #[tokio::test]
     async fn timeout_kills_long_running_command() {
-        let tool = ShellTool::new(
-            "sleep",
-            json!({"allow": ["sleep"], "timeout_ms": 100}),
-        )
-        .expect("build");
-        let err = tool.invoke(json!({"cmd": "sleep", "args": ["10"]})).await.unwrap_err();
+        let tool =
+            ShellTool::new("sleep", json!({"allow": ["sleep"], "timeout_ms": 100})).expect("build");
+        let err = tool
+            .invoke(json!({"cmd": "sleep", "args": ["10"]}))
+            .await
+            .unwrap_err();
         assert!(format!("{err}").contains("timed out"), "got: {err:?}");
     }
 }
