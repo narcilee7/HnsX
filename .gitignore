@@ -16,3 +16,6 @@ Cargo.lock.bak
 
 # Design artifacts (binary sketches, proprietary notes)
 design/
+
+web/dist
+web/node_modules

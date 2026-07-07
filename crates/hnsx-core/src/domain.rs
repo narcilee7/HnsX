@@ -43,6 +43,11 @@ pub struct Step {
     pub input: Value,
     #[serde(default)]
     pub output: Option<String>,
+    /// Optional template string. The step runs iff the rendered value is
+    /// non-empty and not the literal `"false"`. Supports the same
+    /// `${...}` substitution as `input`.
+    #[serde(default)]
+    pub condition: Option<String>,
 }
 
 #[async_trait]
@@ -50,4 +55,11 @@ pub trait Domain: Send + Sync {
     async fn invoke(&self, trigger: Value) -> Result<BoxStream<'static, Chunk>>;
     fn get_agent(&self, id: &str) -> Option<Arc<dyn Agent>>;
     fn spec(&self) -> &DomainSpec;
+
+    /// Look up an agent spec by id without constructing an `Arc<dyn Agent>`.
+    /// Useful for tooling (validation, documentation) before adapter wiring lands.
+    fn agent_spec(&self, id: &str) -> Option<&AgentSpec> {
+        let _ = id;
+        None
+    }
 }

@@ -12,3 +12,25 @@ workspace = true
 
 [dependencies]
 hnsx-core = { workspace = true }
+hnsx-proto = { workspace = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+tonic = { workspace = true }
+prost = { workspace = true }
+tokio-stream = { workspace = true }
+dashmap = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rusqlite = { workspace = true }
+anyhow = { workspace = true }
+futures = { workspace = true }
+
+# HTTP / metrics
+axum = { workspace = true, features = ["macros"] }
+tower = { workspace = true }
+tower-http = { workspace = true }
+
+# Observability
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
