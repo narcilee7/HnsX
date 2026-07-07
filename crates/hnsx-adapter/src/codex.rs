@@ -208,6 +208,7 @@ mod tests {
                 variables: json!({}),
             },
             sandbox: None,
+            memory_window: None,
         }
     }
 

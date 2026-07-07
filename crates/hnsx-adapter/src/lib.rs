@@ -10,19 +10,22 @@ pub mod claude_code;
 pub mod codex;
 pub mod custom;
 pub mod genai;
+pub mod genai_adapter;
 pub mod tools;
 pub mod openai;
 
 pub use claude_code::ClaudeCodeAgent;
 pub use codex::CodexAgent;
 pub use genai::{GenaiAgent, GenaiAgentFactory};
+pub use genai_adapter::{GenaiAdapter, GenaiAdapterFactory};
 pub use hnsx_core::{Adapter, AdapterConfig, AgentFactory, RuntimeContext};
 
 use std::sync::Arc;
 
 use hnsx_core::agent::{AgentSpec, Provider};
 use hnsx_core::agent_factory::AgentFactory as CoreAgentFactory;
-use hnsx_core::Agent;
+use hnsx_core::sandbox::{SandboxPolicy, SandboxRuntime, SandboxSpec};
+use hnsx_core::{Agent, HnsXAgentBuilder};
 use hnsx_core::Result;
 use hnsx_sandbox::factory::SandboxFactory;
 
@@ -49,24 +52,32 @@ impl HnsxAgentFactory {
 
 impl CoreAgentFactory for HnsxAgentFactory {
     fn create(&self, spec: &AgentSpec) -> Result<Arc<dyn Agent>> {
+        let sandbox_spec = spec.sandbox.clone().unwrap_or(SandboxSpec {
+            policy: SandboxPolicy::None,
+            runtime: SandboxRuntime::Auto,
+        });
+        let sandbox = self.sandbox_factory.create(&sandbox_spec);
+
         match spec.model.provider {
-            Provider::ClaudeCode => {
-                let sandbox_spec = spec.sandbox.clone().unwrap_or(hnsx_core::sandbox::SandboxSpec {
-                    policy: hnsx_core::sandbox::SandboxPolicy::Namespace,
-                    runtime: hnsx_core::sandbox::SandboxRuntime::Auto,
-                });
-                let sandbox = self.sandbox_factory.create(&sandbox_spec);
-                Ok(Arc::new(ClaudeCodeAgent::new(sandbox, spec)))
+            Provider::ClaudeCode | Provider::Codex => {
+                let inner: Arc<dyn Agent> = match spec.model.provider {
+                    Provider::ClaudeCode => Arc::new(crate::claude_code::ClaudeCodeAgent::new(sandbox.clone(), spec)),
+                    Provider::Codex => Arc::new(crate::codex::CodexAgent::new(sandbox.clone(), spec)),
+                    _ => unreachable!(),
+                };
+                Ok(inner)
             }
-            Provider::Codex => {
-                let sandbox_spec = spec.sandbox.clone().unwrap_or(hnsx_core::sandbox::SandboxSpec {
-                    policy: hnsx_core::sandbox::SandboxPolicy::Process,
-                    runtime: hnsx_core::sandbox::SandboxRuntime::Auto,
-                });
-                let sandbox = self.sandbox_factory.create(&sandbox_spec);
-                Ok(Arc::new(CodexAgent::new(sandbox, spec)))
+            _ => {
+                let adapter = crate::genai_adapter::GenaiAdapterFactory::default().create_adapter(spec)?;
+                Ok(Arc::new(
+                    HnsXAgentBuilder::new()
+                        .spec(spec.clone())
+                        .adapter(adapter)
+                        .sandbox(sandbox)
+                        .tools(crate::tools::build_tool_registry(&spec.tools).unwrap_or_default())
+                        .build()?,
+                ))
             }
-            _ => GenaiAgentFactory::default().create(spec),
         }
     }
 }

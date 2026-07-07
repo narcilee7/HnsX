@@ -35,6 +35,7 @@ fn codex_spec(command: &str) -> AgentSpec {
             variables: json!({}),
         },
         sandbox: None,
+        memory_window: None,
     }
 }
 

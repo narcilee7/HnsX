@@ -12,6 +12,7 @@ pub mod bus;
 pub mod chunk;
 pub mod domain;
 pub mod error;
+pub mod hnsx_agent;
 pub mod loader;
 pub mod memory;
 pub mod noop;
@@ -27,12 +28,13 @@ pub mod package;
 pub use adapter::{Adapter, RuntimeContext};
 pub use agent::{
     AdapterConfig, Agent, AgentSchema, AgentSpec, HealthStatus, InvokeContext, ModelRef,
-    PromptTemplate, Provider, ToolKind, ToolRef,
+    PromptTemplate, Provider, RetryPolicy, ToolKind, ToolRef,
 };
 pub use agent_factory::{AgentFactory, NoopFactory};
 pub use chunk::{Artifact, Chunk, FileChange, FileChangeKind};
-pub use domain::{Domain, DomainSpec, Step, Workflow};
+pub use domain::{Domain, DomainSpec, ErrorPolicy as WorkflowErrorPolicy, Step, Workflow};
 pub use error::{Error, Result};
+pub use hnsx_agent::{HnsXAgent, HnsXAgentBuilder};
 pub use loader::{DomainLoader, LoadedDomain};
 pub use memory::{
     InMemoryBackend, MemoryBackend, MemoryBackendFactory, MemoryConfig, Message, PostgresBackend,
