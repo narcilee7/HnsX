@@ -8,8 +8,11 @@ use hnsx_core::DomainLoader;
 use hnsx_core::agent::InvokeContext;
 use hnsx_core::agent_factory::AgentFactory;
 use hnsx_core::chunk::Chunk;
+use hnsx_core::Reporter;
+use hnsx_core::reporter::GrpcReporter;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Args, Debug)]
 pub struct TestArgs {
@@ -34,6 +37,9 @@ pub struct TestArgs {
     /// Override the API key for the provider used by the agent
     #[arg(long)]
     pub api_key: Option<String>,
+    /// Report a test invocation summary to a control plane gRPC address.
+    #[arg(long)]
+    pub control_plane: Option<String>,
 }
 
 struct CliSecretsResolver {
@@ -100,7 +106,8 @@ async fn test_agent(args: TestArgs) -> Result<()> {
         domain.spec().id
     );
 
-    let mut stream = agent.invoke(input, ctx).await?;
+    let mut stream = agent.invoke(input, ctx.clone()).await?;
+    let started_at_ms = now_ms();
     while let Some(chunk) = stream.next().await {
         match chunk {
             Chunk::Text(t) => print!("{t}"),
@@ -113,5 +120,32 @@ async fn test_agent(args: TestArgs) -> Result<()> {
         }
     }
 
+    if let Some(addr) = args.control_plane.as_deref() {
+        let reporter = GrpcReporter::connect(addr)
+            .await
+            .with_context(|| format!("failed to connect to control plane at {addr}"))?;
+        let record = hnsx_proto::v1::InvocationRecord {
+            session_id: ctx.session_id,
+            domain_id: ctx.domain_id,
+            started_at_ms: started_at_ms as i64,
+            duration_ms: (now_ms() - started_at_ms) as i64,
+            total_cost_usd: 0.0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
+        };
+        reporter
+            .report_invocation(&record)
+            .await
+            .with_context(|| "failed to report test invocation")?;
+        eprintln!("[hnsx test] reported invocation to control plane at {addr}");
+    }
+
     Ok(())
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }

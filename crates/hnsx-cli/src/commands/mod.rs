@@ -7,10 +7,12 @@ pub mod deploy;
 pub mod dev;
 pub mod logs;
 pub mod metrics;
+pub mod register;
 pub mod run;
 pub mod secrets;
 pub mod test;
 pub mod traces;
+pub mod unregister;
 pub mod validate;
 
 pub use config::load_config;

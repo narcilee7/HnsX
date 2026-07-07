@@ -34,6 +34,8 @@ enum Commands {
     Build(commands::build::BuildArgs),
     /// Deploy a domain to a target
     Deploy(commands::deploy::DeployArgs),
+    /// Register a domain with the control plane
+    Register(commands::register::RegisterArgs),
     /// Run a domain once with a trigger
     Run(commands::run::RunArgs),
     /// Stream logs from a domain
@@ -42,6 +44,8 @@ enum Commands {
     Traces(commands::traces::TracesArgs),
     /// Inspect metrics
     Metrics(commands::metrics::MetricsArgs),
+    /// Unregister a domain from the control plane
+    Unregister(commands::unregister::UnregisterArgs),
 }
 
 fn main() -> Result<()> {
@@ -53,9 +57,11 @@ fn main() -> Result<()> {
         Commands::Test(a) => commands::test::exec(a),
         Commands::Build(a) => commands::build::exec(a),
         Commands::Deploy(a) => commands::deploy::exec(a),
+        Commands::Register(a) => commands::register::exec(a),
         Commands::Run(a) => commands::run::exec(a),
         Commands::Logs(a) => commands::logs::exec(a),
         Commands::Traces(a) => commands::traces::exec(a),
         Commands::Metrics(a) => commands::metrics::exec(a),
+        Commands::Unregister(a) => commands::unregister::exec(a),
     }
 }
