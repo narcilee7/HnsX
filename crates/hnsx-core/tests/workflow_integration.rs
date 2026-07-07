@@ -45,7 +45,11 @@ fn workspace_root() -> PathBuf {
 }
 
 fn collect(stream: impl futures::Stream<Item = Chunk> + Unpin) -> Vec<Chunk> {
-    futures::executor::block_on(async {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("tokio runtime");
+    rt.block_on(async {
         let mut s = stream;
         let mut out = Vec::new();
         while let Some(c) = s.next().await {
@@ -57,7 +61,11 @@ fn collect(stream: impl futures::Stream<Item = Chunk> + Unpin) -> Vec<Chunk> {
 
 fn run_inline(yaml: &str, trigger: serde_json::Value) -> Vec<Chunk> {
     let domain = DomainLoader::new().from_str(yaml).expect("should load");
-    let stream = futures::executor::block_on(domain.invoke(trigger)).expect("invoke");
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("tokio runtime");
+    let stream = rt.block_on(domain.invoke(trigger)).expect("invoke");
     collect(Box::pin(stream))
 }
 
@@ -99,8 +107,11 @@ fn example_customer_service_runs_end_to_end() {
     let domain = DomainLoader::new()
         .from_path(&path)
         .expect("should load customer-service");
-    let stream =
-        futures::executor::block_on(domain.invoke(json!({"message": "test"}))).expect("invoke");
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("tokio runtime");
+    let stream = rt.block_on(domain.invoke(json!({"message": "test"}))).expect("invoke");
     let chunks = collect(Box::pin(stream));
 
     let text_count = chunks

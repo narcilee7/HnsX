@@ -68,7 +68,7 @@ uuid = { version = "1", features = ["v4"] }
 wiremock = "0.6"
 
 # HTTP client for the HTTP tool
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 
 # SQLite for the SQL tool and SQLite memory backend
 rusqlite = { version = "0.32", features = ["bundled"] }
