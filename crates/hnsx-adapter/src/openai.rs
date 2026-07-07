@@ -1,8 +1,7 @@
 //! OpenAI API adapter.
 //!
-//! For Phase 1 the OpenAI provider is implemented by the multi-provider
-//! `genai` client (`hnsx-adapter/src/genai.rs`). This module re-exports that
-//! implementation so callers can still reference `hnsx_adapter::openai` if
-//! desired, without maintaining a separate HTTP client here.
+//! Phase 1.4 provides a native `reqwest` + SSE implementation in
+//! `openai_adapter::OpenAIAdapter`. This module re-exports it for ergonomic
+//! imports.
 
-pub use crate::genai::{GenaiAgent, GenaiAgentFactory};
+pub use crate::openai_adapter::OpenAIAdapter;
