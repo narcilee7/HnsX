@@ -6,6 +6,8 @@ use hnsx_control_plane::metrics;
 use hnsx_control_plane::server::ControlPlaneServer;
 use hnsx_control_plane::store::SqliteStore;
 
+use tokio::net::TcpListener;
+
 #[derive(Args, Debug)]
 pub struct ControlPlaneArgs {
     /// gRPC + HTTP bind address.
@@ -33,6 +35,12 @@ async fn run(args: ControlPlaneArgs) -> Result<()> {
         .parse()
         .with_context(|| format!("invalid address: {}", args.addr))?;
 
+    let grpc_listener = TcpListener::bind(addr)
+        .await
+        .with_context(|| format!("failed to bind gRPC listener on {}", addr))?;
+    let grpc_addr = grpc_listener.local_addr()?;
+    let http_addr = SocketAddr::new(grpc_addr.ip(), grpc_addr.port() + 1);
+
     let store = SqliteStore::open(&args.db)
         .await
         .with_context(|| format!("open SQLite store at {}", args.db))?;
@@ -46,8 +54,10 @@ async fn run(args: ControlPlaneArgs) -> Result<()> {
 
     println!(
         "[control-plane] serving gRPC on {} and HTTP on {}",
-        addr,
-        addr.port() + 1
+        grpc_addr, http_addr
     );
-    server.serve(addr).await.context("serve control plane")
+    server
+        .serve_with_bound(grpc_listener, http_addr)
+        .await
+        .context("serve control plane")
 }

@@ -25,6 +25,12 @@ export interface TraceRecord {
   output: string;
 }
 
+export interface Session {
+  session_id: string;
+  started_at_ms: number;
+  step_count: number;
+}
+
 export interface InvocationMetrics {
   domain_id: string;
   invocation_count: number;
@@ -45,7 +51,11 @@ async function get<T>(path: string): Promise<T> {
 export const api = {
   listDomains: () => get<Domain[]>('/domains'),
   listInstances: (domainId: string) => get<InstanceInfo[]>(`/instances/${encodeURIComponent(domainId)}`),
-  listTraces: (domainId: string) => get<TraceRecord[]>(`/traces/${encodeURIComponent(domainId)}`),
+  listSessions: (domainId: string) => get<Session[]>(`/sessions/${encodeURIComponent(domainId)}`),
+  listTraces: (domainId: string, sessionId?: string) => {
+    const params = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
+    return get<TraceRecord[]>(`/traces/${encodeURIComponent(domainId)}${params}`);
+  },
   getMetrics: (domainId: string) => get<InvocationMetrics>(`/metrics/${encodeURIComponent(domainId)}`),
   getPrometheus: () => fetch('/metrics').then((r) => r.text()),
 };
