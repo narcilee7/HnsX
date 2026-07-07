@@ -19,6 +19,7 @@ futures = { workspace = true }
 genai = { workspace = true }
 serde_json = { workspace = true }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+uuid = { workspace = true }
 hnsx-tool = { path = "../hnsx-tool" }
 
 [dev-dependencies]
