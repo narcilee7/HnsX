@@ -1,10 +1,11 @@
 //! SQL tool: SQLite via `rusqlite`. Each call opens a connection against
-//! `path` (or `:memory:`), runs the configured query, and returns rows as
-//! a JSON array. Postgres lands in Phase 4.
+//! `path` (or `:memory:`), runs the configured query with optional bind
+//! parameters, and returns rows as a JSON array. Postgres lands in Phase 4.
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use rusqlite::types::Value as SqliteValue;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -16,7 +17,8 @@ use hnsx_core::tool::Tool;
 pub struct SqlConfig {
     /// Path to the SQLite database. Use `:memory:` for an in-memory db.
     pub path: String,
-    /// SQL query to run on every invocation.
+    /// SQL query to run on every invocation. Use `?` placeholders for bind
+    /// parameters.
     pub query: String,
 }
 
@@ -53,15 +55,23 @@ impl Tool for SqlTool {
     }
 
     async fn invoke(&self, args: Value) -> Result<Value> {
-        // Optional per-call params are appended to the configured query as
-        // positional bind values. For 3.4 the configured query is the
-        // entire statement; per-call args are mostly a placeholder for
-        // future parameterisation.
-        let _ = args;
+        let params = args
+            .get("params")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let sqlite_params: Vec<SqliteValue> = params
+            .iter()
+            .map(json_value_to_sqlite)
+            .collect();
 
         let path = self.path.clone();
         let query = self.query.clone();
         let rows = tokio::task::spawn_blocking(move || -> Result<Vec<Value>> {
+            let sqlite_refs: Vec<&dyn rusqlite::ToSql> = sqlite_params
+                .iter()
+                .map(|v| v as &dyn rusqlite::ToSql)
+                .collect();
             let conn = rusqlite::Connection::open(&path)
                 .map_err(|e| Error::Adapter(format!("SqlTool open: {e}")))?;
             let mut stmt = conn
@@ -73,14 +83,11 @@ impl Tool for SqlTool {
                 .map(String::from)
                 .collect();
             let mapped = stmt
-                .query_map([], |row| {
+                .query_map(&*sqlite_refs, |row| {
                     let mut obj = serde_json::Map::new();
                     for (i, name) in column_names.iter().enumerate() {
-                        let v: rusqlite::types::Value = row.get(i)?;
-                        obj.insert(
-                            name.clone(),
-                            rusqlite_value_to_json(&v),
-                        );
+                        let v: SqliteValue = row.get(i)?;
+                        obj.insert(name.clone(), sqlite_value_to_json(&v));
                     }
                     Ok(Value::Object(obj))
                 })
@@ -98,16 +105,33 @@ impl Tool for SqlTool {
     }
 }
 
-fn rusqlite_value_to_json(v: &rusqlite::types::Value) -> Value {
-    use rusqlite::types::Value as V;
+fn json_value_to_sqlite(v: &Value) -> SqliteValue {
     match v {
-        V::Null => Value::Null,
-        V::Integer(i) => Value::from(*i),
-        V::Real(f) => serde_json::Number::from_f64(*f)
+        Value::Null => SqliteValue::Null,
+        Value::Bool(b) => SqliteValue::Integer(i64::from(*b)),
+        Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                SqliteValue::Integer(i)
+            } else if let Some(f) = n.as_f64() {
+                SqliteValue::Real(f)
+            } else {
+                SqliteValue::Null
+            }
+        }
+        Value::String(s) => SqliteValue::Text(s.clone()),
+        Value::Array(_) | Value::Object(_) => SqliteValue::Text(v.to_string()),
+    }
+}
+
+fn sqlite_value_to_json(v: &SqliteValue) -> Value {
+    match v {
+        SqliteValue::Null => Value::Null,
+        SqliteValue::Integer(i) => Value::from(*i),
+        SqliteValue::Real(f) => serde_json::Number::from_f64(*f)
             .map(Value::Number)
             .unwrap_or(Value::Null),
-        V::Text(s) => Value::String(s.clone()),
-        V::Blob(b) => Value::String(format!("<blob {} bytes>", b.len())),
+        SqliteValue::Text(s) => Value::String(s.clone()),
+        SqliteValue::Blob(b) => Value::String(format!("<blob {} bytes>", b.len())),
     }
 }
 
@@ -117,19 +141,9 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn run_select_against_memory_db() {
-        // Configure a one-shot CREATE + SELECT against an in-memory db.
-        // Two queries in one tool are not really the design, but for a
-        // single-shot test we just use a SELECT and seed with a setup
-        // script through the args (not supported in 3.4). Instead, open
-        // the in-memory db, seed, and then construct a SELECT tool.
-        // We do this by reusing the same path ":memory:" is per-connection,
-        // so the test creates a single connection and runs the SELECT.
-        //
-        // Simpler: use a temp file.
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("test.db").to_string_lossy().to_string();
 
-        // Seed via a direct connection.
         {
             let conn = rusqlite::Connection::open(&path).expect("seed open");
             conn.execute(
@@ -149,7 +163,7 @@ mod tests {
         )
         .expect("build");
 
-        let out = futures::executor::block_on(tool.invoke(json!({}))).expect("invoke");
+        let out = tool.invoke(json!({})).await.expect("invoke");
         let rows = out["rows"].as_array().expect("rows is array");
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0]["name"], "alpha");
@@ -164,13 +178,35 @@ mod tests {
             let conn = rusqlite::Connection::open(&path).expect("open");
             conn.execute("CREATE TABLE t (x INT)", []).expect("create");
         }
-        let tool = SqlTool::new(
-            "q",
-            json!({"path": path, "query": "SELECT * FROM t"}),
-        )
-        .expect("build");
+        let tool = SqlTool::new("q", json!({"path": path, "query": "SELECT * FROM t"})).expect("build");
         let out = tool.invoke(json!({})).await.expect("invoke");
         assert_eq!(out["count"], 0);
         assert_eq!(out["rows"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn bind_params_filter_rows() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("params.db").to_string_lossy().to_string();
+        {
+            let conn = rusqlite::Connection::open(&path).expect("open");
+            conn.execute("CREATE TABLE users (id INT, name TEXT)", []).expect("create");
+            conn.execute("INSERT INTO users VALUES (1, 'alice')", []).expect("insert");
+            conn.execute("INSERT INTO users VALUES (2, 'bob')", []).expect("insert");
+        }
+
+        let tool = SqlTool::new(
+            "lookup",
+            json!({"path": path, "query": "SELECT * FROM users WHERE id = ?"}),
+        )
+        .expect("build");
+
+        let out = tool
+            .invoke(json!({"params": [1]}))
+            .await
+            .expect("invoke");
+        let rows = out["rows"].as_array().expect("rows");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["name"], "alice");
     }
 }

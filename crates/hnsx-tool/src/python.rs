@@ -190,15 +190,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn missing_python_binary_is_error() {
+    async fn timeout_kills_long_running_script() {
         let tool = PythonTool::new(
-            "x",
-            json!({"script": "print('hello')"}),
+            "slow",
+            json!({
+                "script": "import time; time.sleep(10)",
+                "timeout_ms": 100
+            }),
         )
         .expect("build");
-        // We assume python3 exists on the test machine. If it does not, the
-        // invoke should return an Adapter error rather than panic.
-        let _ = tool.invoke(json!({})).await;
+
+        let err = tool.invoke(json!({})).await.unwrap_err();
+        assert!(format!("{err}").contains("timed out"), "got: {err:?}");
+    }
+
+    #[tokio::test]
+    async fn entrypoint_invokes_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let script = dir.path().join("echo.py");
+        tokio::fs::write(
+            &script,
+            "import sys, json; args = json.load(sys.stdin); print(json.dumps({'echo': args['msg']}))",
+        )
+        .await
+        .expect("write script");
+
+        let tool = PythonTool::new(
+            "echo",
+            json!({"entrypoint": script.to_string_lossy().to_string()}),
+        )
+        .expect("build");
+
+        let out = tool.invoke(json!({"msg": "hi"})).await.expect("invoke");
+        assert_eq!(out["ok"], true);
+        assert_eq!(out["result"]["echo"], "hi");
     }
 
     #[test]
