@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 //! `hnsx` CLI entrypoint. Subcommands map to the operations described in
-//! Initial_Architectrue.md §8.
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
