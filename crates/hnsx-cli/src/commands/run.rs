@@ -50,6 +50,9 @@ pub struct RunArgs {
     /// Directory for JSONL traces (overrides config / env)
     #[arg(long)]
     pub trace_dir: Option<PathBuf>,
+    /// Report traces and invocation summaries to a control plane gRPC address.
+    #[arg(long)]
+    pub control_plane: Option<String>,
     /// Path to config file
     #[arg(long)]
     pub config: Option<PathBuf>,
@@ -122,6 +125,13 @@ async fn run(args: RunArgs) -> Result<()> {
         Telemetry::new()
             .context("failed to initialize telemetry (set HNSX_TRACE_DIR to override)")?
     };
+    if let Some(addr) = args.control_plane.as_deref() {
+        let reporter = hnsx_core::reporter::GrpcReporter::connect(addr)
+            .await
+            .with_context(|| format!("failed to connect to control plane at {addr}"))?;
+        telemetry.set_reporter(Arc::new(reporter));
+        eprintln!("[hnsx] reporting telemetry to control plane at {addr}");
+    }
     eprintln!(
         "[hnsx] tracing per-step events to {}",
         telemetry.trace_dir().display()
