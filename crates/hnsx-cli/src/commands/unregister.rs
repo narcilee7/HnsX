@@ -24,7 +24,12 @@ pub fn exec(args: UnregisterArgs) -> Result<()> {
 async fn run(args: UnregisterArgs) -> Result<()> {
     let mut client = RegistryClient::<Channel>::connect(args.control_plane.clone())
         .await
-        .with_context(|| format!("failed to connect to control plane at {}", args.control_plane))?;
+        .with_context(|| {
+            format!(
+                "failed to connect to control plane at {}",
+                args.control_plane
+            )
+        })?;
 
     let req = DomainRef {
         id: args.id.clone(),

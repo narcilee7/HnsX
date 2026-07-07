@@ -31,8 +31,8 @@ cargo run -p hnsx-cli -- control-plane \
 [control-plane] serving gRPC on 127.0.0.1:50051 and HTTP on 127.0.0.1:50052
 ```
 
-> 提示：`&#8203;``bash
-> # 随机端口（适用于临时测试）
+> 提示：使用随机端口（适用于临时测试）
+> ```bash
 > cargo run -p hnsx-cli -- control-plane --addr 127.0.0.1:0 --db /tmp/hnsx.db
 > ```
 
