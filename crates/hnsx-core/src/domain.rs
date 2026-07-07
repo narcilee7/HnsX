@@ -7,11 +7,11 @@ use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::agent::{Agent, AgentSpec, RetryPolicy};
+use crate::agent::{Agent, AgentSpec, Provider, RetryPolicy};
 use crate::chunk::Chunk;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::memory::MemoryConfig;
-use crate::sandbox::SandboxPolicy;
+use crate::sandbox::{SandboxPolicy, SandboxRuntime, SandboxSpec};
 
 /// How the workflow should behave when a step fails after all retries.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -37,7 +37,7 @@ pub struct DomainSpec {
     #[serde(default)]
     pub memory: Option<MemoryConfig>,
     #[serde(default)]
-    pub sandbox: Option<SandboxPolicy>,
+    pub sandbox: Option<SandboxSpec>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,6 +84,32 @@ pub struct Step {
 
 fn default_stream() -> bool {
     true
+}
+/// Validate a [`SandboxSpec`] policy/runtime combination.
+pub fn validate_sandbox_spec(spec: &SandboxSpec) -> Result<()> {
+    match (spec.policy, spec.runtime) {
+        (SandboxPolicy::Container, SandboxRuntime::MicroVm)
+        | (SandboxPolicy::Vm, SandboxRuntime::Container)
+        | (SandboxPolicy::Namespace, SandboxRuntime::Container)
+        | (SandboxPolicy::Namespace, SandboxRuntime::MicroVm) => Err(Error::InvalidSpec(format!(
+            "incompatible sandbox policy {:?} and runtime {:?}",
+            spec.policy, spec.runtime
+        ))),
+        _ => Ok(()),
+    }
+}
+
+/// Check whether a provider value is one of the known variants.
+pub fn provider_from_str(s: &str) -> Option<Provider> {
+    match s {
+        "openai" => Some(Provider::Openai),
+        "anthropic" => Some(Provider::Anthropic),
+        "claude-code" => Some(Provider::ClaudeCode),
+        "codex" => Some(Provider::Codex),
+        "ollama" => Some(Provider::Ollama),
+        "custom" => Some(Provider::Custom),
+        _ => None,
+    }
 }
 
 #[async_trait]
