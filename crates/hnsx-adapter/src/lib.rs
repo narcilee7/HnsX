@@ -40,6 +40,23 @@ use hnsx_core::sandbox::{SandboxPolicy, SandboxRuntime, SandboxSpec};
 use hnsx_core::{Agent, HnsXAgentBuilder};
 use hnsx_sandbox::factory::SandboxFactory;
 
+/// Secret resolver so `HnsxAgentFactory` can fill in missing API keys without
+/// depending on `hnsx-cli`.
+pub trait SecretResolver: Send + Sync {
+    /// Return the API key for a provider, optionally scoped to an agent id.
+    fn resolve(&self, provider: &str, agent_id: &str) -> Option<String>;
+}
+
+/// Environment-variable helper used by the factory and CLI.
+pub fn api_key_env_var(provider: &str) -> Option<&'static str> {
+    match provider {
+        "openai" => Some("OPENAI_API_KEY"),
+        "anthropic" => Some("ANTHROPIC_API_KEY"),
+        "custom" => Some("CUSTOM_API_KEY"),
+        _ => None,
+    }
+}
+
 /// Factory that resolves a `Provider` to a concrete `Agent` impl.
 ///
 /// All providers are ultimately composed into an `HnsXAgent` via
@@ -48,6 +65,8 @@ use hnsx_sandbox::factory::SandboxFactory;
 #[derive(Clone, Default)]
 pub struct HnsxAgentFactory {
     sandbox_factory: Arc<SandboxFactory>,
+    secrets: Option<Arc<dyn SecretResolver>>,
+    api_key_override: Option<String>,
 }
 
 impl HnsxAgentFactory {
@@ -56,12 +75,53 @@ impl HnsxAgentFactory {
     }
 
     pub fn with_sandbox_factory(sandbox_factory: Arc<SandboxFactory>) -> Self {
-        Self { sandbox_factory }
+        Self {
+            sandbox_factory,
+            ..Default::default()
+        }
+    }
+
+    /// Attach a secret resolver so the factory can fill in missing API keys.
+    pub fn with_secret_resolver(mut self, resolver: Arc<dyn SecretResolver>) -> Self {
+        self.secrets = Some(resolver);
+        self
+    }
+
+    /// Override the API key used for all HTTP providers. Useful for CLI flags.
+    pub fn with_api_key_override(mut self, key: String) -> Self {
+        self.api_key_override = Some(key);
+        self
+    }
+
+    fn ensure_api_key(&self, spec: &AgentSpec) {
+        let provider = format!("{:?}", spec.model.provider).to_lowercase();
+        let env_var = api_key_env_var(&provider);
+
+        if let Some(ref key) = self.api_key_override {
+            if let Some(var) = env_var {
+                unsafe { std::env::set_var(var, key) };
+            }
+            return;
+        }
+
+        if env_var.is_none_or(|var| std::env::var(var).is_ok()) {
+            return;
+        }
+
+        if let Some(ref resolver) = self.secrets {
+            if let Some(key) = resolver.resolve(&provider, &spec.id) {
+                if let Some(var) = env_var {
+                    unsafe { std::env::set_var(var, key) };
+                }
+            }
+        }
     }
 }
 
 impl CoreAgentFactory for HnsxAgentFactory {
     fn create(&self, spec: &AgentSpec) -> Result<Arc<dyn Agent>> {
+        self.ensure_api_key(spec);
+
         let sandbox_spec = spec.sandbox.clone().unwrap_or(SandboxSpec {
             policy: SandboxPolicy::None,
             runtime: SandboxRuntime::Auto,

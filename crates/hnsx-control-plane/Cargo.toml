@@ -36,3 +36,6 @@ tower-http = { workspace = true }
 # Observability
 metrics = { workspace = true }
 metrics-exporter-prometheus = { workspace = true }
+
+[dev-dependencies]
+reqwest = { workspace = true }

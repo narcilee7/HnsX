@@ -16,7 +16,7 @@ use serde_json::Value;
 use crate::agent::{Agent, AgentSpec};
 use crate::agent_factory::{AgentFactory, NoopFactory};
 use crate::chunk::Chunk;
-use crate::domain::{Domain, DomainSpec};
+use crate::domain::{Domain, DomainSpec, validate_sandbox_spec};
 use crate::error::{Error, Result};
 use crate::memory::{MemoryBackend, MemoryBackendFactory, MemoryConfig};
 use crate::telemetry::Telemetry;
@@ -196,51 +196,62 @@ impl DomainLoader {
 ///
 /// Returns the agent map (id → spec) on success. On failure, returns an
 /// `Error::InvalidSpec` with a human-readable message.
-///
-/// Scope for Phase 1.1: id uniqueness + cross-references. Cycle detection and
-/// input/output schema compatibility land with the workflow engine in 1.2.
 fn validate(spec: &DomainSpec) -> Result<HashMap<String, AgentSpec>> {
+    let mut errors: Vec<String> = Vec::new();
+
     // 1. No duplicate agent ids.
     let mut agents: HashMap<String, AgentSpec> = HashMap::with_capacity(spec.agents.len());
     for agent in &spec.agents {
         if agents.insert(agent.id.clone(), agent.clone()).is_some() {
-            return Err(Error::InvalidSpec(format!(
-                "duplicate agent id: {}",
-                agent.id
-            )));
+            errors.push(format!("duplicate agent id: {}", agent.id));
         }
     }
 
-    // 2. No duplicate step ids, and remember the set for cross-references.
+    // 2. Validate each agent spec.
+    for agent in &spec.agents {
+        validate_agent(agent, &mut errors);
+    }
+
+    // 3. No duplicate step ids, and remember the set for cross-references.
     let mut step_ids: HashSet<&str> = HashSet::with_capacity(spec.workflow.steps.len());
     for step in &spec.workflow.steps {
         if !step_ids.insert(step.id.as_str()) {
-            return Err(Error::InvalidSpec(format!(
-                "duplicate step id: {}",
-                step.id
-            )));
+            errors.push(format!("duplicate step id: {}", step.id));
         }
     }
 
-    // 3. workflow.entry must match a step id.
+    // 4. workflow.entry must match a step id.
     if !step_ids.contains(spec.workflow.entry.as_str()) {
-        return Err(Error::InvalidSpec(format!(
+        errors.push(format!(
             "workflow.entry '{}' does not match any step id",
             spec.workflow.entry
-        )));
+        ));
     }
 
-    // 4. Each step's `agent` must reference an existing agent.
+    // 5. Each step's `agent` must reference an existing agent.
     for step in &spec.workflow.steps {
         if !agents.contains_key(&step.agent) {
-            return Err(Error::InvalidSpec(format!(
+            errors.push(format!(
                 "step '{}' references unknown agent '{}'",
                 step.id, step.agent
-            )));
+            ));
         }
+    }
+
+    if !errors.is_empty() {
+        return Err(Error::InvalidSpec(errors.join("; ")));
     }
 
     Ok(agents)
+}
+
+fn validate_agent(agent: &AgentSpec, errors: &mut Vec<String>) {
+    // Sandbox spec must be coherent if present.
+    if let Some(ref sandbox) = agent.sandbox {
+        if let Err(e) = validate_sandbox_spec(sandbox) {
+            errors.push(format!("agent '{}': {e}", agent.id));
+        }
+    }
 }
 
 /// Build a workflow engine by asking the factory for one agent per spec agent.
