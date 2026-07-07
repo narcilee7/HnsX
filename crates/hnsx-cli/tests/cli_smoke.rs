@@ -158,6 +158,89 @@ fn test_with_noop_adapter_executes_a_single_agent() {
 }
 
 #[test]
+fn register_and_unregister_domain_with_control_plane() {
+    let path = valid_domain();
+
+    // Use an ephemeral SQLite database.
+    let db_path = std::env::temp_dir().join(format!("hnsx-cp-{}.db", uuid::Uuid::new_v4()));
+
+    // Start the control plane on a random port.
+    let mut cp = hnsx()
+        .args([
+            "control-plane",
+            "--addr",
+            "127.0.0.1:0",
+            "--db",
+            db_path.to_str().unwrap(),
+        ])
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn control-plane");
+
+    let mut cp_stdout = cp.stdout.take().unwrap();
+    let mut buf = [0u8; 256];
+    let mut line = String::new();
+    let addr: String = loop {
+        let n = std::io::Read::read(&mut cp_stdout, &mut buf).expect("read cp stdout");
+        if n == 0 {
+            panic!("control-plane exited before printing address");
+        }
+        line.push_str(&String::from_utf8_lossy(&buf[..n]));
+        if let Some(pos) = line.find("gRPC on ") {
+            let rest = &line[pos + 8..];
+            if let Some(end) = rest.find(" and") {
+                break rest[..end].to_string();
+            }
+        }
+    };
+
+    let result = (|| {
+        let register = hnsx()
+            .args([
+                "register",
+                "--domain",
+                path.to_str().unwrap(),
+                "--control-plane",
+                &format!("http://{addr}"),
+            ])
+            .output()
+            .expect("spawn register");
+        assert!(
+            register.status.success(),
+            "register should succeed. stderr: {}",
+            String::from_utf8_lossy(&register.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&register.stdout);
+        assert!(
+            stdout.contains("registered domain cli-smoke"),
+            "stdout: {stdout}"
+        );
+
+        let unregister = hnsx()
+            .args([
+                "unregister",
+                "--id",
+                "cli-smoke",
+                "--version",
+                "0.1.0",
+                "--control-plane",
+                &format!("http://{addr}"),
+            ])
+            .output()
+            .expect("spawn unregister");
+        assert!(
+            unregister.status.success(),
+            "unregister should succeed. stderr: {}",
+            String::from_utf8_lossy(&unregister.stderr)
+        );
+        Ok(()) as Result<(), Box<dyn std::any::Any + Send>>
+    })();
+
+    let _ = cp.kill();
+    result.unwrap();
+}
+
+#[test]
 fn metrics_and_traces_read_local_jsonl_files() {
     let trace_dir = std::env::temp_dir().join(format!("hnsx-traces-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&trace_dir).expect("create trace dir");
