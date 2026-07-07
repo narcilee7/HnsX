@@ -1,12 +1,13 @@
-//! Shell tool: whitelisted command execution.
+//! Shell tool: whitelisted command execution with async I/O and timeout.
 //!
-//! For 3.3 the tool runs commands in the host process via `std::process::Command`.
-//! The Phase 2 sandbox will move execution into a namespace so a leaked
-//! prompt can't damage the host. Until then, only commands in the
-//! configured whitelist are allowed.
+//! For Phase 2 the tool runs commands via `tokio::process::Command`. The
+//! Phase 3 sandbox will move execution into a namespace so a leaked prompt
+//! can't damage the host. Until then, only commands in the configured
+//! whitelist are allowed.
 
 use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -16,6 +17,8 @@ use hnsx_core::agent::ToolKind;
 use hnsx_core::error::{Error, Result};
 use hnsx_core::tool::Tool;
 
+const DEFAULT_TIMEOUT_MS: u64 = 30_000;
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct ShellConfig {
     /// Whitelisted command basenames (e.g. `["cat", "grep", "git"]`).
@@ -23,6 +26,9 @@ pub struct ShellConfig {
     /// Working directory. Defaults to current.
     #[serde(default)]
     pub cwd: Option<String>,
+    /// Timeout in ms. Defaults to 30s.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
 }
 
 pub struct ShellTool {
@@ -30,6 +36,7 @@ pub struct ShellTool {
     config: Value,
     allow: Vec<String>,
     cwd: Option<String>,
+    timeout: Duration,
 }
 
 impl ShellTool {
@@ -41,11 +48,13 @@ impl ShellTool {
                 "ShellTool config: `allow` must list at least one command".into(),
             ));
         }
+        let timeout = Duration::from_millis(cfg.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS));
         Ok(Arc::new(Self {
             name: name.into(),
             config,
             allow: cfg.allow,
             cwd: cfg.cwd,
+            timeout,
         }))
     }
 }
@@ -84,15 +93,23 @@ impl Tool for ShellTool {
             )));
         }
 
-        let mut command = std::process::Command::new(cmd);
+        let mut command = tokio::process::Command::new(cmd);
         command.args(&cmd_args);
         if let Some(cwd) = &self.cwd {
             command.current_dir(cwd);
         }
-        command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
 
-        let output = command
-            .output()
+        #[cfg(unix)]
+        apply_unix_limits(&mut command);
+
+        let output = tokio::time::timeout(self.timeout, command.output())
+            .await
+            .map_err(|_| Error::Adapter(format!("ShellTool `{cmd}` timed out after {:?}", self.timeout)))?
             .map_err(|e| Error::Adapter(format!("ShellTool spawn `{cmd}`: {e}")))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -107,6 +124,25 @@ impl Tool for ShellTool {
             "stdout": stdout,
             "stderr": stderr,
         }))
+    }
+}
+
+#[cfg(unix)]
+fn apply_unix_limits(command: &mut tokio::process::Command) {
+    unsafe {
+        command.pre_exec(|| {
+            let _ = nix::sys::resource::setrlimit(
+                nix::sys::resource::Resource::RLIMIT_CPU,
+                300,
+                600,
+            );
+            let _ = nix::sys::resource::setrlimit(
+                nix::sys::resource::Resource::RLIMIT_AS,
+                1024 * 1024 * 1024,
+                2 * 1024 * 1024 * 1024,
+            );
+            Ok(())
+        });
     }
 }
 
@@ -137,26 +173,33 @@ mod tests {
         assert!(matches!(err, Error::Adapter(ref m) if m.contains("whitelist")), "got: {err:?}");
     }
 
-    #[test]
-    fn runs_whitelisted_cat() {
+    #[tokio::test]
+    async fn runs_whitelisted_cat() {
         let tool = ShellTool::new("s", allow(&["cat"])).expect("build");
-        let out = futures::executor::block_on(tool.invoke(json!({
-            "cmd": "cat",
-            "args": []
-        })))
-        .expect("invoke");
+        let out = tool.invoke(json!({"cmd": "cat", "args": []})).await.expect("invoke");
         // No stdin -> cat exits 0 with empty stdout.
         assert_eq!(out["ok"], true);
         assert_eq!(out["exit_code"], 0);
     }
 
-    #[test]
-    fn missing_cmd_arg_errors() {
+    #[tokio::test]
+    async fn missing_cmd_arg_errors() {
         let tool = ShellTool::new("s", allow(&["cat"])).expect("build");
-        let err = match futures::executor::block_on(tool.invoke(json!({}))) {
+        let err = match tool.invoke(json!({})).await {
             Ok(_) => panic!("expected error"),
             Err(e) => e,
         };
         assert!(matches!(err, Error::Adapter(ref m) if m.contains("`cmd`")), "got: {err:?}");
+    }
+
+    #[tokio::test]
+    async fn timeout_kills_long_running_command() {
+        let tool = ShellTool::new(
+            "sleep",
+            json!({"allow": ["sleep"], "timeout_ms": 100}),
+        )
+        .expect("build");
+        let err = tool.invoke(json!({"cmd": "sleep", "args": ["10"]})).await.unwrap_err();
+        assert!(format!("{err}").contains("timed out"), "got: {err:?}");
     }
 }

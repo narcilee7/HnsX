@@ -23,6 +23,7 @@ use hnsx_core::agent::{AgentSpec, HealthStatus};
 use hnsx_core::chunk::Chunk;
 use hnsx_core::error::{Error, Result};
 use hnsx_core::sandbox::{Sandbox, SandboxPolicy, SandboxRuntime, SandboxSpec};
+use hnsx_core::tool::ToolRegistry;
 
 /// Adapter that shells out to the Codex CLI.
 pub struct CodexAdapter {
@@ -54,6 +55,12 @@ impl CodexAdapter {
             flags,
             command,
         }
+    }
+
+    /// No-op for interface consistency: the Codex CLI handles its own tool
+    /// use internally.
+    pub fn with_tools(self, _tools: ToolRegistry) -> Self {
+        self
     }
 }
 

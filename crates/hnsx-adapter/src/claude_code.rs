@@ -17,6 +17,7 @@ use hnsx_core::agent::{AgentSpec, HealthStatus};
 use hnsx_core::chunk::Chunk;
 use hnsx_core::error::{Error, Result};
 use hnsx_core::sandbox::{Sandbox, SandboxPolicy, SandboxRuntime, SandboxSpec};
+use hnsx_core::tool::ToolRegistry;
 
 /// Adapter that shells out to the Claude Code CLI.
 pub struct ClaudeCodeAdapter {
@@ -36,6 +37,12 @@ impl ClaudeCodeAdapter {
             system_prompt: spec.prompt.template.clone(),
             sandbox_spec,
         }
+    }
+
+    /// No-op for interface consistency: the Claude Code CLI handles its own
+    /// tool use internally.
+    pub fn with_tools(self, _tools: ToolRegistry) -> Self {
+        self
     }
 }
 
