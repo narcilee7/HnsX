@@ -1141,6 +1141,7 @@ dependencies = [
  "metrics",
  "metrics-exporter-prometheus",
  "prost",
+ "reqwest 0.12.28",
  "rusqlite",
  "serde",
  "serde_json",

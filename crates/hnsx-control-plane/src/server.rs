@@ -12,6 +12,7 @@ use metrics_exporter_prometheus::PrometheusHandle;
 use tokio::net::TcpListener;
 use tokio_stream::Stream;
 use tonic::transport::Server;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
@@ -89,7 +90,11 @@ impl ControlPlaneServer {
 
     /// Build the axum router for `/metrics`, the REST API and the Web UI.
     fn http_router(&self) -> Router {
-        let mut router = http_api::router(self.store.clone());
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
+        let mut router = http_api::router(self.store.clone()).layer(cors);
         if let Some(handle) = self.metrics_handle.clone() {
             router = router.route("/metrics", get(move || async move { handle.render() }));
         }
@@ -102,12 +107,17 @@ impl ControlPlaneServer {
 
     /// Serve both gRPC and HTTP on the same `addr` until the process is interrupted.
     ///
+    /// HTTP is served on `addr.port() + 1`. If `addr` has port `0`, the OS picks
+    /// the gRPC port and the HTTP port is computed from the bound address.
+    ///
     /// # Errors
     ///
     /// Returns an error if either server cannot bind or run.
     pub async fn serve(&self, addr: SocketAddr) -> anyhow::Result<()> {
-        let grpc_addr = addr;
-        let http_addr = SocketAddr::new(addr.ip(), addr.port() + 1);
+        let grpc_listener = TcpListener::bind(addr).await?;
+        let grpc_addr = grpc_listener.local_addr()?;
+        let http_addr = SocketAddr::new(grpc_addr.ip(), grpc_addr.port() + 1);
+        let incoming = tokio_stream::wrappers::TcpListenerStream::new(grpc_listener);
 
         let (registry, scheduler, discovery, telemetry) = self.services();
         let grpc = Server::builder()
@@ -115,7 +125,7 @@ impl ControlPlaneServer {
             .add_service(scheduler)
             .add_service(discovery)
             .add_service(telemetry)
-            .serve(grpc_addr);
+            .serve_with_incoming_shutdown(incoming, std::future::pending());
 
         let http = async {
             let listener = TcpListener::bind(http_addr).await?;
@@ -127,6 +137,58 @@ impl ControlPlaneServer {
 
         tokio::try_join!(grpc.map_err(anyhow::Error::from), http)?;
         Ok(())
+    }
+
+    /// Serve gRPC over a bound listener and HTTP over a bound listener.
+    ///
+    /// Both listeners are assumed to already be bound by the caller, which
+    /// avoids port races in tests.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if either server cannot run.
+    pub async fn serve_with_both_bound(
+        &self,
+        grpc_listener: TcpListener,
+        http_listener: TcpListener,
+    ) -> anyhow::Result<()> {
+        let incoming = tokio_stream::wrappers::TcpListenerStream::new(grpc_listener);
+
+        let (registry, scheduler, discovery, telemetry) = self.services();
+        let grpc = Server::builder()
+            .add_service(registry)
+            .add_service(scheduler)
+            .add_service(discovery)
+            .add_service(telemetry)
+            .serve_with_incoming_shutdown(incoming, std::future::pending());
+
+        let http = async {
+            let router = self.http_router();
+            axum::serve(http_listener, router)
+                .await
+                .map_err(anyhow::Error::from)
+        };
+
+        tokio::try_join!(grpc.map_err(anyhow::Error::from), http)?;
+        Ok(())
+    }
+
+    /// Serve gRPC over a bound listener and HTTP on a separate address.
+    ///
+    /// This is useful when the caller needs to know the bound port (e.g. port
+    /// `0`) before printing startup messages.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if either server cannot bind or run.
+    pub async fn serve_with_bound(
+        &self,
+        grpc_listener: TcpListener,
+        http_addr: SocketAddr,
+    ) -> anyhow::Result<()> {
+        let http_listener = TcpListener::bind(http_addr).await?;
+        self.serve_with_both_bound(grpc_listener, http_listener)
+            .await
     }
 
     /// Serve gRPC over an existing incoming stream until `shutdown` resolves.
