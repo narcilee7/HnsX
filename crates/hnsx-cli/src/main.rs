@@ -7,6 +7,8 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 mod commands;
+mod deploy;
+mod runtime;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -21,6 +23,8 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// Start the HnsX control plane
+    ControlPlane(commands::control_plane::ControlPlaneArgs),
     /// Run a domain locally in dev mode
     Dev(commands::dev::DevArgs),
     /// Validate a domain YAML file (also serves as a schema round-trip smoke test)
@@ -44,6 +48,7 @@ enum Commands {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
+        Commands::ControlPlane(a) => commands::control_plane::exec(a),
         Commands::Dev(a) => commands::dev::exec(a),
         Commands::Validate(a) => commands::validate::exec(a),
         Commands::Test(a) => commands::test::exec(a),

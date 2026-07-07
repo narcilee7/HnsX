@@ -1,6 +1,6 @@
 [package]
 name = "hnsx-sandbox"
-description = "HnsX sandbox layer (Linux-only implementations land in Phase 1)"
+description = "HnsX sandbox layer with cross-platform backends"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,3 +12,12 @@ workspace = true
 
 [dependencies]
 hnsx-core = { workspace = true }
+async-trait = { workspace = true }
+tokio = { version = "1", features = ["process", "io-util", "rt-multi-thread", "macros", "sync"] }
+futures = { workspace = true }
+tempfile = "3"
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", features = ["process", "resource"] }
+
+

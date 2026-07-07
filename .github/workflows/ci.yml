@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feat/init]
+  pull_request:
+    branches: [main, feat/init]
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo check
+        run: cargo check --workspace
+
+      - name: cargo test
+        run: cargo test --workspace
+
+      - name: cargo clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Smoke test hnsx build
+        run: |
+          cargo build --release --bin hnsx
+          ./target/release/hnsx build --domain domains/financial-analysis/domain.yaml --output /tmp/fa.hnsx.tar
+          test -f /tmp/fa.hnsx.tar
+
+      - name: Verify Docker availability (optional)
+        run: docker version || echo "Docker not available, skipping container tests"
