@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+package hnsx.v1;
+
+option go_package = "github.com/hnsx-io/hnsx/proto/gen/go/hnsx/v1";
+
+// DomainSpec is the top-level declarative harness definition.
+message DomainSpec {
+  string id = 1;
+  string version = 2;
+  string description = 3;
+  Harness harness = 4;
+}
+
+// Harness is the set of constraints and capabilities wrapped around an Agent.
+message Harness {
+  repeated Agent agents = 1;
+  repeated Prompt prompts = 2;
+  repeated Skill skills = 3;
+  repeated Tool tools = 4;
+  repeated MCPConfig mcps = 5;
+  Sandbox sandbox = 6;
+  Policy policy = 7;
+  Memory memory = 8;
+  Session session = 9;
+  Eval eval = 10;
+}
+
+// Agent describes an external agent to be harnessed.
+message Agent {
+  string id = 1;
+  string description = 2;
+  ModelRef model = 3;
+  AdapterRef adapter = 4;
+  PromptRef prompt = 5;
+  repeated string skill_refs = 6;
+  repeated string tool_refs = 7;
+}
+
+message ModelRef {
+  string provider = 1; // e.g. openai, anthropic, ollama
+  string model = 2; // e.g. gpt-4o, claude-sonnet-4
+}
+
+message AdapterRef {
+  string kind = 1; // e.g. openai, anthropic, claude-code, codex, noop
+  int32 timeout_seconds = 2;
+}
+
+message Prompt {
+  string id = 1;
+  string template = 2;
+  map<string, string> variables = 3;
+}
+
+message PromptRef {
+  string id = 1;
+}
+
+message Skill {
+  string id = 1;
+  string description = 2;
+  repeated Prompt prompts = 3;
+  repeated Tool tools = 4;
+  repeated string mcp_refs = 5;
+}
+
+message Tool {
+  string id = 1;
+  string description = 2;
+  string type = 3; // e.g. http, shell, sql, python, file
+  bytes config = 4; // JSON-encoded tool-specific config
+}
+
+message MCPConfig {
+  string id = 1;
+  string command = 2;
+  repeated string args = 3;
+  map<string, string> env = 4;
+}
+
+message Sandbox {
+  string backend = 1; // none, process, container, microvm, delegate
+  bytes config = 2; // JSON-encoded backend-specific config
+}
+
+message Policy {
+  double budget_usd = 1;
+  repeated string allowed_tools = 2;
+  repeated string denied_tools = 3;
+  bool require_human_approval = 4;
+  bytes guardrails = 5; // JSON-encoded guardrail rules
+}
+
+message Memory {
+  string backend = 1; // in_memory, postgres, redis
+  bytes config = 2;
+}
+
+message Session {
+  string mode = 1; // single-task, workflow, multi-turn, autonomous
+  Workflow workflow = 2;
+}
+
+message Workflow {
+  string entry = 1;
+  repeated Step steps = 2;
+}
+
+message Step {
+  string id = 1;
+  string agent_ref = 2;
+  string prompt_ref = 3;
+  string output = 4;
+  map<string, string> input = 5;
+  repeated string next = 6;
+}
+
+message Eval {
+  repeated EvalSet sets = 1;
+}
+
+message EvalSet {
+  string id = 1;
+  string description = 2;
+  repeated EvalCase cases = 3;
+}
+
+message EvalCase {
+  string id = 1;
+  string name = 2;
+  bytes input = 3; // JSON trigger payload
+  bytes expect = 4; // JSON expected output / rules
+  string scorer = 5; // exact, contains, llm-judge, script
+}

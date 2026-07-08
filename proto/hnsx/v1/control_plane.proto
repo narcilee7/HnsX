@@ -1,34 +1,48 @@
 syntax = "proto3";
+
 package hnsx.v1;
 
+option go_package = "github.com/hnsx-io/hnsx/proto/gen/go/hnsx/v1";
+
 service Registry {
-  rpc RegisterDomain(DomainSpec) returns (DomainRef);
+  rpc RegisterDomain(RegisterDomainRequest) returns (DomainRef);
   rpc UnregisterDomain(DomainRef) returns (Empty);
-  rpc ListDomains(Empty) returns (DomainList);
+  rpc GetDomain(DomainRef) returns (DomainSpec);
+  rpc ListDomains(ListDomainsRequest) returns (DomainList);
 }
 
 service Scheduler {
-  rpc RegisterInstance(InstanceInfo) returns (InstanceRef);
-  rpc Heartbeat(InstanceRef) returns (Empty);
-  rpc UnregisterInstance(InstanceRef) returns (Empty);
-  rpc ListInstances(DomainRef) returns (InstanceList);
+  rpc ScheduleSession(ScheduleSessionRequest) returns (SessionRef);
+  rpc GetSession(SessionRef) returns (SessionStatus);
+  rpc ListSessions(ListSessionsRequest) returns (SessionList);
 }
 
 service Discovery {
-  rpc Discover(DiscoverRequest) returns (InstanceList);
+  rpc DiscoverRuntime(DiscoverRequest) returns (RuntimeList);
 }
 
-service Telemetry {
+service TelemetryService {
   rpc RecordTrace(TraceRecord) returns (Empty);
   rpc QueryTraces(QueryTraceRequest) returns (TraceList);
   rpc RecordInvocation(InvocationRecord) returns (Empty);
   rpc QueryInvocationMetrics(InvocationMetricsRequest) returns (InvocationMetrics);
 }
 
+service EvalService {
+  rpc RunEval(RunEvalRequest) returns (EvalRunRef);
+  rpc GetEvalRun(EvalRunRef) returns (EvalRunResult);
+  rpc ListEvalRuns(ListEvalRunsRequest) returns (EvalRunList);
+}
+
+message RegisterDomainRequest {
+  DomainSpec spec = 1;
+}
+
 message DomainSpec {
   string id = 1;
   string version = 2;
-  string yaml_body = 3;
+  string description = 3;
+  string yaml_body = 4;
 }
 
 message DomainRef {
@@ -36,43 +50,75 @@ message DomainRef {
   string version = 2;
 }
 
-message DomainList { repeated DomainSpec domains = 1; }
-
-message InstanceInfo {
-  string instance_id = 1;
-  string domain_id = 2;
-  repeated string tags = 3;
-  string region = 4;
-  repeated string capabilities = 5;
+message DomainList {
+  repeated DomainSpec domains = 1;
 }
 
-message InstanceRef { string instance_id = 1; }
+message ScheduleSessionRequest {
+  string domain_id = 1;
+  string domain_version = 2;
+  string payload = 3; // JSON string
+}
 
-message InstanceList { repeated InstanceInfo instances = 1; }
+message SessionRef {
+  string session_id = 1;
+}
+
+message SessionStatus {
+  string session_id = 1;
+  string state = 2; // pending, running, completed, failed
+  string result = 3; // JSON string
+  int64 started_at_ms = 4;
+  int64 completed_at_ms = 5;
+}
+
+message ListSessionsRequest {
+  string domain_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message SessionList {
+  repeated SessionStatus sessions = 1;
+}
+
+message RuntimeInfo {
+  string runtime_id = 1;
+  repeated string capabilities = 2;
+  string region = 3;
+  string version = 4;
+}
 
 message DiscoverRequest {
-  string domain_id = 1;
-  repeated string tags = 2;
-  string region = 3;
+  repeated string capabilities = 1;
+  string region = 2;
+}
+
+message RuntimeList {
+  repeated RuntimeInfo runtimes = 1;
 }
 
 message TraceRecord {
-  string session_id = 1;
-  string domain_id = 2;
-  string step_id = 3;
-  string agent_id = 4;
-  int64 started_at_ms = 5;
-  int64 duration_ms = 6;
-  string input = 7;
-  string output = 8;
+  string trace_id = 1;
+  string session_id = 2;
+  string domain_id = 3;
+  string step_id = 4;
+  string agent_id = 5;
+  int64 started_at_ms = 6;
+  int64 duration_ms = 7;
+  string input = 8; // JSON string
+  string output = 9; // JSON string
 }
 
 message QueryTraceRequest {
   string domain_id = 1;
   string session_id = 2;
+  int32 limit = 3;
 }
 
-message TraceList { repeated TraceRecord traces = 1; }
+message TraceList {
+  repeated TraceRecord traces = 1;
+}
 
 message InvocationRecord {
   string session_id = 1;
@@ -97,26 +143,30 @@ message InvocationMetrics {
   double avg_latency_ms = 6;
 }
 
-message Empty {}
-
-service Runtime {
-  rpc Trigger(TriggerRequest) returns (stream TriggerResponse);
-}
-
-message TriggerRequest {
+message RunEvalRequest {
   string domain_id = 1;
-  string session_id = 2;
-  string payload = 3; // JSON string
+  string set_id = 2;
 }
 
-message TriggerResponse {
-  oneof item {
-    ChunkText text = 1;
-    ChunkError error = 2;
-    ChunkDone done = 3;
-  }
+message EvalRunRef {
+  string eval_run_id = 1;
 }
 
-message ChunkText { string content = 1; }
-message ChunkError { string message = 1; }
-message ChunkDone { string variables = 1; } // JSON string
+message EvalRunResult {
+  string eval_run_id = 1;
+  string state = 2;
+  double score = 3;
+  int32 total = 4;
+  int32 passed = 5;
+  string report_url = 6;
+}
+
+message ListEvalRunsRequest {
+  string domain_id = 1;
+}
+
+message EvalRunList {
+  repeated EvalRunResult runs = 1;
+}
+
+message Empty {}
