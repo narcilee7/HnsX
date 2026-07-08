@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package hnsx.v1;
+
+option go_package = "github.com/hnsx-io/hnsx/proto/gen/go/hnsx/v1";
+
+service Runtime {
+  rpc Trigger(TriggerRequest) returns (stream TriggerResponse);
+}
+
+message TriggerRequest {
+  string domain_id = 1;
+  string domain_version = 2;
+  string session_id = 3;
+  string payload = 4; // JSON string
+}
+
+message TriggerResponse {
+  oneof item {
+    ChunkText text = 1;
+    ChunkToolCall tool_call = 2;
+    ChunkObservation observation = 3;
+    ChunkError error = 4;
+    ChunkDone done = 5;
+  }
+}
+
+message ChunkText {
+  string content = 1;
+  string agent_id = 2;
+}
+
+message ChunkToolCall {
+  string tool_id = 1;
+  string tool_name = 2;
+  string arguments = 3; // JSON string
+}
+
+message ChunkObservation {
+  string observation_id = 1;
+  string kind = 2;       // text, tool_call, tool_result, error, cost
+  string payload = 3;    // JSON string
+}
+
+message ChunkError {
+  string code = 1;
+  string message = 2;
+}
+
+message ChunkDone {
+  string session_id = 1;
+  string result = 2;     // JSON string
+}

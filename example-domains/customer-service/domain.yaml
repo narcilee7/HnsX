@@ -1,0 +1,50 @@
+id: customer-service
+version: 0.1.0
+description: |
+  Routes customer questions to the right specialist agent
+  (triage, billing, technical).
+harness:
+  agents:
+    - id: triage
+      description: Classifies the incoming question and routes to a specialist.
+      model:
+        provider: anthropic
+        model: claude-haiku-4-5
+      adapter:
+        kind: noop
+        timeout_seconds: 30
+      prompt:
+        id: triage-prompt
+    - id: billing
+      description: Handles billing and subscription questions.
+      model:
+        provider: openai
+        model: gpt-4o-mini
+      adapter:
+        kind: noop
+        timeout_seconds: 60
+      prompt:
+        id: billing-prompt
+  prompts:
+    - id: triage-prompt
+      template: |
+        You are a triage agent. Classify the user's question into
+        one of: billing, technical, other. Reply with JSON only.
+      variables: {}
+    - id: billing-prompt
+      template: |
+        You are the billing specialist. Answer the user's billing question.
+      variables: {}
+  session:
+    mode: workflow
+    workflow:
+      entry: classify
+      steps:
+        - id: classify
+          agent: triage
+          output: classification
+        - id: route
+          agent: billing
+          input:
+            classification: "${classification}"
+          output: response

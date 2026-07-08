@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package hnsx.v1;
+
+option go_package = "github.com/hnsx-io/hnsx/proto/gen/go/hnsx/v1";
+
+// Observation is the atomic unit of observable agent behavior.
+message Observation {
+  string observation_id = 1;
+  string trace_id = 2;
+  string session_id = 3;
+  string domain_id = 4;
+  string step_id = 5;
+  string agent_id = 6;
+  string kind = 7;       // text, tool_call, tool_result, error, cost, latency
+  int64 created_at_ms = 8;
+  string payload = 9;    // JSON string
+}
+
+// Cost captures the monetary and token cost of a single agent invocation.
+message Cost {
+  double total_cost_usd = 1;
+  int64 prompt_tokens = 2;
+  int64 completion_tokens = 3;
+  string model = 4;
+  string provider = 5;
+}
+
+// AuditRecord is an immutable security/operations log entry.
+message AuditRecord {
+  string record_id = 1;
+  string session_id = 2;
+  string domain_id = 3;
+  string action = 4;
+  string actor = 5;
+  int64 created_at_ms = 6;
+  string details = 7;    // JSON string
+}
