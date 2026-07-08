@@ -10,11 +10,15 @@ message Observation {
   string trace_id = 2;
   string session_id = 3;
   string domain_id = 4;
-  string step_id = 5;
-  string agent_id = 6;
-  string kind = 7;       // text, tool_call, tool_result, error, cost, latency
-  int64 created_at_ms = 8;
-  string payload = 9;    // JSON string
+  string domain_version = 5;
+  string step_id = 6;
+  string agent_id = 7;
+  string parent_id = 8;
+  string kind = 9;
+  string role = 10;
+  string payload = 11;
+  string metadata = 12;
+  int64 created_at_ms = 13;
 }
 
 // Cost captures the monetary and token cost of a single agent invocation.
@@ -29,10 +33,23 @@ message Cost {
 // AuditRecord is an immutable security/operations log entry.
 message AuditRecord {
   string record_id = 1;
-  string session_id = 2;
-  string domain_id = 3;
-  string action = 4;
-  string actor = 5;
-  int64 created_at_ms = 6;
-  string details = 7;    // JSON string
+  int64 timestamp_ms = 2;
+  string session_id = 3;
+  string domain_id = 4;
+  string action = 5;
+  string actor = 6;
+  string actor_type = 7;
+  string resource = 8;
+  string resource_type = 9;
+  string decision = 10;
+  string reason = 11;
+  string details = 12;
+}
+
+// MetricValue is a single metric sample.
+message MetricValue {
+  string name = 1;
+  double value = 2;
+  map<string, string> labels = 3;
+  int64 timestamp_ms = 4;
 }
