@@ -1,0 +1,36 @@
+[package]
+name = "hnsx-cli"
+description = "HnsX command-line interface"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+
+
+
+[[bin]]
+name = "hnsx"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+hnsx-core = { workspace = true }
+hnsx-proto = { workspace = true }
+hnsx-adapter = { version = "0.1.0", path = "../hnsx-adapter" }
+hnsx-control-plane = { path = "../hnsx-control-plane" }
+clap = { workspace = true }
+anyhow = { workspace = true }
+futures = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+tokio = { version = "1", features = ["rt", "macros", "time", "process", "fs", "signal"] }
+tokio-stream = { workspace = true }
+serde = { workspace = true }
+uuid = { workspace = true }
+tower = { workspace = true }
+tempfile = "3"
+hostname = "0.4"
+tonic = { workspace = true }
