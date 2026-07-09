@@ -12,6 +12,8 @@ import { formatCostUsd, formatDurationMs, formatTokens } from '../lib/utils'
  * 一站式验收页 — 把所有组件用 mock 数据渲染一遍。
  * 宿主可以单独 <ObservabilityPlayground /> 嵌入或路由访问。
  */
+const heatmapMockData = generateHeatmapMock(26 * 7, () => Math.floor(Math.random() * 50))
+
 export default function ObservabilityPlayground() {
   return (
     <div className="min-h-screen w-full bg-[var(--background)] p-8 text-[var(--chart-text-primary)]">
@@ -105,10 +107,7 @@ export default function ObservabilityPlayground() {
             { label: 'failed', value: 24, variant: 'danger' },
           ]}
         />
-        <ActivityHeatmap
-          unit="sessions"
-          data={generateHeatmapMock(26 * 7, () => Math.floor(Math.random() * 50))}
-        />
+        <ActivityHeatmap unit="sessions" data={heatmapMockData} />
       </section>
 
       <section className="mb-10">
