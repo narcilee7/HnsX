@@ -14,6 +14,7 @@ import (
 	"github.com/hnsx-io/hnsx/core/observation"
 	hsxcore "github.com/hnsx-io/hnsx/core/runtime"
 	hsxsession "github.com/hnsx-io/hnsx/server/pkg/session"
+	"github.com/hnsx-io/hnsx/server/pkg/worker"
 )
 
 // ListSessions handles GET /api/v1/sessions.
@@ -95,10 +96,6 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, domainID
 		writeError(w, r, NewDomainNotFound(domainID))
 		return
 	}
-	if s.Executor == nil {
-		writeError(w, r, NewInternal(errors.New("executor not configured")))
-		return
-	}
 
 	sess := &registeredSession{
 		ID:            hsxcore.NewSessionID(domainID),
@@ -113,6 +110,26 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, domainID
 
 	bc := s.attachBroadcaster(sess.ID)
 
+	// V1.1: if a worker pool is wired, enqueue the session for a Python
+	// worker. Otherwise fall back to the in-process Go executor.
+	if s.SessionQueue != nil {
+		if err := s.enqueueForWorker(sess, d, trigger); err != nil {
+			writeError(w, r, NewInternal(err))
+			return
+		}
+		w.Header().Set("Location", "/api/v1/sessions/"+sess.ID)
+		writeJSON(w, http.StatusAccepted, map[string]any{
+			"id":    sess.ID,
+			"state": sess.State,
+		})
+		return
+	}
+
+	if s.Executor == nil {
+		writeError(w, r, NewInternal(errors.New("executor not configured")))
+		return
+	}
+
 	// Execute synchronously for Phase 1; an async variant lands in a
 	// follow-up PR (the API surface stays the same).
 	go s.runInBackground(sess, d, bc, trigger)
@@ -122,6 +139,42 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, domainID
 		"id":    sess.ID,
 		"state": sess.State,
 	})
+}
+
+// enqueueForWorker serializes the domain spec + trigger and puts the session
+// on the worker queue. The worker will PullSession, run it, and stream
+// observations back via the gRPC StreamChannel.
+func (s *Server) enqueueForWorker(sess *registeredSession, d *registeredDomain, trigger map[string]any) error {
+	specJSON, err := json.Marshal(d.Spec)
+	if err != nil {
+		return fmt.Errorf("marshal domain spec: %w", err)
+	}
+	triggerJSON, err := json.Marshal(trigger)
+	if err != nil {
+		return fmt.Errorf("marshal trigger: %w", err)
+	}
+
+	req := &worker.SessionRequest{
+		SessionID:          sess.ID,
+		DomainID:           d.ID,
+		DomainVersion:      d.Version,
+		DomainSpecJSON:     string(specJSON),
+		TriggerPayloadJSON: string(triggerJSON),
+		TraceID:            sess.ID,
+		CorrelationID:      sess.ID,
+	}
+
+	s.SessionQueue.Enqueue(req)
+
+	bc := s.attachBroadcaster(sess.ID)
+	_ = bc.Publish(context.Background(), observation.Observation{
+		Kind:      "state",
+		SessionID: sess.ID,
+		DomainID:  d.ID,
+		Payload:   map[string]any{"state": "pending", "worker_pool": true},
+		Timestamp: time.Now().UTC(),
+	})
+	return nil
 }
 
 // runInBackground executes the registered session via the executor.
@@ -166,6 +219,14 @@ func (s *Server) CancelSession(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	// V1.1: if a worker pool is wired, ask the assigned worker to cancel.
+	if s.WorkerRegistry != nil {
+		if workerID, ok := s.WorkerRegistry.SessionWorker(id); ok {
+			s.WorkerRegistry.SendCancel(workerID, id, "user requested cancel", time.Now().Add(5*time.Second).UnixMilli())
+		}
+	}
+
 	sess.State = "canceled"
 	done := time.Now().UTC()
 	sess.CompletedAt = &done

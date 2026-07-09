@@ -2,10 +2,10 @@ import { useParams, Link } from 'react-router-dom'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { DomainEditor, useDomainEditor } from '@/components/domain/DomainEditor'
 import { HarnessVisualizer } from '@/components/domain/HarnessVisualizer'
+import { VersionsPanel } from '@/components/domain/VersionsPanel'
 import { useDomain } from '@/hooks/useDomains'
 import { ErrorState } from '@/components/ui/Error'
 import { Loading } from '@/components/ui/Loading'
@@ -58,14 +58,11 @@ export default function DomainDetailPage() {
           <HarnessVisualizer harness={domain.harness} />
         </TabsContent>
         <TabsContent value="versions">
-          <Card>
-            <CardHeader>
-              <CardTitle>Versions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Version history will be shown here.</p>
-            </CardContent>
-          </Card>
+          <VersionsPanel
+            domainId={domain.id}
+            currentVersion={domain.version}
+            onRollback={refetch}
+          />
         </TabsContent>
       </Tabs>
     </div>

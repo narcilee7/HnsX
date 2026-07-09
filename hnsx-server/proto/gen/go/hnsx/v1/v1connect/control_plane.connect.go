@@ -236,6 +236,11 @@ func (UnimplementedDomainRegistryServiceHandler) ListDomains(context.Context, *c
 
 // SessionSchedulerServiceClient is a client for the hnsx.v1.SessionSchedulerService service.
 type SessionSchedulerServiceClient interface {
+	// DEPRECATED as of V1.1: replaced by SchedulerService.PullSession in
+	// proto/hnsx/v1/worker.proto. V1.1 inverts the request direction: workers
+	// pull sessions from the server, the server does not push to them.
+	//
+	// Deprecated: do not use.
 	ScheduleSession(context.Context, *connect.Request[v1.ScheduleSessionRequest]) (*connect.Response[v1.ScheduleSessionResponse], error)
 	GetSession(context.Context, *connect.Request[v1.GetSessionRequest]) (*connect.Response[v1.GetSessionResponse], error)
 	ListSessions(context.Context, *connect.Request[v1.ListSessionsRequest]) (*connect.Response[v1.ListSessionsResponse], error)
@@ -281,6 +286,8 @@ type sessionSchedulerServiceClient struct {
 }
 
 // ScheduleSession calls hnsx.v1.SessionSchedulerService.ScheduleSession.
+//
+// Deprecated: do not use.
 func (c *sessionSchedulerServiceClient) ScheduleSession(ctx context.Context, req *connect.Request[v1.ScheduleSessionRequest]) (*connect.Response[v1.ScheduleSessionResponse], error) {
 	return c.scheduleSession.CallUnary(ctx, req)
 }
@@ -298,6 +305,11 @@ func (c *sessionSchedulerServiceClient) ListSessions(ctx context.Context, req *c
 // SessionSchedulerServiceHandler is an implementation of the hnsx.v1.SessionSchedulerService
 // service.
 type SessionSchedulerServiceHandler interface {
+	// DEPRECATED as of V1.1: replaced by SchedulerService.PullSession in
+	// proto/hnsx/v1/worker.proto. V1.1 inverts the request direction: workers
+	// pull sessions from the server, the server does not push to them.
+	//
+	// Deprecated: do not use.
 	ScheduleSession(context.Context, *connect.Request[v1.ScheduleSessionRequest]) (*connect.Response[v1.ScheduleSessionResponse], error)
 	GetSession(context.Context, *connect.Request[v1.GetSessionRequest]) (*connect.Response[v1.GetSessionResponse], error)
 	ListSessions(context.Context, *connect.Request[v1.ListSessionsRequest]) (*connect.Response[v1.ListSessionsResponse], error)

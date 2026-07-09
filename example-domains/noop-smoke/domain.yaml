@@ -1,0 +1,29 @@
+id: noop-smoke
+version: 0.1.0
+description: |
+  Minimal smoke-test domain using the noop adapter. Used to verify the
+  CLI -> Go control plane -> Python worker -> Noop adapter -> Observation
+  end-to-end pipeline without any external LLM calls.
+harness:
+  agents:
+    assistant:
+      id: assistant
+      provider: noop
+      model: noop
+      adapter:
+        kind: noop
+      system_prompt: "You are a smoke-test assistant."
+  prompts:
+    default:
+      type: system
+      template: "You are a smoke-test assistant."
+  sandbox:
+    policy: none
+  policy:
+    budget:
+      max_cost_usd: 0.0
+      max_turns: 5
+  session:
+    mode: single
+    agent: assistant
+    max_turns: 5

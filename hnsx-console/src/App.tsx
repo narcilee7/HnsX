@@ -16,6 +16,7 @@ import ObservabilityPage from '@/pages/ObservabilityPage'
 import AuditPage from '@/pages/AuditPage'
 import ApprovalsPage from '@/pages/ApprovalsPage'
 import SettingsPage from '@/pages/SettingsPage'
+import PlaygroundPage from '@/pages/PlaygroundPage'
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
           <Route path="/audit" element={<AuditPage />} />
           <Route path="/approvals" element={<ApprovalsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/playground" element={<PlaygroundPage />} />
         </Routes>
       </AppShell>
     </>
