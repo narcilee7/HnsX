@@ -23,7 +23,7 @@ type HarnessSpec struct {
 	MCP           *MCPConfig            `json:"mcp,omitempty" yaml:"mcp,omitempty"`
 	Sandbox       SandboxSpec           `json:"sandbox" yaml:"sandbox"`
 	Policy        PolicySpec            `json:"policy,omitempty" yaml:"policy,omitempty"`
-	Memory        *MemoryConfig         `json:"memory,omitempty" yaml:"memory,omitempty"`
+	Store         *StoreConfig          `json:"store,omitempty" yaml:"store,omitempty"`
 	Session       SessionSpec           `json:"session" yaml:"session"`
 	Telemetry     *TelemetryConfig      `json:"telemetry,omitempty" yaml:"telemetry,omitempty"`
 }
@@ -160,12 +160,17 @@ type GuardrailSpec struct {
 	Config  any    `json:"config,omitempty" yaml:"config,omitempty"`
 }
 
-// MemoryConfig defines memory backend.
-type MemoryConfig struct {
+// StoreConfig defines storage backends for context, knowledge, and ephemeral
+// state. The previous name "MemoryConfig" is kept as a deprecated alias for
+// backward compatibility.
+type StoreConfig struct {
 	Backend       string `json:"backend" yaml:"backend"`
 	Config        any    `json:"config,omitempty" yaml:"config,omitempty"`
 	DefaultWindow int    `json:"default_window,omitempty" yaml:"default_window,omitempty"`
 }
+
+// MemoryConfig is the deprecated alias for StoreConfig.
+type MemoryConfig = StoreConfig
 
 // SessionSpec defines the session/orchestration mode.
 type SessionSpec struct {
