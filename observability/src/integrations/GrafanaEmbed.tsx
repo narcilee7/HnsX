@@ -68,28 +68,20 @@ export function GrafanaEmbed({
     return () => observer.disconnect()
   }, [theme])
 
-  const url = useMemo(() => {
-    const params = new URLSearchParams()
-    if (panelId !== undefined) params.set('panelId', String(panelId))
-    if (solo) params.set('__feature.dashboardSolo', 'true')
-    // theme
-    const effectiveTheme = theme === 'auto' ? hostTheme : theme
-    params.set('theme', effectiveTheme)
-    // time range
-    if (timeRange.kind === 'relative') {
-      params.set('from', `now-${timeRange.value}`)
-      params.set('to', 'now')
-    } else {
-      params.set('from', timeRange.from)
-      params.set('to', timeRange.to)
-    }
-    // vars
-    for (const [k, v] of Object.entries(vars)) {
-      params.set(`var-${k}`, v)
-    }
-    const path = solo ? '/d-solo/' : '/d/'
-    return `${stripTrailingSlash(baseUrl)}${path}${dashboardUid}?${params.toString()}`
-  }, [baseUrl, dashboardUid, panelId, timeRange, theme, hostTheme, vars, solo])
+  const url = useMemo(
+    () =>
+      buildGrafanaUrl({
+        baseUrl,
+        dashboardUid,
+        panelId,
+        timeRange,
+        theme,
+        hostTheme,
+        vars,
+        solo,
+      }),
+    [baseUrl, dashboardUid, panelId, timeRange, theme, hostTheme, vars, solo],
+  )
 
   const showFallback = !baseUrl || !dashboardUid
 
@@ -169,6 +161,42 @@ function DefaultFallback() {
 function detectTheme(): 'light' | 'dark' {
   if (typeof document === 'undefined') return 'light'
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+}
+
+interface BuildUrlOptions {
+  baseUrl: string
+  dashboardUid: string
+  panelId?: number
+  timeRange: GrafanaTimeRange
+  theme: 'light' | 'dark' | 'auto'
+  hostTheme: 'light' | 'dark'
+  vars: Record<string, string>
+  solo: boolean
+}
+
+/**
+ * 纯函数：构建 Grafana iframe URL。
+ * 暴露出来便于单元测试，不依赖 React 渲染。
+ */
+export function buildGrafanaUrl(opts: BuildUrlOptions): string {
+  const { baseUrl, dashboardUid, panelId, timeRange, theme, hostTheme, vars, solo } = opts
+  const params = new URLSearchParams()
+  if (panelId !== undefined) params.set('panelId', String(panelId))
+  if (solo) params.set('__feature.dashboardSolo', 'true')
+  const effectiveTheme = theme === 'auto' ? hostTheme : theme
+  params.set('theme', effectiveTheme)
+  if (timeRange.kind === 'relative') {
+    params.set('from', `now-${timeRange.value}`)
+    params.set('to', 'now')
+  } else {
+    params.set('from', timeRange.from)
+    params.set('to', timeRange.to)
+  }
+  for (const [k, v] of Object.entries(vars)) {
+    params.set(`var-${k}`, v)
+  }
+  const path = solo ? '/d-solo/' : '/d/'
+  return `${stripTrailingSlash(baseUrl)}${path}${dashboardUid}?${params.toString()}`
 }
 
 function stripTrailingSlash(s: string): string {
