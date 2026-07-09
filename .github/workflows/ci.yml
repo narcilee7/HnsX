@@ -72,7 +72,7 @@ jobs:
 
       - name: gofmt check
         run: |
-          diff_out=$(gofmt -l hnsx-core hnsx hnsx-server)
+          diff_out=$(gofmt -l hnsx-server sdk/go)
           if [ -n "$diff_out" ]; then echo "Need gofmt:"; echo "$diff_out"; exit 1; fi
 
       - name: go test

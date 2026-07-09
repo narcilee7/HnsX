@@ -15,9 +15,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-HNSX_DIR="$ROOT/hnsx"
 HNSX_SERVER_DIR="$ROOT/hnsx-server"
-HNSX_CORE_DIR="$ROOT/hnsx-core"
 BIN_DIR="$ROOT/bin"
 ADDR="${1:-127.0.0.1:51002}"
 
@@ -32,16 +30,9 @@ need() {
 need curl
 
 # 1. Build binaries if missing.
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-HNSX_DIR="$ROOT/hnsx"
-HNSX_SERVER_DIR="$ROOT/hnsx-server"
-HNSX_CORE_DIR="$ROOT/hnsx-core"
-
 if [[ ! -x "$BIN_DIR/hnsx-server" || ! -x "$BIN_DIR/hnsx" ]]; then
   bold "[1/6] building binaries"
-  ( cd "$HNSX_CORE_DIR" && go build -o /dev/null ./... )
-  ( cd "$HNSX_DIR"      && go build -o "$BIN_DIR/hnsx"        ./cmd/hnsx )
-  ( cd "$HNSX_SERVER_DIR" && go build -o "$BIN_DIR/hnsx-server" ./cmd/hnsx-server )
+  make build-go
   ok "built hnsx + hnsx-server"
 else
   bold "[1/6] using existing binaries"; ok "found $BIN_DIR/hnsx-server"
@@ -60,7 +51,7 @@ done
 # 3. Boot server with explicit --seed-from so we have known fixtures.
 LOG="$(mktemp -t hnsx-smoke.XXXXXX.log)"
 bold "[3/6] booting server on $ADDR (log $LOG)"
-HNSX_HTTP_ADDR="$ADDR" "$BIN_DIR/hnsx-server" server --seed-from "$ROOT/example-domains" >"$LOG" 2>&1 &
+HNSX_HTTP_ADDR="$ADDR" HNSX_GRPC_ADDR="" "$BIN_DIR/hnsx-server" server --seed-from "$ROOT/example-domains" >"$LOG" 2>&1 &
 SERVER_PID=$!
 trap 'kill "$SERVER_PID" 2>/dev/null || true; rm -f "$LOG"' EXIT
 

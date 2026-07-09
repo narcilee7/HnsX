@@ -1,6 +1,6 @@
 // Package telemetry centralizes HnsX telemetry sinks.
 //
-// The runtime emits observation.Observation values; the implementations in this
+// The runtime emits runtime.Observation values; the implementations in this
 // package convert those into either OTLP spans/metrics, structured stdout,
 // or DB rows. Sinks are designed to be plug-and-play: the runtime passes
 // observations to every registered sink via a Sink implementation.
@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hnsx-io/hnsx/core/observation"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
 
 // Sink is the contract any telemetry backend must satisfy. Implementations
@@ -30,7 +30,7 @@ type Sink interface {
 	// Name returns the sink identifier for logging/metrics.
 	Name() string
 	// Record is called for each observation the runtime emits.
-	Record(ctx context.Context, obs observation.Observation) error
+	Record(ctx context.Context, obs runtime.Observation) error
 	// Flush forces any buffered events to the backend. Best-effort; nil
 	// return value indicates success.
 	Flush(ctx context.Context) error
@@ -61,7 +61,7 @@ func newStdoutSink(out *os.File) *StdoutSink {
 func (s *StdoutSink) Name() string { return "stdout" }
 
 // Record writes one JSON line per observation.
-func (s *StdoutSink) Record(_ context.Context, obs observation.Observation) error {
+func (s *StdoutSink) Record(_ context.Context, obs runtime.Observation) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if obs.Timestamp.IsZero() {
@@ -92,7 +92,7 @@ func NewFanOutSink(sinks ...Sink) *FanOutSink { return &FanOutSink{sinks: sinks}
 func (f *FanOutSink) Name() string { return "fanout" }
 
 // Record forwards the observation to every child sink in order.
-func (f *FanOutSink) Record(ctx context.Context, obs observation.Observation) error {
+func (f *FanOutSink) Record(ctx context.Context, obs runtime.Observation) error {
 	for _, s := range f.sinks {
 		if err := s.Record(ctx, obs); err != nil {
 			return fmt.Errorf("sink %s: %w", s.Name(), err)

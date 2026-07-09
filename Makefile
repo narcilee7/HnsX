@@ -27,7 +27,7 @@ VERSION ?= 0.2.0
 # ---------------------------------------------------------------------------
 # Version stamping
 # ---------------------------------------------------------------------------
-VERSION_PKG := github.com/hnsx-io/hnsx/core/version
+VERSION_PKG := github.com/hnsx-io/hnsx/server/pkg/version
 
 LDFLAGS := -s -w \
   -X '$(VERSION_PKG).Version=$(VERSION)' \
@@ -53,6 +53,9 @@ help:
 	@echo "  ts-type-check   - pnpm -r type-check"
 	@echo "  worker-install  - create venv + pip install hnsx-worker editable"
 	@echo "  worker-test     - run hnsx-worker pytest"
+	@echo "  changeset       - add a changeset (pnpm changeset)"
+	@echo "  version         - version packages from changesets"
+	@echo "  release         - publish versioned packages"
 	@echo "  ci              - lint + type-check + test + worker-test (no smoke)"
 	@echo "  db-up/db-down   - local Postgres (deployments/local)"
 	@echo "  smoke           - end-to-end smoke (requires db-up)"
@@ -66,7 +69,7 @@ build: build-cli build-server ts-build
 # ---------------------------------------------------------------------------
 .PHONY: build-cli
 build-cli:
-	cd hnsx && go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/hnsx ./cmd/hnsx
+	cd $(SERVER_DIR) && go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/hnsx ./cmd/hnsx
 
 .PHONY: build-server
 build-server:
@@ -117,20 +120,14 @@ test: vet test-go ts-test
 
 .PHONY: test-go
 test-go:
-	cd hnsx-core && go test ./...
-	cd hnsx && go test ./...
 	cd $(SERVER_DIR) && go test ./...
 
 .PHONY: vet
 vet:
-	cd hnsx-core && go vet ./...
-	cd hnsx && go vet ./...
 	cd $(SERVER_DIR) && go vet ./...
 
 .PHONY: fmt
 fmt:
-	cd hnsx-core && gofmt -w .
-	cd hnsx && gofmt -w .
 	cd $(SERVER_DIR) && gofmt -w .
 
 .PHONY: lint
@@ -179,6 +176,24 @@ worker-import-check:
 	   assert len(worker_pb2.DESCRIPTOR.services_by_name) == 2, 'expected WorkerService + SchedulerService'; \
 	   print('ok')"
 
+# ---------------------------------------------------------------------------
+# Changesets (TypeScript workspace versioning)
+# ---------------------------------------------------------------------------
+.PHONY: changeset
+changeset:
+	cd $(ROOT) && pnpm exec changeset
+
+.PHONY: version
+version:
+	cd $(ROOT) && pnpm exec changeset version
+
+.PHONY: release
+release:
+	cd $(ROOT) && pnpm exec changeset publish
+
+# ---------------------------------------------------------------------------
+# Python worker proto generation
+# ---------------------------------------------------------------------------
 .PHONY: proto-py
 proto-py:
 	mkdir -p $(WORKER_DIR)/hnsx_worker/proto/gen

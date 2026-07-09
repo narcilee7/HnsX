@@ -11,9 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/hnsx-io/hnsx/core/observation"
-	hsxcore "github.com/hnsx-io/hnsx/core/runtime"
-	hsxsession "github.com/hnsx-io/hnsx/server/pkg/session"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/internal/session/broadcaster"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
 )
 
@@ -98,7 +97,7 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, domainID
 	}
 
 	sess := &registeredSession{
-		ID:            hsxcore.NewSessionID(domainID),
+		ID:            runtime.NewSessionID(domainID),
 		DomainID:      d.ID,
 		DomainVersion: d.Version,
 		Orchestration: d.Spec.Harness.Session.Mode,
@@ -167,7 +166,7 @@ func (s *Server) enqueueForWorker(sess *registeredSession, d *registeredDomain, 
 	s.SessionQueue.Enqueue(req)
 
 	bc := s.attachBroadcaster(sess.ID)
-	_ = bc.Publish(context.Background(), observation.Observation{
+	_ = bc.Publish(context.Background(), runtime.Observation{
 		Kind:      "state",
 		SessionID: sess.ID,
 		DomainID:  d.ID,
@@ -178,11 +177,11 @@ func (s *Server) enqueueForWorker(sess *registeredSession, d *registeredDomain, 
 }
 
 // runInBackground executes the registered session via the executor.
-func (s *Server) runInBackground(sess *registeredSession, d *registeredDomain, bc *hsxsession.Broadcaster, trigger map[string]any) {
+func (s *Server) runInBackground(sess *registeredSession, d *registeredDomain, bc *broadcaster.Broadcaster, trigger map[string]any) {
 	sess.State = "running"
 	executor := s.Executor.WithBroadcaster(bc)
 
-	ctx := hsxcore.WithSessionID(context.Background(), sess.ID)
+	ctx := runtime.WithSessionID(context.Background(), sess.ID)
 
 	result, err := executor.Execute(ctx, d.Spec, trigger)
 	if result != nil {
@@ -196,7 +195,7 @@ func (s *Server) runInBackground(sess *registeredSession, d *registeredDomain, b
 	done := time.Now().UTC()
 	sess.CompletedAt = &done
 
-	bc.Publish(ctx, observation.Observation{
+	bc.Publish(ctx, runtime.Observation{
 		Kind:      "state",
 		SessionID: sess.ID,
 		DomainID:  sess.DomainID,

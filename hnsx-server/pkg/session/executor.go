@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hnsx-io/hnsx/core/domain"
-	"github.com/hnsx-io/hnsx/core/observation"
-	"github.com/hnsx-io/hnsx/core/runtime"
+	"github.com/hnsx-io/hnsx/server/internal/session/broadcaster"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/pkg/telemetry"
 )
 
@@ -27,7 +27,7 @@ import (
 type Executor struct {
 	adapter   runtime.Adapter
 	sinks     []telemetry.Sink
-	broadcast *Broadcaster
+	broadcast *broadcaster.Broadcaster
 	mu        sync.Mutex
 }
 
@@ -42,7 +42,7 @@ func NewExecutor(adapter runtime.Adapter, sinks ...telemetry.Sink) *Executor {
 }
 
 // WithBroadcaster attaches a per-session broadcaster. Required for SSE.
-func (e *Executor) WithBroadcaster(b *Broadcaster) *Executor {
+func (e *Executor) WithBroadcaster(b *broadcaster.Broadcaster) *Executor {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.broadcast = b
@@ -55,8 +55,8 @@ func (e *Executor) WithBroadcaster(b *Broadcaster) *Executor {
 //
 // Phase 1 keeps the runner mostly serial; future PRs will move execution to
 // goroutines and surface cancellation via context.
-func (e *Executor) Execute(ctx context.Context, spec *domain.DomainSpec, trigger map[string]any) (*runtime.Result, error) {
-	if spec == nil {
+func (e *Executor) Execute(ctx context.Context, s *spec.DomainSpec, trigger map[string]any) (*runtime.Result, error) {
+	if s == nil {
 		return nil, errors.New("executor: nil spec")
 	}
 	if e.adapter == nil {
@@ -66,27 +66,27 @@ func (e *Executor) Execute(ctx context.Context, spec *domain.DomainSpec, trigger
 	runner := runtime.NewRunner(e.adapter)
 
 	// Hook: pump observations into broadcaster + sinks.
-	runner.WithHook(func(obs observation.Observation) {
+	runner.WithHook(func(obs runtime.Observation) {
 		// Stamp session + domain IDs so subscribers don't need to infer them.
 		obs.SessionID = runtime.SessionIDFromContext(ctx)
 		if obs.SessionID == "" {
-			obs.SessionID = runtime.NewSessionID(spec.ID)
+			obs.SessionID = runtime.NewSessionID(s.ID)
 		}
-		obs.DomainID = spec.ID
+		obs.DomainID = s.ID
 		if obs.Timestamp.IsZero() {
 			obs.Timestamp = time.Now().UTC()
 		}
 		e.publish(ctx, obs)
 	})
 
-	result, err := runner.Run(ctx, spec, trigger)
+	result, err := runner.Run(ctx, s, trigger)
 	if err != nil && result == nil {
 		return nil, err
 	}
 	return result, err
 }
 
-func (e *Executor) publish(ctx context.Context, obs observation.Observation) {
+func (e *Executor) publish(ctx context.Context, obs runtime.Observation) {
 	e.mu.Lock()
 	sinks := e.sinks
 	bc := e.broadcast
