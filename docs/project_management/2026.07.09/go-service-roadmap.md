@@ -11,14 +11,26 @@
 - [x] 合并 `hnsx-core/` + `hnsx/` CLI 到 `hnsx-server/`，单一 Go module、双 `cmd` 入口。
 - [x] 建立无基础设施依赖的共享层：
   - `pkg/spec` — DomainSpec 模型 + loader
-  - `pkg/runtime` — Adapter 接口、Runner、Observation、Workflow
+  - `pkg/runtime` — Adapter 接口、Runner、Observation、Workflow、Sink 接口
   - `pkg/adapter` — noop / echo 内置 adapter
-- [x] 初步 DDD 骨架：
+- [x] Phase 1 DDD 领域落地：
   - `internal/domain/{model,repository,service}`
   - `internal/session/{model,repository,service,broadcaster}`
+  - `internal/worker/{model,repository,service}`
+  - `internal/policy/{model,repository,service}`
+  - `internal/secret/{model,repository,service}`
+  - `internal/audit/{model,repository,service}`
+  - `internal/evaluation/{model,repository,service}`
+  - `internal/trace/{model,repository,service}`
+  - `internal/telemetry`（sink 实现 + OTel 初始化）
+- [x] Phase 2 应用层拆分：`internal/app/commands` + `queries` 承载业务逻辑，`pkg/api` handler 只做协议转换。
+- [x] Phase 3 Worker 调度：`SessionQueue` 按 capability 匹配，`WorkerRegistry` 管理注册/心跳/驱逐。
+- [x] Phase 4 Tool/Store：`memory` → `store` 重命名，`pkg/tool` 从 DomainSpec 构建 Registry。
+- [x] Phase 5 Policy/审计：budget/permission 接入 executor，audit log 可查询。
+- [x] Phase 6 可观测/Eval：trace 持久化与查询，eval set/run API 骨架。
 - [x] `make ci` 通过（go vet/test + TS lint/type-check/test + worker pytest）。
 
-**结论**：只是代码搬运和目录归位，业务层还没真正按 DDD 和应用服务拆分。
+**结论**：Go Control Plane 的 DDD 骨架与核心治理路径已就位，下一步进入部署与扩展（Phase 7）。
 
 ---
 
@@ -53,14 +65,15 @@
 
 把 `pkg/` 里还残留的业务逻辑按 bounded context 迁入 `internal/`，每个领域包含 `model/`、`repository/`（接口+InMemory+Postgres 同包）、`service/`。
 
-| 领域 | 当前位置 | 目标位置 | 关键任务 |
-|---|---|---|---|
-| **Worker** | `pkg/worker/registry.go`、`queue.go` | `internal/worker/{model,repository,service}` | Worker 注册、心跳、能力标签、任务分配、状态机。 |
-| **Telemetry** | `pkg/telemetry` | `internal/telemetry/{model,service}` | Sink 抽象、Observation → Trace/Metric/Cost 转换。 |
-| **Policy** | `pkg/policy/engine.go`（空壳） | `internal/policy/{model,service}` | Budget、Permission、Guardrail 运行时决策。 |
-| **Secret** | 缺失 | `internal/secret/{model,repository,service}` | Secret 存储、运行时注入、访问审计。 |
-| **Evaluation** | 缺失 | `internal/evaluation/{model,repository,service}` | EvalSet、EvalRun、Baseline、Scorer。 |
-| **Store** | 原 `pkg/memory` | `internal/store/{model,repository,service}` | context/knowledge/ephemeral 三类后端抽象。 |
+| 领域 | 当前位置 | 目标位置 | 状态 | 关键任务 |
+|---|---|---|---|---|
+| **Worker** | `pkg/worker/registry.go`、`queue.go` | `internal/worker/{model,repository,service}` | ✅ 已完成 | Worker 注册、心跳、能力标签、任务分配、状态机。 |
+| **Telemetry** | `pkg/telemetry` | `internal/telemetry` | ✅ 已完成 | Sink 接口下沉到 `pkg/runtime`，实现 + OTel 初始化迁到 `internal/telemetry`。 |
+| **Policy** | `pkg/policy/engine.go` | `internal/policy/{model,repository,service}` | ✅ 已完成 | Budget、Permission、Guardrail 运行时决策；接入 executor。 |
+| **Secret** | 缺失 | `internal/secret/{model,repository,service}` | ✅ 骨架完成 | Secret 存储、运行时注入、访问审计。 |
+| **Evaluation** | 缺失 | `internal/evaluation/{model,repository,service}` | ✅ 骨架完成 | EvalSet、EvalRun、Baseline、Scorer API。 |
+| **Trace** | 缺失 | `internal/trace/{model,repository,service}` | ✅ 骨架完成 | Observation 持久化与按 session 查询。 |
+| **Store** | 原 `pkg/memory` | `internal/store/{model,repository,service}` | 🔄 待 Phase 4 深入 | context/knowledge/ephemeral 三类后端抽象；当前仅完成 `memory` → `store` 重命名。 |
 
 **验收标准**：
 - `pkg/` 只保留真正跨 CLI/Server 复用的库（`spec`、`runtime`、`adapter`、`version`）。
@@ -182,14 +195,29 @@ internal/app/
 
 ## 4. 近期优先级（接下来 1–2 周）
 
-1. **Worker 领域 DDD 化** — 当前 `pkg/worker` 还是基础设施逻辑，先迁到 `internal/worker`。
-2. **应用层 commands/queries 落地** — 把 `pkg/api` 的业务逻辑抽出去。
-3. **Capability 匹配调度** — 让多个 Python Worker 能真正被调度起来跑 session。
-4. **Policy 运行时空壳填实** — 先把 budget/permission 校验接进 executor 路径。
+1. **Phase 7 部署与扩展**：
+   - 持久化 Queue（Postgres/Redis）支持多 Control Plane 实例。
+   - Control Plane graceful shutdown + draining。
+   - Worker 自动发现（K8s）与优雅退出。
+2. **Store 领域深入**：把 `store` 从配置字段升级为 `internal/store` 领域，支持 in_memory/postgres 后端。
+3. **Cost 聚合**：从 observation 流汇总 session/domain/worker 维度的 cost、latency、token。
+4. **Guardrail 内容校验**：把 `policy.Engine` 从 budget/permission 扩展到输出内容 guardrail。
 
 ---
 
-## 5. 风险与待决策
+## 5. 已交付 Commit（feat/scheduler 分支）
+
+| Commit | 内容 |
+|---|---|
+| `98bcb73` | Phase 5 skeleton：policy + audit 领域模型 |
+| `aa512e5` | Phase 5：policy 接入 executor，audit log 可查询 |
+| `d644e97` | Phase 6：trace + evaluation 领域，trace/eval API |
+| `6731965` | Phase 1 收尾：telemetry 迁到 internal/telemetry，Sink 下沉到 pkg/runtime |
+| `eb2de4e` | chore：清理误提交的 python worker 文件 |
+
+---
+
+## 6. 风险与待决策
 
 | 风险 | 说明 | 建议 |
 |---|---|---|
@@ -201,7 +229,7 @@ internal/app/
 
 ---
 
-## 6. 与 Python Worker 的边界
+## 7. 与 Python Worker 的边界
 
 | 职责 | Go Control Plane | Python Worker |
 |---|---|---|
@@ -217,4 +245,4 @@ internal/app/
 
 ---
 
-> 下一批可执行动作：先完成 Phase 1 的 `internal/worker` 迁移 + Phase 2 的 `app/commands` 拆分，同时把 `pkg/api` handler 彻底变薄。
+> 下一批可执行动作：进入 Phase 7 部署与扩展，并补齐 Store 领域、Cost 聚合、Guardrail 内容校验。
