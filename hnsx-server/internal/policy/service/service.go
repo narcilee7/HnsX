@@ -43,6 +43,13 @@ func (s *Service) LoadDomainPolicy(domainID string, ds *spec.DomainSpec) error {
 	})
 }
 
+// SessionEngine returns a fresh, session-scoped policy.Engine for the named
+// domain. The sessionID is reserved for future per-session policy caches; the
+// current implementation returns a fresh engine per call.
+func (s *Service) SessionEngine(domainID, sessionID string) (*policy.Engine, error) {
+	return s.Engine(domainID)
+}
+
 // Engine returns a fresh policy.Engine for the named domain.
 func (s *Service) Engine(domainID string) (*policy.Engine, error) {
 	p, err := s.repo.ByDomain(domainID)

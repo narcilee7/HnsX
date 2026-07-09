@@ -131,9 +131,51 @@ func (s *Server) GetEvalRun(w http.ResponseWriter, r *http.Request) {
 
 // ListAudit handles GET /api/v1/audit.
 func (s *Server) ListAudit(w http.ResponseWriter, r *http.Request) {
+	limit := intQuery(r, "limit", 50)
+	offset := intQuery(r, "offset", 0)
+	if limit <= 0 {
+		limit = 50
+	}
+
+	if s.AuditService == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"items":  []map[string]any{},
+			"total":  0,
+			"limit":  limit,
+			"offset": offset,
+		})
+		return
+	}
+
+	entries, total, err := s.AuditService.List(limit, offset)
+	if err != nil {
+		writeError(w, r, NewInternal(err))
+		return
+	}
+
+	out := make([]map[string]any, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, map[string]any{
+			"id":            e.ID,
+			"session_id":    e.SessionID,
+			"domain_id":     e.DomainID,
+			"action":        e.Action,
+			"actor":         e.Actor,
+			"actor_type":    e.ActorType,
+			"resource":      e.Resource,
+			"resource_type": e.ResourceType,
+			"decision":      e.Decision,
+			"reason":        e.Reason,
+			"details":       e.Details,
+			"timestamp":     e.Timestamp.Format(time.RFC3339),
+		})
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": []map[string]any{},
-		"total": 0,
+		"items":  out,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
 	})
 }
 
