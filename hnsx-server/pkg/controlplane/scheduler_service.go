@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
+	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
 // SchedulerServiceServer implements the SchedulerService gRPC surface.
@@ -32,9 +32,17 @@ type SchedulerServiceServer struct {
 	// doesn't specify one. Defaults to 30.
 	DefaultMaxWaitSeconds int32
 
-	mu       sync.Mutex
-	active   map[string]*activeSession // session_id -> bookkeeping
-	logf     func(format string, args ...any)
+	// OnObservation is called for every observation batch received from a
+	// worker. The API layer uses it to fan observations out to SSE clients.
+	OnObservation func(sessionID string, obs *pb.Observation)
+
+	// OnSessionStatus is called for every status update received from a
+	// worker. The API layer uses it to update the in-memory session state.
+	OnSessionStatus func(sessionID, state string)
+
+	mu     sync.Mutex
+	active map[string]*activeSession // session_id -> bookkeeping
+	logf   func(format string, args ...any)
 }
 
 type activeSession struct {
@@ -84,16 +92,20 @@ func (s *SchedulerServiceServer) PullSession(ctx context.Context, req *pb.PullSe
 	s.active[got.SessionID] = &activeSession{workerID: req.GetWorkerId(), startedAt: time.Now()}
 	s.mu.Unlock()
 
+	if s.Registry != nil {
+		s.Registry.AssignSession(req.GetWorkerId(), got.SessionID)
+	}
+
 	return &pb.PullSessionResponse{
-		SessionId:            got.SessionID,
-		DomainId:             got.DomainID,
-		DomainVersion:        got.DomainVersion,
-		DomainSpecJson:       got.DomainSpecJSON,
-		TriggerPayloadJson:   got.TriggerPayloadJSON,
-		TraceId:              got.TraceID,
-		AssignedAtMs:         time.Now().UnixMilli(),
+		SessionId:             got.SessionID,
+		DomainId:              got.DomainID,
+		DomainVersion:         got.DomainVersion,
+		DomainSpecJson:        got.DomainSpecJSON,
+		TriggerPayloadJson:    got.TriggerPayloadJSON,
+		TraceId:               got.TraceID,
+		AssignedAtMs:          time.Now().UnixMilli(),
 		SessionTimeoutSeconds: 600,
-		CorrelationId:        got.CorrelationID,
+		CorrelationId:         got.CorrelationID,
 	}, nil
 }
 
@@ -112,6 +124,9 @@ func (s *SchedulerServiceServer) NackSession(ctx context.Context, req *pb.NackSe
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.active, req.GetSessionId())
+	if s.Registry != nil {
+		s.Registry.UnassignSession(req.GetSessionId())
+	}
 	// requeue is a V1.1 placeholder; we don't yet have the original
 	// session spec to put back on the queue. The client can retry by
 	// re-scheduling the session via REST. V1.2 will requeue from here.
@@ -121,11 +136,11 @@ func (s *SchedulerServiceServer) NackSession(ctx context.Context, req *pb.NackSe
 // StreamChannel implements the bidi stream. Server side:
 //
 //   - Reads worker events: observations / status / result. Logs them and
-//     stores the latest status per session in ``active`` so the API can
+//     stores the latest status per session in “active“ so the API can
 //     serve /sessions/{id} without DB.
 //   - Writes server-initiated events: per-session cancel commands, drain
 //     commands, periodic pings. The cancel is fed by
-//     ``Registry.SendCancel``; we forward the Inbound channel events to
+//     “Registry.SendCancel“; we forward the Inbound channel events to
 //     the stream as long as the worker is sending.
 func (s *SchedulerServiceServer) StreamChannel(stream pb.SchedulerService_StreamChannelServer) error {
 	ctx := stream.Context()
@@ -205,8 +220,13 @@ func (s *SchedulerServiceServer) StreamChannel(stream pb.SchedulerService_Stream
 func (s *SchedulerServiceServer) handleWorkerEvent(req *pb.StreamChannelRequest) {
 	switch p := req.GetPayload().(type) {
 	case *pb.StreamChannelRequest_Observations:
-		// In V1.1 we don't yet persist to the observations table from
-		// here (the API path still owns that). Log a digest for ops.
+		if p.Observations != nil {
+			for _, obs := range p.Observations.GetObservations() {
+				if s.OnObservation != nil {
+					s.OnObservation(obs.GetSessionId(), obs)
+				}
+			}
+		}
 		count := 0
 		if p.Observations != nil {
 			count = len(p.Observations.GetObservations())
@@ -220,9 +240,15 @@ func (s *SchedulerServiceServer) handleWorkerEvent(req *pb.StreamChannelRequest)
 			}
 			if st.GetState() == "completed" || st.GetState() == "failed" || st.GetState() == "cancelled" {
 				delete(s.active, st.GetSessionId())
+				if s.Registry != nil {
+					s.Registry.UnassignSession(st.GetSessionId())
+				}
 			}
 		}
 		s.mu.Unlock()
+		if s.OnSessionStatus != nil && p.Status != nil {
+			s.OnSessionStatus(p.Status.GetSessionId(), p.Status.GetState())
+		}
 		s.logf("controlplane: worker=%s status session=%s state=%s", req.GetWorkerId(), p.Status.GetSessionId(), p.Status.GetState())
 	case *pb.StreamChannelRequest_Result:
 		s.logf("controlplane: worker=%s result session=%s", req.GetWorkerId(), p.Result.GetSessionId())

@@ -25,7 +25,7 @@ class WorkerConfig:
         auth_token: Bearer token forwarded on Register (V1.1 unused; reserved).
     """
 
-    server_addr: str = "127.0.0.1:50051"
+    server_addr: str = "127.0.0.1:50061"
     worker_id: str = ""
     region: str = "local"
     capacity: worker_pb2.ResourceCapacity = field(

@@ -110,7 +110,11 @@ class WorkerService:
         req = worker_pb2.RegisterRequest(info=info, auth_token=self.config.auth_token)
         resp = self.worker_stub.Register(req, timeout=10.0)
         self.worker_id = resp.worker_id or self.worker_id or f"w-{uuid.uuid4().hex[:8]}"
-        log.info("registered as %s (heartbeat every %ds)", self.worker_id, resp.heartbeat_interval_seconds or self.config.heartbeat_interval_seconds)
+        log.info(
+            "registered as %s (heartbeat every %ds)",
+            self.worker_id,
+            resp.heartbeat_interval_seconds or self.config.heartbeat_interval_seconds,
+        )
 
     def _heartbeat_loop(self) -> None:
         interval = self.config.heartbeat_interval_seconds
@@ -120,7 +124,9 @@ class WorkerService:
                     running_ids = list(self._running.keys())
                 usage = worker_pb2.ResourceUsage(
                     running_sessions=len(running_ids),
-                    free_slots=max(0, self.config.capacity.max_concurrent_sessions - len(running_ids)),
+                    free_slots=max(
+                        0, self.config.capacity.max_concurrent_sessions - len(running_ids)
+                    ),
                 )
                 req = worker_pb2.HeartbeatRequest(
                     worker_id=self.worker_id,
@@ -197,7 +203,9 @@ class WorkerService:
         except BrokenPipeError:
             pass
 
-        handle = _SessionHandle(proc=proc, session_id=resp.session_id, correlation_id=resp.correlation_id)
+        handle = _SessionHandle(
+            proc=proc, session_id=resp.session_id, correlation_id=resp.correlation_id
+        )
         with self._lock:
             self._running[resp.session_id] = handle
 
@@ -252,35 +260,39 @@ class WorkerService:
             log.info("session %s exited rc=%d", handle.session_id, rc)
 
     def _enqueue_observation(self, handle: "_SessionHandle", obs: dict[str, Any]) -> None:
-        proto_obs = worker_pb2.StreamChannelRequest(worker_id=self.worker_id)
         # All observations from the subprocess are batched through the
-        # ``observations`` oneof arm; structured session_end events
-        # are emitted as a separate status event so the server's fan-out
-        # can do a clean session_end signal.
+        # ``observations`` oneof arm. Session end events are special: they
+        # are both forwarded as an observation (so SSE clients see the
+        # terminal event) and as a status update (so the scheduler can
+        # update its bookkeeping and the API session state).
+        base = observation_pb2.Observation(
+            session_id=handle.session_id,
+            domain_id=obs.get("domain_id", ""),
+            step_id=obs.get("step_id", ""),
+            agent_id=obs.get("agent_id", ""),
+            kind=obs.get("kind", ""),
+            payload=json.dumps(obs.get("payload", {}), default=str),
+            created_at_ms=int(obs.get("created_at_ms") or time.time() * 1000),
+        )
+        self._obs_queue.put(
+            worker_pb2.StreamChannelRequest(
+                worker_id=self.worker_id,
+                observations=worker_pb2.ObservationBatch(observations=[base]),
+            )
+        )
+
         if obs.get("kind") == "session_end":
-            proto_obs.status.CopyFrom(
-                worker_pb2.SessionStatusUpdate(
-                    session_id=handle.session_id,
-                    state=obs.get("state", "completed"),
-                    message=json.dumps(obs.get("payload", {})),
-                    timestamp_ms=int(obs.get("created_at_ms") or time.time() * 1000),
+            self._obs_queue.put(
+                worker_pb2.StreamChannelRequest(
+                    worker_id=self.worker_id,
+                    status=worker_pb2.SessionStatusUpdate(
+                        session_id=handle.session_id,
+                        state=obs.get("state", "completed"),
+                        message=json.dumps(obs.get("payload", {})),
+                        timestamp_ms=int(obs.get("created_at_ms") or time.time() * 1000),
+                    ),
                 )
             )
-        else:
-            batch = worker_pb2.ObservationBatch()
-            batch.observations.append(
-                observation_pb2.Observation(
-                    session_id=handle.session_id,
-                    domain_id=obs.get("domain_id", ""),
-                    step_id=obs.get("step_id", ""),
-                    agent_id=obs.get("agent_id", ""),
-                    kind=obs.get("kind", ""),
-                    payload=json.dumps(obs.get("payload", {}), default=str),
-                    created_at_ms=int(obs.get("created_at_ms") or time.time() * 1000),
-                )
-            )
-            proto_obs.observations.CopyFrom(batch)
-        self._obs_queue.put(proto_obs)
 
     def _nack(
         self,
@@ -315,7 +327,9 @@ class WorkerService:
         backoff = 0.5
         while not self._stop_event.is_set():
             try:
-                stream = self.scheduler_stub.StreamChannel(_outbound_iter(self._obs_queue))
+                stream = self.scheduler_stub.StreamChannel(
+                    _outbound_iter(self._obs_queue, self._stop_event)
+                )
                 backoff = 0.5
                 for server_event in stream:
                     if self._stop_event.is_set():
@@ -324,7 +338,9 @@ class WorkerService:
             except grpc.RpcError as e:
                 if self._stop_event.is_set():
                     return
-                log.warning("stream channel error: %s; reconnecting in %.1fs", e.code().name, backoff)
+                log.warning(
+                    "stream channel error: %s; reconnecting in %.1fs", e.code().name, backoff
+                )
                 self._stop_event.wait(backoff)
                 backoff = min(backoff * 2, 10.0)
 
@@ -336,7 +352,11 @@ class WorkerService:
             log.info("server requested drain: %s", event.drain.reason)
             # Step 2: log only; full drain handling is #9.
         elif kind == "invalidate":
-            log.info("server invalidated domain %s/%s", event.invalidate.domain_id, event.invalidate.version)
+            log.info(
+                "server invalidated domain %s/%s",
+                event.invalidate.domain_id,
+                event.invalidate.version,
+            )
         elif kind == "ping":
             log.debug("server ping")
         else:
@@ -377,15 +397,13 @@ class _SessionHandle:
         self.correlation_id = correlation_id
 
 
-def _outbound_iter(q: "queue.Queue[worker_pb2.StreamChannelRequest]") -> Iterator[worker_pb2.StreamChannelRequest]:
+def _outbound_iter(
+    q: "queue.Queue[worker_pb2.StreamChannelRequest]", stop_event: threading.Event
+) -> Iterator[worker_pb2.StreamChannelRequest]:
     """Bridge a queue.Queue into a generator for gRPC client-streaming."""
-    while True:
+    while not stop_event.is_set():
         try:
             item = q.get(timeout=0.5)
         except queue.Empty:
-            # yield a heartbeat-shaped ping-style no-op periodically
-            # (the server can interpret silence as liveness; we keep the
-            #  stream alive by yielding nothing here, but gRPC will close
-            #  on idle. To stay alive we yield a periodic empty Status.)
             continue
         yield item
