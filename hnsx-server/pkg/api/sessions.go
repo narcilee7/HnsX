@@ -16,6 +16,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	"github.com/hnsx-io/hnsx/server/internal/session/broadcaster"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
 )
 
@@ -147,13 +148,14 @@ func (s *Server) enqueueForWorker(sess *app.RegisteredSession, d *app.Registered
 	}
 
 	req := &worker.SessionRequest{
-		SessionID:          sess.ID,
-		DomainID:           d.ID,
-		DomainVersion:      d.Version,
-		DomainSpecJSON:     string(specJSON),
-		TriggerPayloadJSON: string(triggerJSON),
-		TraceID:            sess.ID,
-		CorrelationID:      sess.ID,
+		SessionID:            sess.ID,
+		DomainID:             d.ID,
+		DomainVersion:        d.Version,
+		DomainSpecJSON:       string(specJSON),
+		TriggerPayloadJSON:   string(triggerJSON),
+		TraceID:              sess.ID,
+		CorrelationID:        sess.ID,
+		RequiredCapabilities: spec.DeriveCapabilities(d.Spec),
 	}
 
 	s.SessionQueue.Enqueue(req)
