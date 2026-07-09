@@ -5,7 +5,7 @@ package hnsx.v1;
 import "hnsx/v1/domain.proto";
 import "hnsx/v1/observation.proto";
 
-option go_package = "github.com/hnsx-io/hnsx/go/proto/gen/go/hnsx/v1";
+option go_package = "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1";
 
 service DomainRegistryService {
   rpc RegisterDomain(RegisterDomainRequest) returns (RegisterDomainResponse);
@@ -15,7 +15,12 @@ service DomainRegistryService {
 }
 
 service SessionSchedulerService {
-  rpc ScheduleSession(ScheduleSessionRequest) returns (ScheduleSessionResponse);
+  // DEPRECATED as of V1.1: replaced by SchedulerService.PullSession in
+  // proto/hnsx/v1/worker.proto. V1.1 inverts the request direction: workers
+  // pull sessions from the server, the server does not push to them.
+  rpc ScheduleSession(ScheduleSessionRequest) returns (ScheduleSessionResponse) {
+    option deprecated = true;
+  }
   rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
   rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
 }

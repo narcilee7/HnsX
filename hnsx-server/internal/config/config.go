@@ -25,6 +25,10 @@ type Config struct {
 	// HTTPAddr is the listen address for the Control Plane HTTP server.
 	HTTPAddr string `yaml:"http_addr"`
 
+	// GRPCAddr is the listen address for the V1.1 WorkerService +
+	// SchedulerService gRPC surface. Empty disables the gRPC server.
+	GRPCAddr string `yaml:"grpc_addr"`
+
 	// DatabaseURL is the Postgres connection string. Empty disables the DB.
 	DatabaseURL string `yaml:"database_url"`
 
@@ -62,6 +66,7 @@ type LogConfig struct {
 func Default() *Config {
 	return &Config{
 		HTTPAddr:      "127.0.0.1:50051",
+		GRPCAddr:      "127.0.0.1:50061",
 		DatabaseURL:   "",
 		MigrationsDir: "migrations",
 		OTel: OTelConfig{
@@ -106,6 +111,9 @@ func Load(path string) (*Config, error) {
 func applyEnv(cfg *Config) {
 	if v := os.Getenv("HNSX_HTTP_ADDR"); v != "" {
 		cfg.HTTPAddr = v
+	}
+	if v := os.Getenv("HNSX_GRPC_ADDR"); v != "" {
+		cfg.GRPCAddr = v
 	}
 	if v := os.Getenv("HNSX_DATABASE_URL"); v != "" {
 		cfg.DatabaseURL = v

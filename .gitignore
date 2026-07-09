@@ -38,3 +38,17 @@ design/
 scratch/
 *.log
 *.tmp
+
+# --- Python worker (hnsx-worker, V1.1) ---
+hnsx-worker/.venv/
+hnsx-worker/build/
+hnsx-worker/dist/
+hnsx-worker/*.egg-info/
+hnsx-worker/uv.lock
+hnsx-worker/**/__pycache__/
+hnsx-worker/hnsx_worker/proto/gen/**/*_pb2.py
+hnsx-worker/hnsx_worker/proto/gen/**/*_pb2_grpc.py
+hnsx-worker/hnsx_worker/proto/gen/**/*_pb2.pyi
+hnsx-worker/.pytest_cache/
+hnsx-worker/.mypy_cache/
+hnsx-worker/.ruff_cache/

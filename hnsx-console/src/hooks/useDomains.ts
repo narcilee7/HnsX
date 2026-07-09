@@ -1,5 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listDomains, getDomain, createDomain, updateDomain, validateDomain } from '@/api/domains'
+import {
+  listDomains,
+  getDomain,
+  createDomain,
+  updateDomain,
+  deleteDomain,
+  validateDomain,
+  listDomainVersions,
+  getDomainVersion,
+} from '@/api/domains'
 import type { DomainSpec } from '@hnsx/sdk-node'
 
 const domainKeys = {
@@ -25,6 +34,22 @@ export function useDomain(id: string | undefined) {
   })
 }
 
+export function useDomainVersions(id: string | undefined) {
+  return useQuery({
+    queryKey: [...domainKeys.detail(id || ''), 'versions'] as const,
+    queryFn: () => listDomainVersions(id!),
+    enabled: !!id,
+  })
+}
+
+export function useDomainVersion(id: string | undefined, version: string | undefined) {
+  return useQuery({
+    queryKey: [...domainKeys.detail(id || ''), 'version', version || ''] as const,
+    queryFn: () => getDomainVersion(id!, version!),
+    enabled: !!id && !!version,
+  })
+}
+
 export function useCreateDomain() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -41,6 +66,16 @@ export function useUpdateDomain(id: string) {
     mutationFn: (spec: DomainSpec) => updateDomain(id, spec),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: domainKeys.detail(id) })
+      queryClient.invalidateQueries({ queryKey: domainKeys.lists() })
+    },
+  })
+}
+
+export function useDeleteDomain() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deleteDomain(id),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: domainKeys.lists() })
     },
   })

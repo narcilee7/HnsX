@@ -38,6 +38,8 @@ const (
 )
 
 // RuntimeServiceClient is a client for the hnsx.v1.RuntimeService service.
+//
+// Deprecated: do not use.
 type RuntimeServiceClient interface {
 	Trigger(context.Context, *connect.Request[v1.TriggerRequest]) (*connect.ServerStreamForClient[v1.TriggerResponse], error)
 }
@@ -49,6 +51,8 @@ type RuntimeServiceClient interface {
 //
 // The URL supplied here should be the base URL for the Connect or gRPC server (for example,
 // http://api.acme.com or https://acme.com/grpc).
+//
+// Deprecated: do not use.
 func NewRuntimeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) RuntimeServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
 	runtimeServiceMethods := v1.File_hnsx_v1_runtime_proto.Services().ByName("RuntimeService").Methods()
@@ -73,6 +77,8 @@ func (c *runtimeServiceClient) Trigger(ctx context.Context, req *connect.Request
 }
 
 // RuntimeServiceHandler is an implementation of the hnsx.v1.RuntimeService service.
+//
+// Deprecated: do not use.
 type RuntimeServiceHandler interface {
 	Trigger(context.Context, *connect.Request[v1.TriggerRequest], *connect.ServerStream[v1.TriggerResponse]) error
 }
@@ -82,6 +88,8 @@ type RuntimeServiceHandler interface {
 //
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
+//
+// Deprecated: do not use.
 func NewRuntimeServiceHandler(svc RuntimeServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	runtimeServiceMethods := v1.File_hnsx_v1_runtime_proto.Services().ByName("RuntimeService").Methods()
 	runtimeServiceTriggerHandler := connect.NewServerStreamHandler(
