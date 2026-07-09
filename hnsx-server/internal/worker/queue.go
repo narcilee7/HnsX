@@ -22,28 +22,48 @@ type SessionRequest struct {
 	CorrelationID        string
 }
 
-// SessionQueue is an in-memory FIFO with capability matching and
-// long-poll support. PullSession blocks until either a matching session
-// is available or the caller's context is cancelled (e.g. the worker
-// times out the long-poll).
-type SessionQueue struct {
+// SessionQueue is the scheduler-side abstraction for pending sessions.
+// Implementations may be in-memory (single-process / tests) or backed by
+// Redis (multi-instance Control Plane).
+type SessionQueue interface {
+	// Enqueue adds a session to the queue. Implementations must be
+	// idempotent: enqueuing the same SessionID twice is a no-op.
+	Enqueue(req *SessionRequest)
+	// Dequeue blocks until a session matching all required capabilities is
+	// available or the context is cancelled. Returns (nil, false) on
+	// cancellation.
+	Dequeue(ctx context.Context, required []string) (*SessionRequest, bool)
+	// Remove deletes a session by id (e.g. after Ack or Nack).
+	Remove(id string)
+	// Len returns the current pending count.
+	Len() int
+}
+
+// MemorySessionQueue is an in-memory FIFO with capability matching and
+// long-poll support. It is the default when no Redis backend is configured
+// and is useful for tests or single-process deployments.
+type MemorySessionQueue struct {
 	mu      sync.Mutex
 	cond    *sync.Cond
 	pending []*SessionRequest
 	byID    map[string]*SessionRequest
 }
 
-// NewSessionQueue constructs an empty SessionQueue.
-func NewSessionQueue() *SessionQueue {
-	q := &SessionQueue{byID: map[string]*SessionRequest{}}
+// NewSessionQueue constructs an empty in-memory SessionQueue.
+func NewSessionQueue() SessionQueue {
+	q := &MemorySessionQueue{byID: map[string]*SessionRequest{}}
 	q.cond = sync.NewCond(&q.mu)
 	return q
 }
 
+// NewMemorySessionQueue is an explicit alias of NewSessionQueue. Use it when
+// the caller wants to document that an in-memory queue is intentional.
+func NewMemorySessionQueue() SessionQueue { return NewSessionQueue() }
+
 // Enqueue adds a session to the back of the queue. Wakes one blocked
 // Dequeue caller, if any. If a session with the same SessionID is
 // already queued, the call is a no-op (idempotent).
-func (q *SessionQueue) Enqueue(req *SessionRequest) {
+func (q *MemorySessionQueue) Enqueue(req *SessionRequest) {
 	if req == nil || req.SessionID == "" {
 		return
 	}
@@ -65,7 +85,7 @@ func (q *SessionQueue) Enqueue(req *SessionRequest) {
 // capabilities must be present in the request's RequiredCapabilities"
 // (intersection is non-empty for every key). Returns (nil, false) on
 // cancellation.
-func (q *SessionQueue) Dequeue(ctx context.Context, required []string) (*SessionRequest, bool) {
+func (q *MemorySessionQueue) Dequeue(ctx context.Context, required []string) (*SessionRequest, bool) {
 	// Watch for ctx cancellation while waiting.
 	stop := make(chan struct{})
 	defer close(stop)
@@ -98,7 +118,7 @@ func (q *SessionQueue) Dequeue(ctx context.Context, required []string) (*Session
 }
 
 // Remove deletes a session by id (e.g. after Ack or Nack).
-func (q *SessionQueue) Remove(id string) {
+func (q *MemorySessionQueue) Remove(id string) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if _, ok := q.byID[id]; !ok {
@@ -114,7 +134,7 @@ func (q *SessionQueue) Remove(id string) {
 }
 
 // Len returns the current pending count.
-func (q *SessionQueue) Len() int {
+func (q *MemorySessionQueue) Len() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return len(q.pending)
@@ -138,3 +158,5 @@ func matches(offered, required []string) bool {
 	}
 	return true
 }
+
+var _ SessionQueue = (*MemorySessionQueue)(nil)

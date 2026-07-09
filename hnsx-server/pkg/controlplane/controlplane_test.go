@@ -9,7 +9,7 @@ import (
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
-func newTestServer(t *testing.T) (*SchedulerServiceServer, *worker.Registry, *worker.SessionQueue) {
+func newTestServer(t *testing.T) (*SchedulerServiceServer, *worker.Registry, worker.SessionQueue) {
 	t.Helper()
 	reg := worker.NewRegistry()
 	reg.SetClock(func() time.Time { return time.Unix(0, 0) })

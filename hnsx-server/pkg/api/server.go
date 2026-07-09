@@ -41,7 +41,7 @@ type Server struct {
 	// V1.1 worker pool. May be nil when the server is started without the
 	// gRPC control plane (legacy local-executor mode).
 	WorkerRegistry *worker.Registry
-	SessionQueue   *worker.SessionQueue
+	SessionQueue   worker.SessionQueue
 
 	// PolicyService loads domain policy into the policy repository.
 	PolicyService *policyservice.Service
@@ -77,7 +77,7 @@ func NewServer(build BuildInfo, database *db.DB, executor *pkgexecutor.Executor)
 // NewServerWithWorkerPool constructs an API Server wired to the V1.1 worker
 // pool. When WorkerRegistry and SessionQueue are non-nil, session triggers
 // are enqueued for Python workers instead of executed locally.
-func NewServerWithWorkerPool(build BuildInfo, database *db.DB, executor *pkgexecutor.Executor, reg *worker.Registry, q *worker.SessionQueue) *Server {
+func NewServerWithWorkerPool(build BuildInfo, database *db.DB, executor *pkgexecutor.Executor, reg *worker.Registry, q worker.SessionQueue) *Server {
 	return &Server{
 		BuildInfo:      build,
 		DB:             database,
@@ -90,7 +90,7 @@ func NewServerWithWorkerPool(build BuildInfo, database *db.DB, executor *pkgexec
 
 // WithWorkerPool wires an existing server into the V1.1 worker pool. Used by
 // tests and by main when the gRPC control plane is enabled.
-func (s *Server) WithWorkerPool(reg *worker.Registry, q *worker.SessionQueue) *Server {
+func (s *Server) WithWorkerPool(reg *worker.Registry, q worker.SessionQueue) *Server {
 	s.WorkerRegistry = reg
 	s.SessionQueue = q
 	return s
