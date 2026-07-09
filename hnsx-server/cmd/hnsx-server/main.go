@@ -27,9 +27,11 @@ import (
 	"github.com/hnsx-io/hnsx/core/version"
 	"github.com/hnsx-io/hnsx/server/internal/config"
 	"github.com/hnsx-io/hnsx/server/pkg/api"
+	"github.com/hnsx-io/hnsx/server/pkg/controlplane"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 	hsxruntime "github.com/hnsx-io/hnsx/server/pkg/session"
 	"github.com/hnsx-io/hnsx/server/pkg/telemetry"
+	"github.com/hnsx-io/hnsx/server/pkg/worker"
 )
 
 func main() {
@@ -133,7 +135,37 @@ func cmdServer(args []string) int {
 		seedFromDir(srv, *seedFrom)
 	}
 
-	log.Printf("[hnsx-server] listening on %s", cfg.HTTPAddr)
+	// V1.1: V1.1 worker pool. The registry + queue are shared with the
+	// REST API so session creation enqueues and cancel APIs publish to
+	// the worker's StreamChannel. Both pieces are in-memory; V1.2
+	// persists worker state into the runtimes table.
+	workerReg := worker.NewRegistry()
+	sessionQ := worker.NewSessionQueue()
+
+	// Stale-worker GC: every 30s, evict workers that haven't heartbeat
+	// in over 60s and log how many were reaped.
+	stopGC := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stopGC:
+				return
+			case <-ticker.C:
+				if evicted := workerReg.EvictStale(60 * time.Second); len(evicted) > 0 {
+					log.Printf("[hnsx-server] evicted %d stale worker(s): %v", len(evicted), evicted)
+				}
+			}
+		}
+	}()
+
+	var grpcSrv *controlplane.Server
+	if cfg.GRPCAddr != "" {
+		grpcSrv = controlplane.NewServer(cfg.GRPCAddr).WithWorkerServices(workerReg, sessionQ)
+	}
+
+	log.Printf("[hnsx-server] listening on http=%s grpc=%s", cfg.HTTPAddr, cfg.GRPCAddr)
 	log.Printf("[hnsx-server] version=%s commit=%s", build.Version, build.Commit)
 	log.Printf("[hnsx-server] otel=%s build=%s", cfg.OTel.Exporter, build.GoVersion)
 
@@ -142,10 +174,19 @@ func cmdServer(args []string) int {
 		serveErr <- srv.Listen(cfg.HTTPAddr)
 	}()
 
+	var grpcErr chan error
+	if grpcSrv != nil {
+		grpcErr = make(chan error, 1)
+		go func() {
+			grpcErr <- grpcSrv.ListenAndServe(ctx)
+		}()
+	}
+
 	select {
 	case <-ctx.Done():
 		log.Println("[hnsx-server] shutting down")
-		shutdownCtx, cancel2 := context.WithCancel(context.Background())
+		close(stopGC)
+		shutdownCtx, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel2()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			log.Printf("[hnsx-server] api shutdown: %v", err)
@@ -158,6 +199,9 @@ func cmdServer(args []string) int {
 		return 0
 	case err := <-serveErr:
 		log.Fatalf("http: %v", err)
+		return 1
+	case err := <-grpcErr:
+		log.Fatalf("grpc: %v", err)
 		return 1
 	}
 }
