@@ -35,10 +35,10 @@ describe('TrendIndicator', () => {
   })
 
   it('flips good/bad with goodWhen="down"', () => {
-    // 增长 10% — 但 goodWhen=down 所以应该是 bad（红色调）
+    // 增长 20% — 但 goodWhen=down 所以应该是 bad（红色调）
     const { container } = render(<TrendIndicator value={120} previous={100} goodWhen="down" />)
-    // 找到含 +10% 的 span
-    const span = screen.getByText('+10.0%')
+    // 找到含 +20% 的 span
+    const span = screen.getByText('+20.0%')
     expect(span).toBeInTheDocument()
     // 验证它有 danger-text 颜色类（不在 good class 里）
     expect(container.innerHTML).toMatch(/danger-text|danger-soft/)
