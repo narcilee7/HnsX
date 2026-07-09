@@ -29,12 +29,14 @@ import (
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/version"
 	"github.com/hnsx-io/hnsx/server/internal/config"
+	"github.com/hnsx-io/hnsx/server/internal/worker"
+	"github.com/hnsx-io/hnsx/server/internal/worker/repository"
+	"github.com/hnsx-io/hnsx/server/internal/worker/service"
 	"github.com/hnsx-io/hnsx/server/pkg/api"
 	"github.com/hnsx-io/hnsx/server/pkg/controlplane"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 	hsxruntime "github.com/hnsx-io/hnsx/server/pkg/session"
 	"github.com/hnsx-io/hnsx/server/pkg/telemetry"
-	"github.com/hnsx-io/hnsx/server/pkg/worker"
 
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
@@ -137,11 +139,16 @@ func cmdServer(args []string) int {
 
 	// V1.1: worker pool is only enabled when a gRPC address is configured.
 	// When nil, the REST API falls back to the in-process executor.
+	var workerSvc *service.Service
+	if cfg.GRPCAddr != "" {
+		workerSvc = service.NewService(repository.NewInMemoryRepository())
+	}
+
 	var workerReg *worker.Registry
 	var sessionQ *worker.SessionQueue
-	if cfg.GRPCAddr != "" {
-		workerReg = worker.NewRegistry()
-		sessionQ = worker.NewSessionQueue()
+	if workerSvc != nil {
+		workerReg = workerSvc.Registry()
+		sessionQ = workerSvc.Queue()
 	}
 	srv := api.NewServerWithWorkerPool(build, store, exec, workerReg, sessionQ)
 
@@ -153,7 +160,7 @@ func cmdServer(args []string) int {
 	// in over 60s and log how many were reaped. Only runs when worker pool
 	// is enabled.
 	stopGC := make(chan struct{})
-	if workerReg != nil {
+	if workerSvc != nil {
 		go func() {
 			ticker := time.NewTicker(30 * time.Second)
 			defer ticker.Stop()
@@ -162,7 +169,7 @@ func cmdServer(args []string) int {
 				case <-stopGC:
 					return
 				case <-ticker.C:
-					if evicted := workerReg.EvictStale(60 * time.Second); len(evicted) > 0 {
+					if evicted := workerSvc.EvictStale(60 * time.Second); len(evicted) > 0 {
 						log.Printf("[hnsx-server] evicted %d stale worker(s): %v", len(evicted), evicted)
 					}
 				}
