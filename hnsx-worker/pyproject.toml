@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hnsx-worker"
+version = "0.1.0"
+description = "HnsX Python capability execution plane (worker + session runtime)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "HnsX Authors" }
+]
+keywords = ["hnsx", "agent", "harness", "grpc", "ray"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "grpcio>=1.66,<2.0",
+    "grpcio-tools>=1.66,<2.0",
+    "protobuf>=5.27,<6.0",
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "types-protobuf>=5.27",
+]
+
+[project.scripts]
+hnsx-worker = "hnsx_worker.__main__:cli"
+
+[project.urls]
+Homepage = "https://github.com/hnsx-io/hnsx"
+Issues = "https://github.com/hnsx-io/hnsx/issues"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hnsx_worker*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"hnsx_worker.proto.gen" = ["**/*.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+strict_optional = true
+warn_unused_ignores = true
+ignore_missing_imports = false

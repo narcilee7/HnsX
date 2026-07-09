@@ -1,0 +1,251 @@
+syntax = "proto3";
+
+package hnsx.v1;
+
+option go_package = "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1";
+
+import "hnsx/v1/observation.proto";
+
+// ============================================================================
+// HnsX V1.1 — Worker ↔ Server wire contract (Ray-style).
+//
+// Two services live on the same server-side endpoint:
+//
+//   - WorkerService: lifecycle (Register + Heartbeat). Worker → server.
+//   - SchedulerService: work loop (PullSession + AckSession + NackSession +
+//     StreamChannel). Worker → server, with a bidi StreamChannel that lets
+//     the server push Cancel / Drain / DomainInvalidation commands to the
+//     worker without an extra RPC.
+//
+// See design/Tech/V1/Architecture.md V1.1 §10 for the full rationale.
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// WorkerService — worker lifecycle.
+// ----------------------------------------------------------------------------
+
+service WorkerService {
+  // Register is the first call after the worker process starts. The server
+  // returns a canonical worker_id (it may reject duplicates or reassign) and
+  // its preferred heartbeat cadence. Idempotent on retry.
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+
+  // Heartbeat carries the worker's resource usage and liveness signal. The
+  // server may ack with a DrainHint asking the worker to drain.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+// ----------------------------------------------------------------------------
+// SchedulerService — work intake + observation/control channel.
+// ----------------------------------------------------------------------------
+
+service SchedulerService {
+  // PullSession long-polls: the server holds the call open until it has a
+  // session to assign to this worker, or until max_wait_seconds elapses.
+  // On timeout the server returns an empty PullSessionResponse.
+  rpc PullSession(PullSessionRequest) returns (PullSessionResponse);
+
+  // AckSession flips the session row to "running" with the worker_id and
+  // correlation_id. Sent after the worker has successfully spawned the
+  // session subprocess and is about to begin Turn 1.
+  rpc AckSession(AckSessionRequest) returns (AckSessionResponse);
+
+  // NackSession reports permanent failure on pickup (e.g. spec invalid in
+  // the worker, sandbox backend missing). Server either marks session
+  // "failed" (requeue=false) or re-queues it for another worker.
+  rpc NackSession(NackSessionRequest) returns (NackSessionResponse);
+
+  // StreamChannel is the long-lived bidi channel. Worker streams up
+  // StreamChannelRequest messages (oneof of observations / status / result).
+  // Server pushes down StreamChannelResponse messages (oneof of cancel /
+  // drain / domain-invalidation / ping).
+  rpc StreamChannel(stream StreamChannelRequest) returns (stream StreamChannelResponse);
+}
+
+// ----------------------------------------------------------------------------
+// Shared resource / health messages.
+// ----------------------------------------------------------------------------
+
+// ResourceCapacity is the worker's static capability declaration.
+message ResourceCapacity {
+  int32 max_concurrent_sessions = 1;
+  repeated string providers = 2;          // ["anthropic", "openai", "claudecode", ...]
+  repeated string models = 3;             // ["claude-haiku-4-5", "gpt-4o-mini", ...]
+  repeated string sandbox_runtimes = 4;   // ["none", "process", "container"]
+  int64 memory_total_bytes = 5;           // 0 = unknown
+  double cpu_total_cores = 6;             // 0.0 = unknown
+}
+
+// ResourceUsage is the worker's dynamic resource view.
+message ResourceUsage {
+  int32 running_sessions = 1;
+  int32 free_slots = 2;
+  double cpu_percent = 3;
+  int64 memory_used_bytes = 4;
+  int64 uptime_seconds = 5;
+}
+
+// WorkerHealth summarizes liveness signals used by the scheduler.
+message WorkerHealth {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_HEALTHY = 1;     // accepting new sessions
+    STATUS_DEGRADED = 2;    // accepting new sessions, warn scheduler
+    STATUS_DRAINING = 3;    // no new sessions; finish existing
+  }
+  Status status = 1;
+  string message = 2;
+  int64 last_event_ms = 3;
+}
+
+// WorkerInfo is the worker's identity + capability declaration.
+message WorkerInfo {
+  string worker_id = 1;             // server-assigned on Register; echoed thereafter
+  string tenant_id = 2;             // UUID string
+  string version = 3;               // semver of hnsx-worker build
+  string region = 4;                // "local" | "us-west-2" | ...
+  string hostname = 5;              // for ops debugging
+  string pid = 6;                   // process id for log correlation
+  ResourceCapacity capacity = 7;
+  map<string, string> labels = 8;   // free-form: {"gpu":"a100","zone":"a"}
+}
+
+// ----------------------------------------------------------------------------
+// WorkerService messages.
+// ----------------------------------------------------------------------------
+
+message RegisterRequest {
+  WorkerInfo info = 1;
+  string auth_token = 2;            // bearer-style; server validates against tenant
+}
+
+message RegisterResponse {
+  string worker_id = 1;             // canonical id (server may regenerate)
+  int64 server_time_ms = 2;         // for clock-skew debugging
+  int32 heartbeat_interval_seconds = 3; // server's preferred cadence (default 5)
+}
+
+message HeartbeatRequest {
+  string worker_id = 1;
+  int64 timestamp_ms = 2;
+  ResourceUsage usage = 3;
+  repeated string running_session_ids = 4;
+  WorkerHealth health = 5;
+}
+
+message HeartbeatResponse {
+  int64 server_time_ms = 1;
+  DrainHint drain = 2;              // optional: server may ask worker to drain
+}
+
+message DrainHint {
+  int64 deadline_seconds = 1;       // 0 = drain ASAP
+  string reason = 2;
+}
+
+// ----------------------------------------------------------------------------
+// SchedulerService messages.
+// ----------------------------------------------------------------------------
+
+message PullSessionRequest {
+  string worker_id = 1;
+  int64 max_wait_seconds = 2;       // server may hold call up to this long
+  repeated string required_capabilities = 3; // e.g. ["provider:anthropic","model:claude-haiku-4-5"]
+}
+
+message PullSessionResponse {
+  // Empty result == no work within max_wait_seconds; worker may re-call.
+  string session_id = 1;
+  string domain_id = 2;
+  string domain_version = 3;
+  string domain_spec_json = 4;       // serialized DomainSpec (JSON; canonical wire format)
+  string trigger_payload_json = 5;
+  string trace_id = 6;
+  int64 assigned_at_ms = 7;
+  int64 session_timeout_seconds = 8; // hard cap for this session
+  string correlation_id = 9;         // for log/cancel correlation
+}
+
+message AckSessionRequest {
+  string worker_id = 1;
+  string session_id = 2;
+  int64 acknowledged_at_ms = 3;
+  string correlation_id = 4;
+}
+
+message AckSessionResponse {}
+
+message NackSessionRequest {
+  string worker_id = 1;
+  string session_id = 2;
+  string reason = 3;
+  string error_code = 4;             // aligns with future ErrorCode enum
+  bool requeue = 5;                  // if true, server re-assigns to another worker
+}
+
+message NackSessionResponse {}
+
+// ----------------------------------------------------------------------------
+// StreamChannel messages (bidi).
+// ----------------------------------------------------------------------------
+
+// StreamChannelRequest is everything the worker sends up.
+message StreamChannelRequest {
+  string worker_id = 1;
+  oneof payload {
+    ObservationBatch observations = 2;
+    SessionStatusUpdate status = 3;
+    SessionFinalResult result = 4;
+  }
+}
+
+// StreamChannelResponse is everything the server pushes down.
+message StreamChannelResponse {
+  string correlation_id = 1;
+  oneof payload {
+    CancelSessionCommand cancel = 2;
+    DrainWorkerCommand drain = 3;
+    DomainInvalidation invalidate = 4;
+    Ping ping = 5;
+  }
+}
+
+message ObservationBatch {
+  repeated Observation observations = 1;
+}
+
+message SessionStatusUpdate {
+  string session_id = 1;
+  string state = 2;                  // "running" | "completed" | "failed" | "cancelled" | "crashed"
+  string message = 3;
+  int64 timestamp_ms = 4;
+}
+
+message SessionFinalResult {
+  string session_id = 1;
+  string result_json = 2;
+  double total_cost_usd = 3;
+  int64 total_prompt_tokens = 4;
+  int64 total_completion_tokens = 5;
+  int64 duration_ms = 6;
+}
+
+message CancelSessionCommand {
+  string session_id = 1;
+  string reason = 2;
+  int64 deadline_ms = 3;
+}
+
+message DrainWorkerCommand {
+  int64 deadline_seconds = 1;
+  string reason = 2;
+}
+
+message DomainInvalidation {
+  string domain_id = 1;
+  string version = 2;                // empty = invalidate all versions
+}
+
+message Ping {
+  int64 timestamp_ms = 1;
+}

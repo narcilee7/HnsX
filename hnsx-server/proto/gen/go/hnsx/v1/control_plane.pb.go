@@ -2201,9 +2201,9 @@ const file_hnsx_v1_control_plane_proto_rawDesc = "" +
 	"\x0eRegisterDomain\x12\x1e.hnsx.v1.RegisterDomainRequest\x1a\x1f.hnsx.v1.RegisterDomainResponse\x12W\n" +
 	"\x10UnregisterDomain\x12 .hnsx.v1.UnregisterDomainRequest\x1a!.hnsx.v1.UnregisterDomainResponse\x12B\n" +
 	"\tGetDomain\x12\x19.hnsx.v1.GetDomainRequest\x1a\x1a.hnsx.v1.GetDomainResponse\x12H\n" +
-	"\vListDomains\x12\x1b.hnsx.v1.ListDomainsRequest\x1a\x1c.hnsx.v1.ListDomainsResponse2\x83\x02\n" +
-	"\x17SessionSchedulerService\x12T\n" +
-	"\x0fScheduleSession\x12\x1f.hnsx.v1.ScheduleSessionRequest\x1a .hnsx.v1.ScheduleSessionResponse\x12E\n" +
+	"\vListDomains\x12\x1b.hnsx.v1.ListDomainsRequest\x1a\x1c.hnsx.v1.ListDomainsResponse2\x88\x02\n" +
+	"\x17SessionSchedulerService\x12Y\n" +
+	"\x0fScheduleSession\x12\x1f.hnsx.v1.ScheduleSessionRequest\x1a .hnsx.v1.ScheduleSessionResponse\"\x03\x88\x02\x01\x12E\n" +
 	"\n" +
 	"GetSession\x12\x1a.hnsx.v1.GetSessionRequest\x1a\x1b.hnsx.v1.GetSessionResponse\x12K\n" +
 	"\fListSessions\x12\x1c.hnsx.v1.ListSessionsRequest\x1a\x1d.hnsx.v1.ListSessionsResponse2o\n" +
@@ -2218,8 +2218,8 @@ const file_hnsx_v1_control_plane_proto_rawDesc = "" +
 	"\aRunEval\x12\x17.hnsx.v1.RunEvalRequest\x1a\x18.hnsx.v1.RunEvalResponse\x12E\n" +
 	"\n" +
 	"GetEvalRun\x12\x1a.hnsx.v1.GetEvalRunRequest\x1a\x1b.hnsx.v1.GetEvalRunResponse\x12K\n" +
-	"\fListEvalRuns\x12\x1c.hnsx.v1.ListEvalRunsRequest\x1a\x1d.hnsx.v1.ListEvalRunsResponseB\x8e\x01\n" +
-	"\vcom.hnsx.v1B\x11ControlPlaneProtoP\x01Z/github.com/hnsx-io/hnsx/go/proto/gen/go/hnsx/v1\xa2\x02\x03HXX\xaa\x02\aHnsx.V1\xca\x02\aHnsx\\V1\xe2\x02\x13Hnsx\\V1\\GPBMetadata\xea\x02\bHnsx::V1b\x06proto3"
+	"\fListEvalRuns\x12\x1c.hnsx.v1.ListEvalRunsRequest\x1a\x1d.hnsx.v1.ListEvalRunsResponseB\x92\x01\n" +
+	"\vcom.hnsx.v1B\x11ControlPlaneProtoP\x01Z3github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1\xa2\x02\x03HXX\xaa\x02\aHnsx.V1\xca\x02\aHnsx\\V1\xe2\x02\x13Hnsx\\V1\\GPBMetadata\xea\x02\bHnsx::V1b\x06proto3"
 
 var (
 	file_hnsx_v1_control_plane_proto_rawDescOnce sync.Once

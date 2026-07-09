@@ -2,11 +2,17 @@ syntax = "proto3";
 
 package hnsx.v1;
 
-option go_package = "github.com/hnsx-io/hnsx/go/proto/gen/go/hnsx/v1";
+option go_package = "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1";
 
 import "hnsx/v1/observation.proto";
 
+// DEPRECATED as of V1.1: replaced by SchedulerService.StreamChannel +
+// WorkerService.Heartbeat in proto/hnsx/v1/worker.proto. The push-style
+// "Trigger → stream observation" RPC assumed the server knew which runtime
+// to push to; V1.1 inverts this so workers pull and stream back.
 service RuntimeService {
+  option deprecated = true;
+
   rpc Trigger(TriggerRequest) returns (stream TriggerResponse);
 }
 

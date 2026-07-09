@@ -396,10 +396,10 @@ const file_hnsx_v1_runtime_proto_rawDesc = "" +
 	"\tDoneChunk\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x16\n" +
-	"\x06result\x18\x02 \x01(\tR\x06result2P\n" +
+	"\x06result\x18\x02 \x01(\tR\x06result2U\n" +
 	"\x0eRuntimeService\x12>\n" +
-	"\aTrigger\x12\x17.hnsx.v1.TriggerRequest\x1a\x18.hnsx.v1.TriggerResponse0\x01B\x89\x01\n" +
-	"\vcom.hnsx.v1B\fRuntimeProtoP\x01Z/github.com/hnsx-io/hnsx/go/proto/gen/go/hnsx/v1\xa2\x02\x03HXX\xaa\x02\aHnsx.V1\xca\x02\aHnsx\\V1\xe2\x02\x13Hnsx\\V1\\GPBMetadata\xea\x02\bHnsx::V1b\x06proto3"
+	"\aTrigger\x12\x17.hnsx.v1.TriggerRequest\x1a\x18.hnsx.v1.TriggerResponse0\x01\x1a\x03\x88\x02\x01B\x8d\x01\n" +
+	"\vcom.hnsx.v1B\fRuntimeProtoP\x01Z3github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1\xa2\x02\x03HXX\xaa\x02\aHnsx.V1\xca\x02\aHnsx\\V1\xe2\x02\x13Hnsx\\V1\\GPBMetadata\xea\x02\bHnsx::V1b\x06proto3"
 
 var (
 	file_hnsx_v1_runtime_proto_rawDescOnce sync.Once
