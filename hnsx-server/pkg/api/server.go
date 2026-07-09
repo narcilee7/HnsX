@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/app"
@@ -54,8 +55,10 @@ type Server struct {
 	// EvalService manages eval sets and runs.
 	EvalService *evalservice.Service
 
-	shutdownOnce sync.Once
-	httpServer   *http.Server
+	shutdownOnce   sync.Once
+	httpServer     *http.Server
+	activeRequests sync.WaitGroup
+	draining       atomic.Bool
 }
 
 // ErrDomainNotFound is returned when a requested domain is not registered.
@@ -133,7 +136,7 @@ func (s *Server) LoadDomainPolicy(domainID string) error {
 
 // Handler returns the http.Handler with the entire API surface mounted.
 func (s *Server) Handler() http.Handler {
-	return newRouter(s)
+	return s.drainMiddleware(newRouter(s))
 }
 
 // Listen starts the HTTP server on addr. Blocks until Shutdown is called or
@@ -159,6 +162,37 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}
 	})
 	return err
+}
+
+// Drain marks the server as draining and waits for active requests to finish.
+// New requests receive 503 Service Unavailable. Call before Shutdown.
+func (s *Server) Drain(ctx context.Context) error {
+	s.draining.Store(true)
+	done := make(chan struct{})
+	go func() {
+		s.activeRequests.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// drainMiddleware tracks in-flight requests and rejects new ones once draining.
+func (s *Server) drainMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.draining.Load() {
+			w.Header().Set("Retry-After", "0")
+			http.Error(w, "server is shutting down", http.StatusServiceUnavailable)
+			return
+		}
+		s.activeRequests.Add(1)
+		defer s.activeRequests.Done()
+		next.ServeHTTP(w, r)
+	})
 }
 
 // timeoutCtx derives a request-scoped context with the configured timeout.
