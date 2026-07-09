@@ -1,68 +1,122 @@
-// Package telemetry provides trace, metric, and audit collection.
+// Package telemetry centralizes HnsX telemetry sinks.
+//
+// The runtime emits observation.Observation values; the implementations in this
+// package convert those into either OTLP spans/metrics, structured stdout,
+// or DB rows. Sinks are designed to be plug-and-play: the runtime passes
+// observations to every registered sink via a Sink implementation.
+//
+// Phase 1 ships:
+//
+//   - StdoutSink: prints observations as one JSON line per event.
+//   - OtlpGRPCSink: ships observations as OTLP traces to a Collector.
+//   - DBSink: persists observations into the `observations` table via pgx.
+//   - FanOutSink: composes multiple sinks.
 package telemetry
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"sync"
 	"time"
+
+	"github.com/hnsx-io/hnsx/core/observation"
 )
 
-// Sink receives telemetry records.
+// Sink is the contract any telemetry backend must satisfy. Implementations
+// MUST be safe for concurrent use.
 type Sink interface {
-	RecordTrace(ctx context.Context, record *TraceRecord) error
-	RecordInvocation(ctx context.Context, record *InvocationRecord) error
-	RecordAudit(ctx context.Context, record *AuditRecord) error
+	// Name returns the sink identifier for logging/metrics.
+	Name() string
+	// Record is called for each observation the runtime emits.
+	Record(ctx context.Context, obs observation.Observation) error
+	// Flush forces any buffered events to the backend. Best-effort; nil
+	// return value indicates success.
+	Flush(ctx context.Context) error
+	// Close releases any resources (spans, exporters, etc.).
+	Close(ctx context.Context) error
 }
 
-// TraceRecord is an observation trace.
-type TraceRecord struct {
-	TraceID   string
-	SessionID string
-	DomainID  string
-	StepID    string
-	AgentID   string
-	Kind      string
-	Payload   string
-	CreatedAt time.Time
+// ----------------------------------------------------------------------------
+// StdoutSink
+// ----------------------------------------------------------------------------
+
+// StdoutSink writes each observation as a single-line JSON record to the
+// configured file (defaults to os.Stdout). Useful for local dev and CI.
+type StdoutSink struct {
+	mu  sync.Mutex
+	out *os.File
+	enc *json.Encoder
 }
 
-// InvocationRecord captures cost and latency.
-type InvocationRecord struct {
-	SessionID        string
-	DomainID         string
-	StartedAt        time.Time
-	Duration         time.Duration
-	TotalCostUSD     float64
-	PromptTokens     int64
-	CompletionTokens int64
+// NewStdoutSink constructs a sink that writes to os.Stdout.
+func NewStdoutSink() *StdoutSink { return newStdoutSink(os.Stdout) }
+
+func newStdoutSink(out *os.File) *StdoutSink {
+	return &StdoutSink{out: out, enc: json.NewEncoder(out)}
 }
 
-// AuditRecord is an immutable audit log entry.
-type AuditRecord struct {
-	RecordID  string
-	SessionID string
-	DomainID  string
-	Action    string
-	Actor     string
-	Details   string
-	CreatedAt time.Time
+// Name returns "stdout".
+func (s *StdoutSink) Name() string { return "stdout" }
+
+// Record writes one JSON line per observation.
+func (s *StdoutSink) Record(_ context.Context, obs observation.Observation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if obs.Timestamp.IsZero() {
+		obs.Timestamp = time.Now().UTC()
+	}
+	return s.enc.Encode(obs)
 }
 
-// StdoutSink writes telemetry to stdout.
-type StdoutSink struct{}
+// Flush is a no-op (writes are immediate).
+func (s *StdoutSink) Flush(_ context.Context) error { return nil }
 
-// NewStdoutSink creates a stdout sink.
-func NewStdoutSink() *StdoutSink {
-	return &StdoutSink{}
+// Close is a no-op.
+func (s *StdoutSink) Close(_ context.Context) error { return nil }
+
+// ----------------------------------------------------------------------------
+// FanOutSink
+// ----------------------------------------------------------------------------
+
+// FanOutSink dispatches every observation to one or more child sinks.
+type FanOutSink struct {
+	sinks []Sink
 }
 
-func (s *StdoutSink) RecordTrace(ctx context.Context, record *TraceRecord) error {
+// NewFanOutSink composes multiple sinks.
+func NewFanOutSink(sinks ...Sink) *FanOutSink { return &FanOutSink{sinks: sinks} }
+
+// Name returns "fanout".
+func (f *FanOutSink) Name() string { return "fanout" }
+
+// Record forwards the observation to every child sink in order.
+func (f *FanOutSink) Record(ctx context.Context, obs observation.Observation) error {
+	for _, s := range f.sinks {
+		if err := s.Record(ctx, obs); err != nil {
+			return fmt.Errorf("sink %s: %w", s.Name(), err)
+		}
+	}
 	return nil
 }
 
-func (s *StdoutSink) RecordInvocation(ctx context.Context, record *InvocationRecord) error {
+// Flush forwards the Flush call to all children.
+func (f *FanOutSink) Flush(ctx context.Context) error {
+	for _, s := range f.sinks {
+		if err := s.Flush(ctx); err != nil {
+			return fmt.Errorf("sink %s flush: %w", s.Name(), err)
+		}
+	}
 	return nil
 }
 
-func (s *StdoutSink) RecordAudit(ctx context.Context, record *AuditRecord) error {
+// Close forwards the Close call to all children.
+func (f *FanOutSink) Close(ctx context.Context) error {
+	for _, s := range f.sinks {
+		if err := s.Close(ctx); err != nil {
+			return fmt.Errorf("sink %s close: %w", s.Name(), err)
+		}
+	}
 	return nil
 }

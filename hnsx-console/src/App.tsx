@@ -1,27 +1,46 @@
-import { Routes, Route, Link } from 'react-router-dom'
-import DomainsPage from './pages/DomainsPage'
-import DomainDetailPage from './pages/DomainDetailPage'
-import SessionsPage from './pages/SessionsPage'
+import { Routes, Route } from 'react-router-dom'
+import { AppShell } from '@/components/layout'
+import { ToastProvider } from '@/components/ui/ToastProvider'
+import DashboardPage from '@/pages/DashboardPage'
+import DomainsPage from '@/pages/DomainsPage'
+import DomainDetailPage from '@/pages/DomainDetailPage'
+import DomainRunPage from '@/pages/DomainRunPage'
+import SessionsPage from '@/pages/SessionsPage'
+import SessionDetailPage from '@/pages/SessionDetailPage'
+import TracesPage from '@/pages/TracesPage'
+import TraceDetailPage from '@/pages/TraceDetailPage'
+import EvalsPage from '@/pages/EvalsPage'
+import EvalSetPage from '@/pages/EvalSetPage'
+import EvalRunPage from '@/pages/EvalRunPage'
+import ObservabilityPage from '@/pages/ObservabilityPage'
+import AuditPage from '@/pages/AuditPage'
+import ApprovalsPage from '@/pages/ApprovalsPage'
+import SettingsPage from '@/pages/SettingsPage'
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <nav className="border-b bg-white px-6 py-3">
-        <div className="mx-auto flex max-w-7xl items-center gap-6">
-          <Link to="/" className="text-lg font-bold text-indigo-600">HnsX</Link>
-          <Link to="/domains" className="text-sm hover:text-indigo-600">Domains</Link>
-          <Link to="/sessions" className="text-sm hover:text-indigo-600">Sessions</Link>
-        </div>
-      </nav>
-      <main className="mx-auto max-w-7xl p-6">
+    <>
+      <ToastProvider />
+      <AppShell>
         <Routes>
-          <Route path="/" element={<DomainsPage />} />
+          <Route path="/" element={<DashboardPage />} />
           <Route path="/domains" element={<DomainsPage />} />
           <Route path="/domains/:id" element={<DomainDetailPage />} />
+          <Route path="/domains/:id/run" element={<DomainRunPage />} />
           <Route path="/sessions" element={<SessionsPage />} />
+          <Route path="/sessions/:id" element={<SessionDetailPage />} />
+          <Route path="/traces" element={<TracesPage />} />
+          <Route path="/traces/:id" element={<TraceDetailPage />} />
+          <Route path="/evals" element={<EvalsPage />} />
+          <Route path="/domains/:domainId/evals/:setId" element={<EvalSetPage />} />
+          <Route path="/domains/:domainId/evals/:setId/runs/:runId" element={<EvalRunPage />} />
+          <Route path="/observability" element={<ObservabilityPage />} />
+          <Route path="/audit" element={<AuditPage />} />
+          <Route path="/approvals" element={<ApprovalsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
-      </main>
-    </div>
+      </AppShell>
+    </>
   )
 }
 

@@ -1,12 +1,35 @@
+// hnsx-server is the HnsX control plane daemon. It hosts the HTTP/REST API
+// and (in future PRs) the gRPC control plane. Phase 1 focuses on:
+//
+//   - Loading configuration (env+yaml).
+//   - Optionally connecting Postgres and running migrations.
+//   - Initialising OTel (stdout / otlp / none).
+//   - Starting the HTTP API + SSE handler on the configured address.
+//
+// Usage:
+//
+//	hnsx-server server [--config <path>]
+//	hnsx-server version
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"log"
 	"os"
+	"os/signal"
+	stdruntime "runtime"
+	"syscall"
 
-	"github.com/hnsx-io/hnsx/go/internal/version"
-	"github.com/hnsx-io/hnsx/go/pkg/controlplane"
+	"github.com/hnsx-io/hnsx/core/adapter"
+	"github.com/hnsx-io/hnsx/core/loader"
+	"github.com/hnsx-io/hnsx/core/version"
+	"github.com/hnsx-io/hnsx/server/internal/config"
+	"github.com/hnsx-io/hnsx/server/pkg/api"
+	"github.com/hnsx-io/hnsx/server/pkg/db"
+	hsxruntime "github.com/hnsx-io/hnsx/server/pkg/session"
+	"github.com/hnsx-io/hnsx/server/pkg/telemetry"
 )
 
 func main() {
@@ -30,25 +53,142 @@ func printUsage() {
 	fmt.Print(`hnsx-server — HnsX Control Plane
 
 Usage:
-  hnsx-server server --addr <addr>
+  hnsx-server server [--config <path>]
   hnsx-server version
 
-Examples:
-  hnsx-server server --addr 127.0.0.1:50051
+Environment:
+  HNSX_HTTP_ADDR           Listen address (default 127.0.0.1:50051)
+  HNSX_DATABASE_URL        Postgres connection string
+  HNSX_MIGRATIONS_DIR      SQL migrations directory
+  HNSX_OTEL_EXPORTER       stdout | otlp | none
+  HNSX_OTEL_OTLP_ENDPOINT  OTLP gRPC endpoint (default 127.0.0.1:4317)
+  HNSX_OTEL_SERVICE_NAME   service.name attribute
+  HNSX_LOG_LEVEL           debug | info | warn | error
 `)
 }
 
 func cmdServer(args []string) int {
 	fs := flag.NewFlagSet("server", flag.ExitOnError)
-	addr := fs.String("addr", "127.0.0.1:50051", "control plane listen address")
+	cfgPath := fs.String("config", "", "optional path to YAML config")
+	seedFrom := fs.String("seed-from", "", "optional directory of v2 DomainSpec YAMLs to register on boot (development only; production deployments register via POST /api/v1/domains)")
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(os.Stderr, "parse flags: %v\n", err)
 		return 1
 	}
 
-	server := controlplane.NewServer(*addr)
-	fmt.Printf("hnsx control plane listening on %s\n", server.Addr())
+	cfg, err := config.Load(*cfgPath)
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
 
-	// TODO: implement gRPC/HTTP server startup.
-	select {}
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	otelProv, err := telemetry.Init(ctx, telemetry.OTelOptions{
+		ServiceName:  cfg.OTel.ServiceName,
+		Exporter:     cfg.OTel.Exporter,
+		OTLPEndpoint: cfg.OTel.OTLPEndpoint,
+	})
+	if err != nil {
+		log.Fatalf("otel: %v", err)
+	}
+
+	var store *db.DB
+	if cfg.PostgresEnabled() {
+		store, err = db.Open(ctx, cfg.DatabaseURL)
+		if err != nil {
+			log.Printf("[hnsx-server] WARNING: database unavailable: %v", err)
+			store = db.NoDB()
+		} else {
+			defer store.Close()
+			if err := db.Migrate(ctx, store.SQL, cfg.MigrationsDir); err != nil {
+				log.Fatalf("migrate: %v", err)
+			}
+			log.Printf("[hnsx-server] migrations applied from %s", cfg.MigrationsDir)
+		}
+	} else {
+		store = db.NoDB()
+		log.Printf("[hnsx-server] running in no-db mode (set HNSX_DATABASE_URL to enable)")
+	}
+
+	sinks := []telemetry.Sink{telemetry.NewStdoutSink()}
+	if store != nil && !store.IsNoDB() {
+		sinks = append(sinks, telemetry.NewDBSink(store.Pool))
+	}
+	if cfg.OTel.Exporter != "none" {
+		sinks = append(sinks, telemetry.NewTracerSink())
+	}
+
+	exec := hsxruntime.NewExecutor(adapter.NewNoopAdapter(), sinks...)
+
+	build := api.BuildInfo{
+		Version:   version.Version,
+		Commit:    version.Commit,
+		Built:     version.Built,
+		GoVersion: stdruntime.Version(),
+	}
+	srv := api.NewServer(build, store, exec)
+
+	if *seedFrom != "" {
+		seedFromDir(srv, *seedFrom)
+	}
+
+	log.Printf("[hnsx-server] listening on %s", cfg.HTTPAddr)
+	log.Printf("[hnsx-server] version=%s commit=%s", build.Version, build.Commit)
+	log.Printf("[hnsx-server] otel=%s build=%s", cfg.OTel.Exporter, build.GoVersion)
+
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- srv.Listen(cfg.HTTPAddr)
+	}()
+
+	select {
+	case <-ctx.Done():
+		log.Println("[hnsx-server] shutting down")
+		shutdownCtx, cancel2 := context.WithCancel(context.Background())
+		defer cancel2()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("[hnsx-server] api shutdown: %v", err)
+		}
+		if otelProv != nil {
+			if err := otelProv.Shutdown(shutdownCtx); err != nil {
+				log.Printf("[hnsx-server] otel shutdown: %v", err)
+			}
+		}
+		return 0
+	case err := <-serveErr:
+		log.Fatalf("http: %v", err)
+		return 1
+	}
+}
+
+// seedFromDir walks the given directory and registers every v2 DomainSpec YAML
+// against the API server. It is an explicit operator action (--seed-from) so
+// production deployments never implicitly pull in development fixtures.
+//
+// Each subdirectory of dir is expected to contain a single `domain.yaml`. Any
+// YAML that fails validation is logged and skipped — the server still boots.
+func seedFromDir(s *api.Server, dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		log.Printf("[seed] cannot read %s: %v (skipping)", dir, err)
+		return
+	}
+	registered := 0
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		path := fmt.Sprintf("%s/%s/domain.yaml", dir, e.Name())
+		spec, err := loader.LoadFile(path)
+		if err != nil {
+			log.Printf("[seed] skip %s: %v", path, err)
+			continue
+		}
+		s.RegisterBootstrapDomain(spec)
+		registered++
+	}
+	if registered > 0 {
+		log.Printf("[seed] registered %d domain(s) from %s", registered, dir)
+	}
 }

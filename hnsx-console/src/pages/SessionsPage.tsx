@@ -1,51 +1,51 @@
-interface Session {
-  id: string
-  domainId: string
-  state: string
-  startedAt: string
-}
-
-const mockSessions: Session[] = [
-  { id: 'sess-001', domainId: 'customer-service', state: 'completed', startedAt: '2026-07-08T12:00:00Z' },
-  { id: 'sess-002', domainId: 'code-review', state: 'failed', startedAt: '2026-07-08T12:30:00Z' },
-]
+import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
+import type { ColumnDef } from '@tanstack/react-table'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { DataTable } from '@/components/ui/DataTable'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Timestamp } from '@/components/ui/Timestamp'
+import { ErrorState } from '@/components/ui/Error'
+import { useSessions } from '@/hooks/useSessions'
+import type { SessionViewModel } from '@/api/mappers'
 
 export default function SessionsPage() {
+  const { data, isLoading, error, refetch } = useSessions({ limit: 50 })
+
+  const columns = useMemo<ColumnDef<SessionViewModel>[]>(
+    () => [
+      {
+        accessorKey: 'id',
+        header: 'ID',
+        cell: ({ row }) => (
+          <Link to={`/sessions/${row.original.id}`} className="font-medium hover:underline">
+            {row.original.id}
+          </Link>
+        ),
+      },
+      { accessorKey: 'domainId', header: 'Domain' },
+      {
+        accessorKey: 'state',
+        header: 'State',
+        cell: ({ row }) => <StatusBadge status={row.original.state} />,
+      },
+      {
+        accessorKey: 'startedAt',
+        header: 'Started At',
+        cell: ({ row }) => <Timestamp date={row.original.startedAt} />,
+      },
+    ],
+    [],
+  )
+
+  if (error) {
+    return <ErrorState description={error.message} onRetry={refetch} />
+  }
+
   return (
-    <div>
-      <h1 className="mb-6 text-2xl font-bold">Sessions</h1>
-      <div className="rounded-lg border bg-white shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="px-4 py-3 font-medium">ID</th>
-              <th className="px-4 py-3 font-medium">Domain</th>
-              <th className="px-4 py-3 font-medium">State</th>
-              <th className="px-4 py-3 font-medium">Started At</th>
-            </tr>
-          </thead>
-          <tbody>
-            {mockSessions.map((session) => (
-              <tr key={session.id} className="border-t">
-                <td className="px-4 py-3 font-medium">{session.id}</td>
-                <td className="px-4 py-3 text-gray-600">{session.domainId}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs ${
-                      session.state === 'completed'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}
-                  >
-                    {session.state}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-gray-600">{session.startedAt}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="space-y-4">
+      <PageHeader title="Sessions" description="Monitor and inspect sessions." />
+      <DataTable columns={columns} data={data?.items || []} loading={isLoading} />
     </div>
   )
 }

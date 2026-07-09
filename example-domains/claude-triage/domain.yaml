@@ -1,42 +1,49 @@
 id: claude-triage
-version: 0.1.0
+version: 0.2.0
 description: |
-  Triage flow using Anthropic's claude-haiku-4-5. Mirrors
-  customer-service but routes the classifier through the Anthropic
-  Messages API; the follow-up specialist uses OpenAI gpt-4o-mini so the
-  workflow exercises two providers end-to-end.
-agents:
-  - id: claude-triage
-    description: Classifies the question into billing / technical / other.
-    model:
+  Two-provider triage flow. Anthropic classifies the question via the
+  Messages API; OpenAI drafts the reply. Demonstrates a workflow that
+  exercises both providers end-to-end.
+harness:
+  agents:
+    claude-triage:
+      id: claude-triage
       provider: anthropic
       model: claude-haiku-4-5
-    adapter:
-      timeout_seconds: 30
-    prompt:
-      template: |
-        You are a triage agent. Classify the user's question into one of
-        {billing, technical, other}. Reply with JSON only.
-      variables: {}
-  - id: gpt-responder
-    description: Drafts the final reply given the triage decision.
-    model:
+      adapter:
+        kind: anthropic
+        timeout_seconds: 30
+      system_prompt: triage-prompt
+    gpt-responder:
+      id: gpt-responder
       provider: openai
       model: gpt-4o-mini
-    adapter:
-      timeout_seconds: 60
-    prompt:
+      adapter:
+        kind: openai
+        timeout_seconds: 60
+      system_prompt: responder-prompt
+  prompts:
+    triage-prompt:
+      type: system
+      template: |
+        You are a triage agent. Classify the user's question into one of
+        {billing, technical, other} and reply with JSON only.
+    responder-prompt:
+      type: system
       template: |
         You are the responder. Given the classification, draft a short,
         helpful reply.
-      variables: {}
-workflow:
-  entry: classify
-  steps:
-    - id: classify
-      agent: claude-triage
-      output: classification
-    - id: respond
-      agent: gpt-responder
-      input:
-        classification: "${steps.classify.output}"
+  session:
+    mode: workflow
+    workflow:
+      entry: classify
+      steps:
+        - id: classify
+          agent: claude-triage
+          next: respond
+          output: classification
+        - id: respond
+          agent: gpt-responder
+          input:
+            classification: "${classification}"
+          output: reply
