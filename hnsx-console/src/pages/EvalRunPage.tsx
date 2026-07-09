@@ -81,7 +81,7 @@ export default function EvalRunPage() {
   const baselineScore = useMemo(() => {
     if (!run?.baselineRunId) return undefined
     return trendData.find((d) => d.runId === run.baselineRunId)?.score
-  }, [run?.baselineRunId, trendData])
+  }, [run, trendData])
 
   /* ----- baseline data ----- */
   const baselineData = useMemo(() => {
@@ -96,7 +96,7 @@ export default function EvalRunPage() {
       })
     }
     return map
-  }, [run?.baselineRunId, runsList])
+  }, [run, runsList])
 
   /* ----- case rows w/ diff ----- */
   const caseRows: CaseRow[] = useMemo(() => {
