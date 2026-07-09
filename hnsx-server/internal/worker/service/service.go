@@ -19,22 +19,28 @@ import (
 type Service struct {
 	repo  repository.Repository
 	reg   *worker.Registry
-	queue *worker.SessionQueue
+	queue worker.SessionQueue
 }
 
-// NewService constructs a Service backed by the supplied repository.
-// It also owns the in-memory registry and session queue used by the gRPC
-// control plane. Pass nil for the queue if worker pooling is disabled.
+// NewService constructs a Service backed by the supplied repository and an
+// in-memory session queue. Use NewServiceWithQueue to inject a different
+// queue implementation (e.g. RedisSessionQueue for multi-instance Control
+// Plane).
 func NewService(repo repository.Repository) *Service {
+	return NewServiceWithQueue(repo, worker.NewSessionQueue())
+}
+
+// NewServiceWithQueue constructs a Service with an explicit session queue.
+func NewServiceWithQueue(repo repository.Repository, q worker.SessionQueue) *Service {
 	return &Service{
 		repo:  repo,
 		reg:   worker.NewRegistry(),
-		queue: worker.NewSessionQueue(),
+		queue: q,
 	}
 }
 
-// WithQueue replaces the default session queue. Used by tests.
-func (s *Service) WithQueue(q *worker.SessionQueue) *Service {
+// WithQueue replaces the default session queue. Used by tests and main.
+func (s *Service) WithQueue(q worker.SessionQueue) *Service {
 	s.queue = q
 	return s
 }
@@ -51,7 +57,7 @@ func (s *Service) WithRegistry(r *worker.Registry) *Service {
 func (s *Service) Registry() *worker.Registry { return s.reg }
 
 // Queue returns the underlying session queue.
-func (s *Service) Queue() *worker.SessionQueue { return s.queue }
+func (s *Service) Queue() worker.SessionQueue { return s.queue }
 
 // Register records a worker's WorkerInfo and returns a canonical worker_id.
 func (s *Service) Register(info *pb.WorkerInfo) (string, error) {

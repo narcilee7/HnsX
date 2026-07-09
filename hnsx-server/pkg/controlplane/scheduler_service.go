@@ -27,7 +27,7 @@ import (
 type SchedulerServiceServer struct {
 	pb.UnimplementedSchedulerServiceServer
 	Registry *worker.Registry
-	Queue    *worker.SessionQueue
+	Queue    worker.SessionQueue
 
 	// DefaultMaxWaitSeconds caps the long-poll window when the worker
 	// doesn't specify one. Defaults to 30.
@@ -52,7 +52,7 @@ type activeSession struct {
 }
 
 // NewSchedulerServiceServer wires the registry + queue into a server.
-func NewSchedulerServiceServer(reg *worker.Registry, q *worker.SessionQueue) *SchedulerServiceServer {
+func NewSchedulerServiceServer(reg *worker.Registry, q worker.SessionQueue) *SchedulerServiceServer {
 	return &SchedulerServiceServer{
 		Registry:              reg,
 		Queue:                 q,

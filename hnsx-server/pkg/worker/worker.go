@@ -4,6 +4,8 @@
 package worker
 
 import (
+	"github.com/redis/go-redis/v9"
+
 	"github.com/hnsx-io/hnsx/server/internal/worker"
 )
 
@@ -25,5 +27,14 @@ var ErrUnknownWorker = worker.ErrUnknownWorker
 // NewRegistry constructs an empty Registry.
 func NewRegistry() *Registry { return worker.NewRegistry() }
 
-// NewSessionQueue constructs an empty SessionQueue.
-func NewSessionQueue() *SessionQueue { return worker.NewSessionQueue() }
+// NewSessionQueue constructs an empty in-memory SessionQueue.
+func NewSessionQueue() SessionQueue { return worker.NewSessionQueue() }
+
+// NewMemorySessionQueue is an explicit alias of NewSessionQueue. Use it when
+// the caller wants to document that an in-memory queue is intentional.
+func NewMemorySessionQueue() SessionQueue { return worker.NewSessionQueue() }
+
+// NewRedisSessionQueue constructs a queue backed by the supplied Redis client.
+func NewRedisSessionQueue(rdb *redis.Client, prefix string) SessionQueue {
+	return worker.NewRedisSessionQueue(rdb, prefix)
+}
