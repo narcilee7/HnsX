@@ -10,8 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gopkg.in/yaml.v3"
 
-	"github.com/hnsx-io/hnsx/core/domain"
-	"github.com/hnsx-io/hnsx/core/loader"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
 
 // ListDomains handles GET /api/v1/domains.
@@ -214,30 +213,30 @@ func (s *Server) TriggerDomain(w http.ResponseWriter, r *http.Request) {
 // helpers
 // ----------------------------------------------------------------------------
 
-// decodeDomainBody parses either YAML or JSON body into a *domain.DomainSpec.
+// decodeDomainBody parses either YAML or JSON body into a *spec.DomainSpec.
 // It honours Content-Type ("application/yaml" -> yaml, default -> json) and
 // also detects yaml format heuristically when the body starts with the YAML
 // document marker "---".
-func decodeDomainBody(r *http.Request) (*domain.DomainSpec, error) {
+func decodeDomainBody(r *http.Request) (*spec.DomainSpec, error) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
 	defer r.Body.Close()
 
-	var spec domain.DomainSpec
+	var s spec.DomainSpec
 	ct := r.Header.Get("Content-Type")
 	if isYAMLContentType(ct) || looksLikeYAML(body) {
-		if err := yaml.Unmarshal(body, &spec); err != nil {
+		if err := yaml.Unmarshal(body, &s); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := json.Unmarshal(body, &spec); err != nil {
+		if err := json.Unmarshal(body, &s); err != nil {
 			return nil, err
 		}
 	}
-	if err := loader.Validate(&spec); err != nil {
+	if err := spec.Validate(&s); err != nil {
 		return nil, err
 	}
-	return &spec, nil
+	return &s, nil
 }

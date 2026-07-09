@@ -55,3 +55,6 @@ hnsx-worker/.ruff_cache/
 
 # --- TypeScript workspace ---
 node_modules/
+
+# --- Build outputs ---
+bin/

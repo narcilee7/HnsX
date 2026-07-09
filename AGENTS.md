@@ -42,7 +42,7 @@
 
 - 把执行轨迹作为 **Observation 流** 上报：每一步 Tool 调用 / 决策点都生成 Observation（kind: tool_call / state / thinking / cost / error）。
 - 失败要明确报告：把堆栈、上下文、可能的修复建议一并写到 Observation 里。
-- 不修改 `docs/` `proto/` `hnsx-server/` `hnsx-core/` —— 你的活动范围是 Domain 工作区。
+- 不修改 `docs/` `proto/` `hnsx-server/` —— 你的活动范围是 Domain 工作区。
 
 ---
 

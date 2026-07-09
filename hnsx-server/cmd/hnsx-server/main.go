@@ -24,10 +24,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hnsx-io/hnsx/core/adapter"
-	"github.com/hnsx-io/hnsx/core/loader"
-	"github.com/hnsx-io/hnsx/core/observation"
-	"github.com/hnsx-io/hnsx/core/version"
+	"github.com/hnsx-io/hnsx/server/pkg/adapter"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/version"
 	"github.com/hnsx-io/hnsx/server/internal/config"
 	"github.com/hnsx-io/hnsx/server/pkg/api"
 	"github.com/hnsx-io/hnsx/server/pkg/controlplane"
@@ -134,12 +134,15 @@ func cmdServer(args []string) int {
 		Built:     version.Built,
 		GoVersion: stdruntime.Version(),
 	}
-	// V1.1: worker pool. The registry + queue are shared with the
-	// REST API so session creation enqueues and cancel APIs publish to
-	// the worker's StreamChannel. Both pieces are in-memory; V1.2
-	// persists worker state into the runtimes table.
-	workerReg := worker.NewRegistry()
-	sessionQ := worker.NewSessionQueue()
+
+	// V1.1: worker pool is only enabled when a gRPC address is configured.
+	// When nil, the REST API falls back to the in-process executor.
+	var workerReg *worker.Registry
+	var sessionQ *worker.SessionQueue
+	if cfg.GRPCAddr != "" {
+		workerReg = worker.NewRegistry()
+		sessionQ = worker.NewSessionQueue()
+	}
 	srv := api.NewServerWithWorkerPool(build, store, exec, workerReg, sessionQ)
 
 	if *seedFrom != "" {
@@ -147,22 +150,25 @@ func cmdServer(args []string) int {
 	}
 
 	// Stale-worker GC: every 30s, evict workers that haven't heartbeat
-	// in over 60s and log how many were reaped.
+	// in over 60s and log how many were reaped. Only runs when worker pool
+	// is enabled.
 	stopGC := make(chan struct{})
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-stopGC:
-				return
-			case <-ticker.C:
-				if evicted := workerReg.EvictStale(60 * time.Second); len(evicted) > 0 {
-					log.Printf("[hnsx-server] evicted %d stale worker(s): %v", len(evicted), evicted)
+	if workerReg != nil {
+		go func() {
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-stopGC:
+					return
+				case <-ticker.C:
+					if evicted := workerReg.EvictStale(60 * time.Second); len(evicted) > 0 {
+						log.Printf("[hnsx-server] evicted %d stale worker(s): %v", len(evicted), evicted)
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 
 	var grpcSrv *controlplane.Server
 	if cfg.GRPCAddr != "" {
@@ -173,7 +179,7 @@ func cmdServer(args []string) int {
 				if obs.GetPayload() != "" {
 					_ = json.Unmarshal([]byte(obs.GetPayload()), &payload)
 				}
-				srv.PublishObservation(sessionID, observation.Observation{
+				srv.PublishObservation(sessionID, runtime.Observation{
 					Kind:      obs.GetKind(),
 					SessionID: obs.GetSessionId(),
 					DomainID:  obs.GetDomainId(),
@@ -211,7 +217,9 @@ func cmdServer(args []string) int {
 	select {
 	case <-ctx.Done():
 		log.Println("[hnsx-server] shutting down")
-		close(stopGC)
+		if workerReg != nil {
+			close(stopGC)
+		}
 		shutdownCtx, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel2()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -250,7 +258,7 @@ func seedFromDir(s *api.Server, dir string) {
 			continue
 		}
 		path := fmt.Sprintf("%s/%s/domain.yaml", dir, e.Name())
-		spec, err := loader.LoadFile(path)
+		spec, err := spec.LoadFile(path)
 		if err != nil {
 			log.Printf("[seed] skip %s: %v", path, err)
 			continue

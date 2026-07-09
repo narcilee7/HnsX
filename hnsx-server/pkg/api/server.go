@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hnsx-io/hnsx/core/domain"
-	"github.com/hnsx-io/hnsx/core/observation"
-	hsxcore "github.com/hnsx-io/hnsx/core/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/internal/session/broadcaster"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
-	hsxsession "github.com/hnsx-io/hnsx/server/pkg/session"
+	pkgexecutor "github.com/hnsx-io/hnsx/server/pkg/session"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
 )
 
@@ -29,7 +29,7 @@ type BuildInfo struct {
 type Server struct {
 	BuildInfo BuildInfo
 	DB        *db.DB
-	Executor  *hsxsession.Executor
+	Executor  *pkgexecutor.Executor
 
 	// V1.1 worker pool. May be nil when the server is started without the
 	// gRPC control plane (legacy local-executor mode).
@@ -39,7 +39,7 @@ type Server struct {
 	mu           sync.RWMutex
 	domains      map[string]*registeredDomain // keyed by domain_id
 	sessions     map[string]*registeredSession
-	bsessions    map[string]*hsxsession.Broadcaster
+	bsessions    map[string]*broadcaster.Broadcaster
 	shutdownOnce sync.Once
 	httpServer   *http.Server
 }
@@ -49,7 +49,7 @@ type registeredDomain struct {
 	ID          string             `json:"id"`
 	Version     string             `json:"version"`
 	Description string             `json:"description"`
-	Spec        *domain.DomainSpec `json:"-"`
+	Spec        *spec.DomainSpec `json:"-"`
 	Harness     any                `json:"harness,omitempty"`
 	CreatedAt   time.Time          `json:"created_at"`
 	UpdatedAt   time.Time          `json:"updated_at"`
@@ -67,21 +67,21 @@ type registeredSession struct {
 	Orchestration string          `json:"orchestration"`
 	State         string          `json:"state"`
 	Trigger       map[string]any  `json:"trigger,omitempty"`
-	Result        *hsxcore.Result `json:"result,omitempty"`
+	Result        *runtime.Result `json:"result,omitempty"`
 	StartedAt     time.Time       `json:"started_at"`
 	CompletedAt   *time.Time      `json:"completed_at,omitempty"`
 }
 
 // NewServer constructs an API Server. The BuildInfo should be supplied by
 // the main package; pass an empty struct for tests.
-func NewServer(build BuildInfo, database *db.DB, executor *hsxsession.Executor) *Server {
+func NewServer(build BuildInfo, database *db.DB, executor *pkgexecutor.Executor) *Server {
 	return NewServerWithWorkerPool(build, database, executor, nil, nil)
 }
 
 // NewServerWithWorkerPool constructs an API Server wired to the V1.1 worker
 // pool. When WorkerRegistry and SessionQueue are non-nil, session triggers
 // are enqueued for Python workers instead of executed locally.
-func NewServerWithWorkerPool(build BuildInfo, database *db.DB, executor *hsxsession.Executor, reg *worker.Registry, q *worker.SessionQueue) *Server {
+func NewServerWithWorkerPool(build BuildInfo, database *db.DB, executor *pkgexecutor.Executor, reg *worker.Registry, q *worker.SessionQueue) *Server {
 	return &Server{
 		BuildInfo:      build,
 		DB:             database,
@@ -90,7 +90,7 @@ func NewServerWithWorkerPool(build BuildInfo, database *db.DB, executor *hsxsess
 		SessionQueue:   q,
 		domains:        map[string]*registeredDomain{},
 		sessions:       map[string]*registeredSession{},
-		bsessions:      map[string]*hsxsession.Broadcaster{},
+		bsessions:      map[string]*broadcaster.Broadcaster{},
 	}
 }
 
@@ -177,13 +177,13 @@ func (s *Server) lookupSession(id string) (*registeredSession, bool) {
 	return sess, ok
 }
 
-func (s *Server) attachBroadcaster(sessionID string) *hsxsession.Broadcaster {
+func (s *Server) attachBroadcaster(sessionID string) *broadcaster.Broadcaster {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if bc, ok := s.bsessions[sessionID]; ok {
 		return bc
 	}
-	bc := hsxsession.NewBroadcaster()
+	bc := broadcaster.NewBroadcaster()
 	s.bsessions[sessionID] = bc
 	return bc
 }
@@ -212,7 +212,7 @@ func (s *Server) listSessionItems() []*registeredSession {
 // worker StreamChannel and the HTTP /events endpoint. Returns false if the
 // session has no broadcaster (e.g. it was triggered before V1.1 or has
 // already been cleaned up).
-func (s *Server) PublishObservation(sessionID string, obs observation.Observation) bool {
+func (s *Server) PublishObservation(sessionID string, obs runtime.Observation) bool {
 	bc := s.attachBroadcaster(sessionID)
 	ctx := context.Background()
 	if err := bc.Publish(ctx, obs); err != nil {
@@ -242,8 +242,8 @@ func (s *Server) UpdateSessionState(sessionID, state string) {
 // path in main, not for the public API.
 //
 // Public callers should use the POST /api/v1/domains handler instead.
-func (s *Server) RegisterBootstrapDomain(spec any) {
-	ds, ok := spec.(*domain.DomainSpec)
+func (s *Server) RegisterBootstrapDomain(v any) {
+	ds, ok := v.(*spec.DomainSpec)
 	if !ok {
 		return
 	}

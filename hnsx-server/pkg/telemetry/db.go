@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/hnsx-io/hnsx/core/observation"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
 
 // DBSink persists each observation into the `observations` table created by
@@ -35,7 +35,7 @@ func (s *DBSink) Name() string { return "db" }
 // Record inserts one row per observation. Errors are returned (the runner
 // does not currently surface sink errors but a future telemetry-aware
 // control loop can use them).
-func (s *DBSink) Record(ctx context.Context, obs observation.Observation) error {
+func (s *DBSink) Record(ctx context.Context, obs runtime.Observation) error {
 	if s == nil || s.pool == nil {
 		return nil
 	}
