@@ -7,9 +7,11 @@ import (
 	"time"
 
 	"github.com/hnsx-io/hnsx/core/domain"
+	"github.com/hnsx-io/hnsx/core/observation"
 	hsxcore "github.com/hnsx-io/hnsx/core/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 	hsxsession "github.com/hnsx-io/hnsx/server/pkg/session"
+	"github.com/hnsx-io/hnsx/server/pkg/worker"
 )
 
 // BuildInfo describes this build of hnsx-server. Set by main at process start.
@@ -22,11 +24,17 @@ type BuildInfo struct {
 
 // Server is the API layer. It owns the in-process domain registry, the
 // session registry, the live Session broadcasters, and a reference to the
-// database (which may be NoDB).
+// database (which may be NoDB). In V1.1 it also holds the worker registry and
+// session queue so REST session creation can enqueue work for Python workers.
 type Server struct {
 	BuildInfo BuildInfo
 	DB        *db.DB
 	Executor  *hsxsession.Executor
+
+	// V1.1 worker pool. May be nil when the server is started without the
+	// gRPC control plane (legacy local-executor mode).
+	WorkerRegistry *worker.Registry
+	SessionQueue   *worker.SessionQueue
 
 	mu           sync.RWMutex
 	domains      map[string]*registeredDomain // keyed by domain_id
@@ -67,14 +75,31 @@ type registeredSession struct {
 // NewServer constructs an API Server. The BuildInfo should be supplied by
 // the main package; pass an empty struct for tests.
 func NewServer(build BuildInfo, database *db.DB, executor *hsxsession.Executor) *Server {
+	return NewServerWithWorkerPool(build, database, executor, nil, nil)
+}
+
+// NewServerWithWorkerPool constructs an API Server wired to the V1.1 worker
+// pool. When WorkerRegistry and SessionQueue are non-nil, session triggers
+// are enqueued for Python workers instead of executed locally.
+func NewServerWithWorkerPool(build BuildInfo, database *db.DB, executor *hsxsession.Executor, reg *worker.Registry, q *worker.SessionQueue) *Server {
 	return &Server{
-		BuildInfo: build,
-		DB:        database,
-		Executor:  executor,
-		domains:   map[string]*registeredDomain{},
-		sessions:  map[string]*registeredSession{},
-		bsessions: map[string]*hsxsession.Broadcaster{},
+		BuildInfo:      build,
+		DB:             database,
+		Executor:       executor,
+		WorkerRegistry: reg,
+		SessionQueue:   q,
+		domains:        map[string]*registeredDomain{},
+		sessions:       map[string]*registeredSession{},
+		bsessions:      map[string]*hsxsession.Broadcaster{},
 	}
+}
+
+// WithWorkerPool wires an existing server into the V1.1 worker pool. Used by
+// tests and by main when the gRPC control plane is enabled.
+func (s *Server) WithWorkerPool(reg *worker.Registry, q *worker.SessionQueue) *Server {
+	s.WorkerRegistry = reg
+	s.SessionQueue = q
+	return s
 }
 
 // Handler returns the http.Handler with the entire API surface mounted.
@@ -180,6 +205,36 @@ func (s *Server) listSessionItems() []*registeredSession {
 		out = append(out, s)
 	}
 	return out
+}
+
+// PublishObservation forwards an observation into the named session's
+// broadcaster so SSE clients see it. It is the bridge between the gRPC
+// worker StreamChannel and the HTTP /events endpoint. Returns false if the
+// session has no broadcaster (e.g. it was triggered before V1.1 or has
+// already been cleaned up).
+func (s *Server) PublishObservation(sessionID string, obs observation.Observation) bool {
+	bc := s.attachBroadcaster(sessionID)
+	ctx := context.Background()
+	if err := bc.Publish(ctx, obs); err != nil {
+		return false
+	}
+	return true
+}
+
+// UpdateSessionState updates the in-memory session state. Called by the
+// scheduler when the worker reports a terminal status update.
+func (s *Server) UpdateSessionState(sessionID, state string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[sessionID]
+	if !ok {
+		return
+	}
+	sess.State = state
+	if state == "completed" || state == "failed" || state == "cancelled" || state == "canceled" {
+		now := time.Now().UTC()
+		sess.CompletedAt = &now
+	}
 }
 
 // RegisterBootstrapDomain inserts an already-validated *domain.DomainSpec

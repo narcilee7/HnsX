@@ -10,6 +10,7 @@ import {
   Activity,
   Shield,
   Menu,
+  FlaskConical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -32,6 +33,7 @@ const navItems = [
   { label: 'Audit', href: '/audit', icon: Shield },
   { label: 'Approvals', href: '/approvals', icon: ClipboardList },
   { label: 'Settings', href: '/settings', icon: Settings },
+  { label: 'Playground', href: '/playground', icon: FlaskConical },
 ]
 
 function NavItem({

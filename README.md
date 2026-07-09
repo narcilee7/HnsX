@@ -46,6 +46,10 @@ hnsx/
 │   │   └── proto/gen/go/hnsx/v1/    buf-generated Go code (DO NOT EDIT)
 │   ├── go.mod
 │   └── *_test.go                    Unit tests (loader, runtime, api, config, observation, adapter)
+├── hnsx-worker/                     Python capability execution plane (V1.1+)
+│   ├── pyproject.toml               PEP 621 packaging, grpcio + click + protobuf
+│   ├── hnsx_worker/                 Package source (CLI + worker + runtime + proto gen)
+│   └── tests/                       Pytest suite (Step 1: import smoke)
 ├── hnsx-console/                    React 19 + Vite + Shadcn-style UI (built by a separate stream)
 ├── example-domains/                 4 v2 DomainSpec YAMLs (customer-service / claude-triage / code-review / financial-analysis)
 ├── bin/                             Built artifacts (hnsx, hnsx-server)
@@ -167,11 +171,26 @@ DB row payload, SSE event data).
 
 ```bash
 make proto           # buf lint + buf generate  (regenerates Go proto)
+make proto-py        # regenerate Python proto stubs (worker)
+make proto-all       # regenerate Go + Python proto stubs
 make build           # build CLI + server
 make vet             # go vet
 make test-go         # go test ./...
+make worker-install  # create venv + pip install hnsx-worker editable
+make worker-test     # run hnsx-worker pytest
 ./scripts/smoke.sh   # end-to-end smoke against in-process server
 ```
+
+### Python worker changes (V1.1+)
+
+The Python worker (`hnsx-worker/`) is a separate package with its own
+`pyproject.toml` and venv. Editing flow:
+
+1. Edit `proto/hnsx/v1/*.proto` and/or `hnsx-worker/hnsx_worker/`.
+2. Run `make proto-all` to regenerate both Go and Python stubs.
+3. Run `make worker-install` once (creates `.venv/`, installs deps).
+4. Run `make worker-test` to execute the pytest suite.
+5. Smoke-check the wire contract: `hnsx-worker check-proto`.
 
 ### Proto changes
 

@@ -1,9 +1,11 @@
-// Package controlplane is the gRPC control plane entrypoint. Phase 1 keeps
-// the gRPC interface as a stub — the active API surface is REST + SSE in
-// pkg/api, which the console consumes.
+// Package controlplane is the gRPC control plane entrypoint.
 //
-// Future PRs will register the v1 services from proto/hnsx/v1/control_plane.proto
-// (DomainRegistryService, SessionSchedulerService, TelemetryService, etc.).
+// V1.1 (Python Worker Pivot) registers the two new services from
+// proto/hnsx/v1/worker.proto: WorkerService and SchedulerService.
+// They share a worker.Registry and worker.SessionQueue owned by the
+// server's caller (see cmd/hnsx-server). The legacy services
+// (DomainRegistryService, etc.) remain available for the Go-side API
+// and console.
 package controlplane
 
 import (
@@ -14,6 +16,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/hnsx-io/hnsx/server/pkg/worker"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
@@ -23,16 +26,32 @@ type Server struct {
 	mu       sync.Mutex
 	listener net.Listener
 	gs       *grpc.Server
+
+	// Worker / scheduler services; nil-safe (the gRPC server still
+	// starts even if these aren't wired, but the corresponding RPCs
+	// will return Unimplemented).
+	Worker *WorkerServiceServer
+	Sched  *SchedulerServiceServer
 }
 
 // NewServer constructs a Server bound to addr.
 func NewServer(addr string) *Server { return &Server{addr: addr} }
 
-// Addr returns the listen address.
+// WithWorkerServices wires the V1.1 worker + scheduler services into the
+// server. “reg“ and “q“ are shared with the API layer so REST session
+// creation can enqueue and REST cancel can publish to the worker's
+// StreamChannel.
+func (s *Server) WithWorkerServices(reg *worker.Registry, q *worker.SessionQueue) *Server {
+	s.Worker = &WorkerServiceServer{Registry: reg}
+	s.Sched = NewSchedulerServiceServer(reg, q)
+	return s
+}
+
+// Addr returns the listen address (only meaningful after ListenAndServe).
 func (s *Server) Addr() string { return s.addr }
 
-// ListenAndServe opens the TCP listener and blocks until ctx is canceled or
-// the underlying gRPC server fails.
+// ListenAndServe opens the TCP listener and blocks until ctx is canceled
+// or the underlying gRPC server fails.
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	l, err := net.Listen("tcp", s.addr)
 	if err != nil {
@@ -41,11 +60,13 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	s.mu.Lock()
 	s.listener = l
 	s.gs = grpc.NewServer()
+	if s.Worker != nil {
+		pb.RegisterWorkerServiceServer(s.gs, s.Worker)
+	}
+	if s.Sched != nil {
+		pb.RegisterSchedulerServiceServer(s.gs, s.Sched)
+	}
 	s.mu.Unlock()
-
-	// Future: register pb.RegisterDomainRegistryServiceServer(s.gs, ...)
-	// while the registry list grows.
-	_ = pb.File_hnsx_v1_domain_proto
 
 	serveErr := make(chan error, 1)
 	go func() {

@@ -1,0 +1,130 @@
+/* ==========================================================================
+ * @hnsx/observability — Morandi Palette
+ *
+ * Morandi 风格：muted / dusty / 低饱和度、轻微暖偏。专为长时间阅读的
+ * 运维/审计控制台设计，长时间看不刺眼，同时状态色仍能传达语义。
+ *
+ * 引用方式：在宿主应用的入口 CSS 里 @import 这份文件即可。或者把下面的
+ * 变量手动合并进宿主已有的 :root/.dark 块。
+ *
+ * 颜色规范（与 dataviz skill 的六项校验保持一致）：
+ *   - Categorical：固定顺序 1..5，绝不轮询复用
+ *   - Status：保留给 good/warning/serious/critical，永不充当"系列 4"
+ *   - 图表里的文字使用 --text-* 系列色，绝不用图表色
+ *   - light 模式 oklch L ≈ 0.55–0.78，C ≤ 0.10
+ *   - dark  模式 oklch L ≈ 0.65–0.80，C ≤ 0.10
+ * ========================================================================== */
+
+:root {
+  /* ---------- Categorical series (5 slots, fixed order) ---------- */
+  /* chart-1: muted sage     — primary metric / 默认主色 */
+  --chart-1: oklch(0.65 0.07 145);
+  /* chart-2: dusty rose     — 次要 metric / 对比系列 */
+  --chart-2: oklch(0.66 0.07 20);
+  /* chart-3: muted slate    — 中性 / 第三系列 */
+  --chart-3: oklch(0.58 0.05 250);
+  /* chart-4: muted ochre    — 注意力 / 提示 */
+  --chart-4: oklch(0.74 0.09 75);
+  /* chart-5: warm taupe     — 基线 / 中性 */
+  --chart-5: oklch(0.55 0.03 70);
+
+  /* 半透明叠加用（面积图填充、tooltip 背景、淡背景卡片） */
+  --chart-1-soft: oklch(0.65 0.07 145 / 0.18);
+  --chart-2-soft: oklch(0.66 0.07 20 / 0.18);
+  --chart-3-soft: oklch(0.58 0.05 250 / 0.18);
+  --chart-4-soft: oklch(0.74 0.09 75 / 0.20);
+  --chart-5-soft: oklch(0.55 0.03 70 / 0.18);
+
+  /* ---------- Status (reserved, never themed) ---------- */
+  --success: oklch(0.62 0.08 145);
+  --warning: oklch(0.76 0.10 78);
+  --danger:  oklch(0.58 0.10 28);
+  --info:    oklch(0.58 0.05 245);
+
+  --success-soft: oklch(0.62 0.08 145 / 0.15);
+  --warning-soft: oklch(0.76 0.10 78 / 0.18);
+  --danger-soft:  oklch(0.58 0.10 28 / 0.15);
+  --info-soft:    oklch(0.58 0.05 250 / 0.15);
+
+  /* success 比 good 略弱一档；critical 才是真强告警 */
+  --success-text: oklch(0.42 0.08 145);
+  --warning-text: oklch(0.48 0.10 75);
+  --danger-text:  oklch(0.42 0.12 28);
+  --info-text:    oklch(0.42 0.06 250);
+
+  /* ---------- Chart chrome (text / grid) ---------- */
+  --chart-text-primary:   oklch(0.20 0.005 80);
+  --chart-text-secondary: oklch(0.45 0.005 80);
+  --chart-text-muted:     oklch(0.62 0.005 80);
+  --chart-grid:           oklch(0.90 0.003 80);
+  --chart-baseline:       oklch(0.82 0.003 80);
+
+  /* ---------- Tooltip / popover surface ---------- */
+  --chart-tooltip-bg:    oklch(1 0 0 / 0.96);
+  --chart-tooltip-border: oklch(0.20 0.005 80 / 0.10);
+}
+
+.dark {
+  /* dark 模式：整体提亮一档，保持 muted 感，但保证在深色 surface 上 ≥3:1 对比 */
+  --chart-1: oklch(0.74 0.07 145);
+  --chart-2: oklch(0.76 0.07 20);
+  --chart-3: oklch(0.72 0.05 250);
+  --chart-4: oklch(0.80 0.09 75);
+  --chart-5: oklch(0.72 0.03 70);
+
+  --chart-1-soft: oklch(0.74 0.07 145 / 0.22);
+  --chart-2-soft: oklch(0.76 0.07 20 / 0.22);
+  --chart-3-soft: oklch(0.72 0.05 250 / 0.22);
+  --chart-4-soft: oklch(0.80 0.09 75 / 0.24);
+  --chart-5-soft: oklch(0.72 0.03 70 / 0.22);
+
+  --success: oklch(0.74 0.08 145);
+  --warning: oklch(0.82 0.10 80);
+  --danger:  oklch(0.70 0.12 28);
+  --info:    oklch(0.72 0.06 245);
+
+  --success-soft: oklch(0.74 0.08 145 / 0.22);
+  --warning-soft: oklch(0.82 0.10 80 / 0.24);
+  --danger-soft:  oklch(0.70 0.12 28 / 0.22);
+  --info-soft:    oklch(0.72 0.06 245 / 0.22);
+
+  --success-text: oklch(0.82 0.08 145);
+  --warning-text: oklch(0.86 0.09 78);
+  --danger-text:  oklch(0.82 0.12 28);
+  --info-text:    oklch(0.82 0.06 245);
+
+  --chart-text-primary:   oklch(0.96 0.003 80);
+  --chart-text-secondary: oklch(0.78 0.005 80);
+  --chart-text-muted:     oklch(0.62 0.005 80);
+  --chart-grid:           oklch(0.30 0.005 80);
+  --chart-baseline:       oklch(0.40 0.005 80);
+
+  --chart-tooltip-bg:     oklch(0.22 0.005 80 / 0.96);
+  --chart-tooltip-border: oklch(0.96 0.003 80 / 0.10);
+}
+
+/* ==========================================================================
+ * 组件局部类 — 配套 recharts 用。
+ * recharts 的 fill/stroke 接受 CSS color string；这里把变量暴露成 class，
+ * 让组件里直接 `className="fill-chart-1 stroke-chart-1"` 即可。
+ * ========================================================================== */
+
+.fill-chart-1  { fill: var(--chart-1); }
+.fill-chart-2  { fill: var(--chart-2); }
+.fill-chart-3  { fill: var(--chart-3); }
+.fill-chart-4  { fill: var(--chart-4); }
+.fill-chart-5  { fill: var(--chart-5); }
+.stroke-chart-1 { stroke: var(--chart-1); }
+.stroke-chart-2 { stroke: var(--chart-2); }
+.stroke-chart-3 { stroke: var(--chart-3); }
+.stroke-chart-4 { stroke: var(--chart-4); }
+.stroke-chart-5 { stroke: var(--chart-5); }
+
+.fill-success  { fill: var(--success); }
+.fill-warning  { fill: var(--warning); }
+.fill-danger   { fill: var(--danger); }
+.fill-info     { fill: var(--info); }
+.stroke-success { stroke: var(--success); }
+.stroke-warning { stroke: var(--warning); }
+.stroke-danger  { stroke: var(--danger); }
+.stroke-info    { stroke: var(--info); }
