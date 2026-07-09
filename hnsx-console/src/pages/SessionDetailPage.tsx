@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom'
-import { useState, useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,6 +8,14 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Timestamp } from '@/components/ui/Timestamp'
 import { ErrorState } from '@/components/ui/Error'
 import { Loading } from '@/components/ui/Loading'
+import {
+  MetricCard,
+  TrendIndicator,
+  Sparkline,
+  TokenUsageChart,
+  LatencyHistogram,
+  AgentFlowDiagram,
+} from '@hnsx/observability'
 import { useSession, useSessionEvents } from '@/hooks/useSessions'
 import {
   ObservationTimeline,
@@ -21,8 +29,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { CostBadge } from '@/components/ui/CostBadge'
-import { ArrowLeft, Check, X } from 'lucide-react'
+import { ArrowLeft, Check, Radio, X } from 'lucide-react'
+import type { ObservationViewModel } from '@/api/mappers'
 
 export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -33,27 +41,15 @@ export default function SessionDetailPage() {
 
   const { agents, kinds } = useObservationFilters(observations)
 
+  const stats = useMemo(() => summarize(observations), [observations])
   const durationMs = useMemo(() => {
     if (!session?.startedAt || !session?.completedAt) return undefined
     return session.completedAt.getTime() - session.startedAt.getTime()
   }, [session])
 
-  const statCards: { label: string; value: React.ReactNode }[] = [
-    {
-      label: 'Domain',
-      value: (
-        <Link to={`/domains/${session?.domainId}`} className="font-medium hover:underline">
-          {session?.domainId}
-        </Link>
-      ),
-    },
-    { label: 'State', value: <StatusBadge status={state || session?.state || ''} /> },
-    { label: 'Started At', value: <Timestamp date={session?.startedAt} /> },
-    { label: 'Duration', value: <span className="text-sm font-medium">{durationMs ? `${durationMs}ms` : '-'}</span> },
-    { label: 'Cost', value: <CostBadge cost={undefined} /> },
-    { label: 'Agent Calls', value: <span className="text-sm font-medium">-</span> },
-    { label: 'Tool Calls', value: <span className="text-sm font-medium">-</span> },
-  ]
+  const tokenSeries = useMemo(() => buildTokenSeries(observations), [observations])
+  const latencyBuckets = useMemo(() => buildLatencyBuckets(stats.perStepLatency), [stats.perStepLatency])
+  const flowData = useMemo(() => buildAgentFlow(observations), [observations])
 
   if (isLoading) return <Loading />
   if (error || !session) {
@@ -89,35 +85,87 @@ export default function SessionDetailPage() {
         </div>
       </PageHeader>
 
-      <div className="grid gap-4 lg:grid-cols-4 md:grid-cols-2">
-        {statCards.map((stat) => (
-          <Card key={stat.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{stat.label}</CardTitle>
-            </CardHeader>
-            <CardContent>{stat.value}</CardContent>
-          </Card>
-        ))}
+      {/* KPI row — MetricCard × 4 */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="总 Token"
+          value={stats.totalTokens}
+          formatValue={(n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : `${n}`)}
+          unit="tok"
+          caption="input + output"
+          footer={<Sparkline data={tokenSeries.map((t) => t.input + t.output)} variant="chart-1" />}
+        />
+        <MetricCard
+          label="耗时"
+          value={durationMs ?? 0}
+          formatValue={(n) => (n >= 1000 ? `${(n / 1000).toFixed(2)}s` : `${Math.round(n)}ms`)}
+          caption="首 observation 到末 observation"
+          footer={<Sparkline data={stats.perStepLatency.slice(-12)} variant="chart-2" />}
+        />
+        <MetricCard
+          label="Agent 切换"
+          value={stats.agentSwitches}
+          caption="不同 agent 之间的 hand-off 次数"
+          trend={<TrendIndicator value={stats.agentSwitches} previous={Math.max(stats.agentSwitches - 1, 0)} goodWhen="down" />}
+        />
+        <MetricCard
+          label="状态"
+          value={
+            <span className="flex items-center gap-2">
+              <StatusBadge status={state || session.state || ''} />
+              {connected && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--success-text)]">
+                  <Radio className="h-3 w-3 animate-pulse" />
+                  live
+                </span>
+              )}
+            </span>
+          }
+          caption={`${observations.length} observations`}
+        />
+      </div>
+
+      {/* 上下文 + 成本/token 拆解 */}
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Live</CardTitle>
+          <CardHeader>
+            <CardTitle className="text-sm">Session 上下文</CardTitle>
           </CardHeader>
-          <CardContent>
-            {connected ? (
-              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-600">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-green-600" />
-                Connected
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                <span className="h-2 w-2 rounded-full bg-muted-foreground" />
-                Disconnected
-              </span>
+          <CardContent className="space-y-2 text-sm">
+            <Row label="Domain" value={
+              <Link to={`/domains/${session.domainId}`} className="font-medium hover:underline">
+                {session.domainId}{session.domainVersion ? ` @${session.domainVersion}` : ''}
+              </Link>
+            } />
+            <Row label="State" value={<StatusBadge status={state || session.state || ''} />} />
+            <Row label="Started At" value={<Timestamp date={session.startedAt} />} />
+            <Row label="Completed At" value={<Timestamp date={session.completedAt} />} />
+            {session.traceId && (
+              <Row
+                label="Trace"
+                value={
+                  <Link to={`/traces/${session.traceId}`} className="font-mono text-xs hover:underline">
+                    {session.traceId}
+                  </Link>
+                }
+              />
+            )}
+            {session.result && (
+              <Row label="Result" value={<span className="text-xs">{session.result}</span>} />
             )}
           </CardContent>
         </Card>
+
+        <div className="space-y-4 lg:col-span-2">
+          <TokenUsageChart data={tokenSeries} height={220} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <LatencyHistogram data={latencyBuckets} height={200} />
+            <AgentFlowDiagram data={flowData} height={200} />
+          </div>
+        </div>
       </div>
 
+      {/* Timeline */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Trace Timeline</CardTitle>
@@ -162,4 +210,161 @@ export default function SessionDetailPage() {
       </Card>
     </div>
   )
+}
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span>{value}</span>
+    </div>
+  )
+}
+
+// ----------------- helpers -----------------
+
+interface Summary {
+  totalTokens: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  agentSwitches: number
+  perStepLatency: number[]
+}
+
+function summarize(observations: ObservationViewModel[]): Summary {
+  let totalInput = 0
+  let totalOutput = 0
+  let agentSwitches = 0
+  const perStepLatency: number[] = []
+  let lastAgent: string | undefined
+
+  for (const obs of observations) {
+    const p = obs.payload
+    if (p && typeof p === 'object' && !Array.isArray(p)) {
+      const tokens = (p as Record<string, unknown>).tokens ?? (p as Record<string, unknown>).usage
+      if (tokens && typeof tokens === 'object') {
+        const t = tokens as Record<string, unknown>
+        if (typeof t.input === 'number') totalInput += t.input
+        else if (typeof t.prompt_tokens === 'number') totalInput += t.prompt_tokens as number
+        if (typeof t.output === 'number') totalOutput += t.output
+        else if (typeof t.completion_tokens === 'number') totalOutput += t.completion_tokens as number
+      }
+      const lat =
+        (p as Record<string, unknown>).duration_ms ??
+        (p as Record<string, unknown>).durationMs ??
+        (p as Record<string, unknown>).latency_ms ??
+        (p as Record<string, unknown>).latencyMs
+      if (typeof lat === 'number' && lat > 0) perStepLatency.push(lat)
+    }
+    if (obs.agentId && lastAgent && obs.agentId !== lastAgent) agentSwitches += 1
+    if (obs.agentId) lastAgent = obs.agentId
+  }
+
+  return {
+    totalTokens: totalInput + totalOutput,
+    totalInputTokens: totalInput,
+    totalOutputTokens: totalOutput,
+    agentSwitches,
+    perStepLatency,
+  }
+}
+
+function buildTokenSeries(observations: ObservationViewModel[]): { label: string; input: number; output: number }[] {
+  // 按 createdAt 分桶到 12 个等宽窗口
+  if (observations.length === 0) return []
+  const timestamps = observations
+    .map((o) => o.createdAt?.getTime() ?? 0)
+    .filter((t) => t > 0)
+  if (timestamps.length === 0) return []
+  const min = Math.min(...timestamps)
+  const max = Math.max(...timestamps)
+  const bucketCount = 12
+  const span = Math.max(max - min, 1)
+  const width = span / bucketCount
+  const buckets = Array.from({ length: bucketCount }, (_, i) => ({
+    label: formatBucketLabel(min + i * width + width / 2),
+    input: 0,
+    output: 0,
+  }))
+  for (const obs of observations) {
+    const t = obs.createdAt?.getTime() ?? 0
+    if (t <= 0) continue
+    const idx = Math.min(bucketCount - 1, Math.floor((t - min) / Math.max(width, 1)))
+    const p = obs.payload
+    if (p && typeof p === 'object' && !Array.isArray(p)) {
+      const tokens = (p as Record<string, unknown>).tokens ?? (p as Record<string, unknown>).usage
+      if (tokens && typeof tokens === 'object') {
+        const tt = tokens as Record<string, unknown>
+        const inp =
+          typeof tt.input === 'number'
+            ? (tt.input as number)
+            : typeof tt.prompt_tokens === 'number'
+              ? (tt.prompt_tokens as number)
+              : 0
+        const out =
+          typeof tt.output === 'number'
+            ? (tt.output as number)
+            : typeof tt.completion_tokens === 'number'
+              ? (tt.completion_tokens as number)
+              : 0
+        buckets[idx]!.input += inp
+        buckets[idx]!.output += out
+      }
+    }
+  }
+  return buckets
+}
+
+function buildLatencyBuckets(latencies: number[]): { label: string; count: number }[] {
+  const buckets = [
+    { label: '<100ms', count: 0 },
+    { label: '100-300ms', count: 0 },
+    { label: '300ms-1s', count: 0 },
+    { label: '1-3s', count: 0 },
+    { label: '>3s', count: 0 },
+  ]
+  for (const ms of latencies) {
+    if (ms < 100) buckets[0]!.count += 1
+    else if (ms < 300) buckets[1]!.count += 1
+    else if (ms < 1000) buckets[2]!.count += 1
+    else if (ms < 3000) buckets[3]!.count += 1
+    else buckets[4]!.count += 1
+  }
+  return buckets
+}
+
+function buildAgentFlow(observations: ObservationViewModel[]): { source: string; target: string; count: number; avgMs?: number }[] {
+  const sorted = [...observations].sort(
+    (a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0),
+  )
+  const transitions = new Map<string, { count: number; totalMs: number }>()
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1]!
+    const cur = sorted[i]!
+    if (!prev.agentId || !cur.agentId || prev.agentId === cur.agentId) continue
+    const key = `${prev.agentId}->${cur.agentId}`
+    const entry = transitions.get(key) ?? { count: 0, totalMs: 0 }
+    entry.count += 1
+    const p = cur.payload
+    if (p && typeof p === 'object' && !Array.isArray(p)) {
+      const lat =
+        (p as Record<string, unknown>).duration_ms ??
+        (p as Record<string, unknown>).durationMs ??
+        (p as Record<string, unknown>).latency_ms ??
+        (p as Record<string, unknown>).latencyMs
+      if (typeof lat === 'number') entry.totalMs += lat
+    }
+    transitions.set(key, entry)
+  }
+  return Array.from(transitions.entries()).map(([key, { count, totalMs }]) => {
+    const [source, target] = key.split('->') as [string, string]
+    return { source, target, count, avgMs: totalMs / Math.max(count, 1) }
+  })
+}
+
+function formatBucketLabel(ms: number): string {
+  const d = new Date(ms)
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
 }
