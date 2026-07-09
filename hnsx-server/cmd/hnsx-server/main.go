@@ -25,13 +25,15 @@ import (
 	"time"
 
 	"github.com/hnsx-io/hnsx/server/pkg/adapter"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/pkg/version"
 	"github.com/hnsx-io/hnsx/server/internal/audit/model"
 	auditrepository "github.com/hnsx-io/hnsx/server/internal/audit/repository"
 	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
 	"github.com/hnsx-io/hnsx/server/internal/config"
+	evalrepository "github.com/hnsx-io/hnsx/server/internal/evaluation/repository"
+	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
 	policyrepository "github.com/hnsx-io/hnsx/server/internal/policy/repository"
 	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
 	"github.com/hnsx-io/hnsx/server/internal/worker"
@@ -42,6 +44,8 @@ import (
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 	hsxruntime "github.com/hnsx-io/hnsx/server/pkg/session"
 	"github.com/hnsx-io/hnsx/server/pkg/telemetry"
+	tracerepository "github.com/hnsx-io/hnsx/server/internal/trace/repository"
+	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
 
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
@@ -133,11 +137,21 @@ func cmdServer(args []string) int {
 		sinks = append(sinks, telemetry.NewTracerSink())
 	}
 
-	// Policy + audit services are backed by in-memory repositories in Phase 1.
-	// Future PRs will add Postgres-backed repositories once the domain/tenant
-	// mapping is stable.
+	// Policy + audit + trace services are backed by in-memory repositories in
+	// Phase 1. Future PRs will add Postgres-backed repositories once the
+	// domain/tenant mapping is stable.
 	policySvc := policyservice.NewService(policyrepository.NewInMemoryRepository())
 	auditSvc := auditservice.NewService(auditrepository.NewInMemoryRepository())
+	traceSvc := traceservice.NewService(tracerepository.NewInMemoryRepository())
+	evalSvc := evalservice.NewService(evalrepository.NewInMemoryRepository())
+
+	traceSink := &funcSink{
+		name: "trace",
+		record: func(ctx context.Context, obs runtime.Observation) error {
+			return traceSvc.Record(ctx, obs)
+		},
+	}
+	sinks = append(sinks, traceSink)
 
 	exec := hsxruntime.NewExecutor(adapter.NewNoopAdapter(), sinks...).
 		WithPolicyProvider(policySvc).
@@ -165,7 +179,9 @@ func cmdServer(args []string) int {
 	}
 	srv := api.NewServerWithWorkerPool(build, store, exec, workerReg, sessionQ).
 		WithPolicyService(policySvc).
-		WithAuditService(auditSvc)
+		WithAuditService(auditSvc).
+		WithTraceService(traceSvc).
+		WithEvalService(evalSvc)
 
 	if *seedFrom != "" {
 		seedFromDir(srv, *seedFrom)
@@ -312,3 +328,18 @@ func (r *auditRecorder) Record(ctx context.Context, entry hsxruntime.AuditEntry)
 		Details:   entry.Details,
 	})
 }
+
+// funcSink adapts a function to the telemetry.Sink interface.
+type funcSink struct {
+	name   string
+	record func(context.Context, runtime.Observation) error
+}
+
+func (s *funcSink) Name() string { return s.name }
+
+func (s *funcSink) Record(ctx context.Context, obs runtime.Observation) error {
+	return s.record(ctx, obs)
+}
+
+func (s *funcSink) Flush(context.Context) error  { return nil }
+func (s *funcSink) Close(context.Context) error  { return nil }

@@ -65,6 +65,7 @@ func newRouter(s *Server) http.Handler {
 
 		r.Route("/evals", func(r chi.Router) {
 			r.Get("/", s.ListEvalSets)
+			r.Post("/", s.CreateEvalSet)
 			r.Route("/{setId}", func(r chi.Router) {
 				r.Get("/", s.GetEvalSet)
 				r.Post("/run", s.RunEval)

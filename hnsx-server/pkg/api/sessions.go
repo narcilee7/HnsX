@@ -240,18 +240,47 @@ func (s *Server) RerunSession(w http.ResponseWriter, r *http.Request) {
 
 // GetSessionTrace handles GET /api/v1/sessions/{id}/trace.
 //
-// Phase 1 returns a summary envelope pointing at the SSE replay endpoint.
+// Returns the persisted observation trace for the session. When TraceService
+// is not configured, falls back to the in-memory broadcaster replay buffer.
 func (s *Server) GetSessionTrace(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	trace, ok := queries.GetSessionTrace(s.AppState, id)
+	sess, ok := queries.GetSession(s.AppState, id)
 	if !ok {
 		writeError(w, r, NewSessionNotFound(id))
 		return
 	}
+
+	observations := []map[string]any{}
+
+	if s.TraceService != nil {
+		records, err := s.TraceService.BySession(id)
+		if err != nil {
+			writeError(w, r, NewInternal(err))
+			return
+		}
+		for _, rec := range records {
+			observations = append(observations, map[string]any{
+				"kind":              rec.Kind,
+				"session_id":        rec.SessionID,
+				"domain_id":         rec.DomainID,
+				"domain_version":    rec.DomainVersion,
+				"step_id":           rec.StepID,
+				"agent_id":          rec.AgentID,
+				"payload":           rec.Payload,
+				"cost_usd":          rec.CostUSD,
+				"prompt_tokens":     rec.PromptTokens,
+				"completion_tokens": rec.CompletionTokens,
+				"latency_ms":        rec.LatencyMs,
+				"timestamp":         queries.FormatTimeValue(rec.CreatedAt),
+			})
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"trace_id":   trace.TraceID,
-		"session_id": trace.SessionID,
-		"replay":     trace.Replay,
+		"trace_id":     id,
+		"session_id":   id,
+		"domain_id":    sess.DomainID,
+		"observations": observations,
 	})
 }
 
