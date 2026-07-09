@@ -1,21 +1,21 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
 	"sort"
-	"time"
 
 	"github.com/go-chi/chi/v5"
-	"gopkg.in/yaml.v3"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/internal/app/commands"
+	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 )
 
 // ListDomains handles GET /api/v1/domains.
 func (s *Server) ListDomains(w http.ResponseWriter, r *http.Request) {
-	items := s.listDomainItems()
+	items := queries.ListDomains(s.AppState)
 	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
 
 	out := make([]map[string]any, 0, len(items))
@@ -24,9 +24,9 @@ func (s *Server) ListDomains(w http.ResponseWriter, r *http.Request) {
 			"id":          d.ID,
 			"version":     d.Version,
 			"description": d.Description,
-			"status":      "active",
-			"created_at":  d.CreatedAt.UTC().Format(time.RFC3339),
-			"updated_at":  d.UpdatedAt.UTC().Format(time.RFC3339),
+			"status":      d.Status,
+			"created_at":  queries.FormatTimeValue(d.CreatedAt),
+			"updated_at":  queries.FormatTimeValue(d.UpdatedAt),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -40,110 +40,79 @@ func (s *Server) ListDomains(w http.ResponseWriter, r *http.Request) {
 // GetDomain handles GET /api/v1/domains/{id}.
 func (s *Server) GetDomain(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	d, ok := s.lookupDomain(id)
+	item, d, ok := queries.GetDomain(s.AppState, id)
 	if !ok {
 		writeError(w, r, NewDomainNotFound(id))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":          d.ID,
-		"version":     d.Version,
-		"description": d.Description,
-		"harness":     d.Spec.Harness,
-		"status":      "active",
-		"created_at":  d.CreatedAt.UTC().Format(time.RFC3339),
-		"updated_at":  d.UpdatedAt.UTC().Format(time.RFC3339),
+		"id":          item.ID,
+		"version":     item.Version,
+		"description": item.Description,
+		"harness":     d.Harness,
+		"status":      item.Status,
+		"created_at":  queries.FormatTimeValue(item.CreatedAt),
+		"updated_at":  queries.FormatTimeValue(item.UpdatedAt),
 	})
 }
 
 // RegisterDomain handles POST /api/v1/domains.
-//
-// Body can be either JSON (matches the canonical schema) or YAML
-// (Content-Type: application/yaml or .yaml extension at /domains/import).
 func (s *Server) RegisterDomain(w http.ResponseWriter, r *http.Request) {
-	spec, err := decodeDomainBody(r)
+	res, err := commands.RegisterDomain(s.AppState, r.Body, r.Header.Get("Content-Type"))
 	if err != nil {
+		if err == commands.ErrDomainExists {
+			writeError(w, r, &APIError{
+				Code:    "DOMAIN_EXISTS",
+				Message: err.Error(),
+				Details: map[string]any{"domain_id": res.Domain.ID},
+			})
+			return
+		}
 		writeError(w, r, NewValidation(err))
 		return
 	}
 
-	if _, exists := s.lookupDomain(spec.ID); exists {
-		writeError(w, r, &APIError{
-			Code:    "DOMAIN_EXISTS",
-			Message: "domain " + spec.ID + " already exists; use PUT to update",
-			Details: map[string]any{"domain_id": spec.ID},
-		})
-		return
-	}
-
-	now := time.Now().UTC()
-	d := &registeredDomain{
-		ID:          spec.ID,
-		Version:     spec.Version,
-		Description: spec.Description,
-		Spec:        spec,
-		Harness:     spec.Harness,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	}
-	s.registerDomain(d)
-
-	w.Header().Set("Location", "/api/v1/domains/"+spec.ID)
+	w.Header().Set("Location", commands.BuildDomainLocation(res.Domain.ID))
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"id":         spec.ID,
-		"version":    spec.Version,
-		"created_at": now.Format(time.RFC3339),
+		"id":         res.Domain.ID,
+		"version":    res.Domain.Version,
+		"created_at": queries.FormatTimeValue(res.CreatedAt),
 	})
 }
 
 // UpdateDomain handles PUT /api/v1/domains/{id}.
 func (s *Server) UpdateDomain(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-
-	existing, ok := s.lookupDomain(id)
-	if !ok {
-		writeError(w, r, NewDomainNotFound(id))
-		return
-	}
-	spec, err := decodeDomainBody(r)
+	updated, err := commands.UpdateDomain(s.AppState, id, r.Body, r.Header.Get("Content-Type"))
 	if err != nil {
-		writeError(w, r, NewValidation(err))
+		switch err {
+		case commands.ErrDomainNotFound:
+			writeError(w, r, NewDomainNotFound(id))
+		case commands.ErrIDMismatch:
+			writeError(w, r, &APIError{
+				Code:    "INVALID_REQUEST",
+				Message: "domain id in body does not match URL",
+			})
+		default:
+			writeError(w, r, NewValidation(err))
+		}
 		return
 	}
-	if spec.ID != id {
-		writeError(w, r, &APIError{
-			Code:    "INVALID_REQUEST",
-			Message: "domain id in body does not match URL",
-		})
-		return
-	}
-
-	existing.Version = spec.Version
-	existing.Description = spec.Description
-	existing.Spec = spec
-	existing.Harness = spec.Harness
-	existing.UpdatedAt = time.Now().UTC()
-	s.registerDomain(existing) // re-register to refresh map
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":         existing.ID,
-		"version":    existing.Version,
-		"updated_at": existing.UpdatedAt.Format(time.RFC3339),
+		"id":         updated.ID,
+		"version":    updated.Version,
+		"updated_at": queries.FormatTimeValue(updated.UpdatedAt),
 	})
 }
 
 // DeleteDomain handles DELETE /api/v1/domains/{id}.
 func (s *Server) DeleteDomain(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	s.mu.Lock()
-	if _, ok := s.domains[id]; !ok {
-		s.mu.Unlock()
+	if err := commands.DeleteDomain(s.AppState, id); err != nil {
 		writeError(w, r, NewDomainNotFound(id))
 		return
 	}
-	delete(s.domains, id)
-	s.mu.Unlock()
-
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -153,7 +122,7 @@ func (s *Server) DeleteDomain(w http.ResponseWriter, r *http.Request) {
 // history is a future PR.
 func (s *Server) ListDomainVersions(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	d, ok := s.lookupDomain(id)
+	_, d, ok := queries.GetDomain(s.AppState, id)
 	if !ok {
 		writeError(w, r, NewDomainNotFound(id))
 		return
@@ -161,7 +130,7 @@ func (s *Server) ListDomainVersions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"items": []map[string]any{{
 			"version":    d.Version,
-			"created_at": d.CreatedAt.UTC().Format(time.RFC3339),
+			"created_at": queries.FormatTimeValue(d.CreatedAt),
 			"is_current": true,
 		}},
 		"total": 1,
@@ -173,24 +142,19 @@ func (s *Server) ListDomainVersions(w http.ResponseWriter, r *http.Request) {
 // Phase 1 re-validates the body against the v2 loader and returns the same
 // summary as `hnsx validate`.
 func (s *Server) ValidateDomain(w http.ResponseWriter, r *http.Request) {
-	spec, err := decodeDomainBody(r)
+	summary, err := commands.ValidateDomain(r.Body, r.Header.Get("Content-Type"))
 	if err != nil {
 		writeError(w, r, NewValidation(err))
 		return
 	}
 
-	count := len(spec.Harness.Agents)
-	steps := 0
-	if spec.Harness.Session.Workflow != nil {
-		steps = len(spec.Harness.Session.Workflow.Steps)
-	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"valid":       true,
-		"id":          spec.ID,
-		"version":     spec.Version,
-		"mode":        spec.Harness.Session.Mode,
-		"agent_count": count,
-		"step_count":  steps,
+		"valid":       summary.Valid,
+		"id":          summary.ID,
+		"version":     summary.Version,
+		"mode":        summary.Mode,
+		"agent_count": summary.AgentCount,
+		"step_count":  summary.StepCount,
 	})
 }
 
@@ -209,34 +173,17 @@ func (s *Server) TriggerDomain(w http.ResponseWriter, r *http.Request) {
 	s.triggerSession(w, r, id, body.Trigger)
 }
 
-// ----------------------------------------------------------------------------
-// helpers
-// ----------------------------------------------------------------------------
-
-// decodeDomainBody parses either YAML or JSON body into a *spec.DomainSpec.
-// It honours Content-Type ("application/yaml" -> yaml, default -> json) and
-// also detects yaml format heuristically when the body starts with the YAML
-// document marker "---".
-func decodeDomainBody(r *http.Request) (*spec.DomainSpec, error) {
+// decodeJSONBody is a small wrapper kept in this file for handler use.
+func decodeJSONBody(r *http.Request, v any) error {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer r.Body.Close()
-
-	var s spec.DomainSpec
-	ct := r.Header.Get("Content-Type")
-	if isYAMLContentType(ct) || looksLikeYAML(body) {
-		if err := yaml.Unmarshal(body, &s); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := json.Unmarshal(body, &s); err != nil {
-			return nil, err
-		}
+	body = bytes.TrimSpace(body)
+	if len(body) == 0 {
+		body = []byte("{}")
 	}
-	if err := spec.Validate(&s); err != nil {
-		return nil, err
-	}
-	return &s, nil
+	return json.Unmarshal(body, v)
 }
+
