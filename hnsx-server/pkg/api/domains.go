@@ -72,6 +72,8 @@ func (s *Server) RegisterDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_ = s.LoadDomainPolicy(res.Domain.ID)
+
 	w.Header().Set("Location", commands.BuildDomainLocation(res.Domain.ID))
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":         res.Domain.ID,
@@ -98,6 +100,8 @@ func (s *Server) UpdateDomain(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
+	_ = s.LoadDomainPolicy(updated.ID)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id":         updated.ID,

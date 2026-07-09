@@ -2,14 +2,18 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/app"
+	"github.com/hnsx-io/hnsx/server/internal/app/queries"
+	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
+	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
-	pkgexecutor "github.com/hnsx-io/hnsx/server/pkg/session"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	pkgexecutor "github.com/hnsx-io/hnsx/server/pkg/session"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
 )
@@ -36,9 +40,18 @@ type Server struct {
 	WorkerRegistry *worker.Registry
 	SessionQueue   *worker.SessionQueue
 
+	// PolicyService loads domain policy into the policy repository.
+	PolicyService *policyservice.Service
+
+	// AuditService records and queries immutable audit entries.
+	AuditService *auditservice.Service
+
 	shutdownOnce sync.Once
 	httpServer   *http.Server
 }
+
+// ErrDomainNotFound is returned when a requested domain is not registered.
+var ErrDomainNotFound = errors.New("domain not found")
 
 // Domain is a re-export alias used by Sessions results so callers can avoid
 // importing internal/app everywhere.
@@ -70,6 +83,32 @@ func (s *Server) WithWorkerPool(reg *worker.Registry, q *worker.SessionQueue) *S
 	s.WorkerRegistry = reg
 	s.SessionQueue = q
 	return s
+}
+
+// WithPolicyService wires the policy loader. Domain registration/update will
+// persist the derived policy so the executor can enforce it.
+func (s *Server) WithPolicyService(svc *policyservice.Service) *Server {
+	s.PolicyService = svc
+	return s
+}
+
+// WithAuditService wires the audit log service.
+func (s *Server) WithAuditService(svc *auditservice.Service) *Server {
+	s.AuditService = svc
+	return s
+}
+
+// LoadDomainPolicy persists the policy for the named domain. It is called
+// automatically after domain registration/update and bootstrap seeding.
+func (s *Server) LoadDomainPolicy(domainID string) error {
+	if s.PolicyService == nil {
+		return nil
+	}
+	_, d, ok := queries.GetDomain(s.AppState, domainID)
+	if !ok {
+		return ErrDomainNotFound
+	}
+	return s.PolicyService.LoadDomainPolicy(domainID, d.Spec)
 }
 
 // Handler returns the http.Handler with the entire API surface mounted.
@@ -147,4 +186,5 @@ func (s *Server) RegisterBootstrapDomain(v any) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	})
+	_ = s.LoadDomainPolicy(ds.ID)
 }
