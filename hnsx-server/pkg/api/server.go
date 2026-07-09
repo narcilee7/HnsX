@@ -10,7 +10,9 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
+	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
 	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
+	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	pkgexecutor "github.com/hnsx-io/hnsx/server/pkg/session"
@@ -45,6 +47,12 @@ type Server struct {
 
 	// AuditService records and queries immutable audit entries.
 	AuditService *auditservice.Service
+
+	// TraceService records and queries observation traces.
+	TraceService *traceservice.Service
+
+	// EvalService manages eval sets and runs.
+	EvalService *evalservice.Service
 
 	shutdownOnce sync.Once
 	httpServer   *http.Server
@@ -95,6 +103,18 @@ func (s *Server) WithPolicyService(svc *policyservice.Service) *Server {
 // WithAuditService wires the audit log service.
 func (s *Server) WithAuditService(svc *auditservice.Service) *Server {
 	s.AuditService = svc
+	return s
+}
+
+// WithTraceService wires the trace recording/query service.
+func (s *Server) WithTraceService(svc *traceservice.Service) *Server {
+	s.TraceService = svc
+	return s
+}
+
+// WithEvalService wires the evaluation service.
+func (s *Server) WithEvalService(svc *evalservice.Service) *Server {
+	s.EvalService = svc
 	return s
 }
 

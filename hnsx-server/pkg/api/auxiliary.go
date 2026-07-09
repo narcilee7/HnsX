@@ -1,12 +1,16 @@
 package api
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
+	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
 
 // ListTraces handles GET /api/v1/traces — returns the per-domain trace index.
@@ -99,33 +103,236 @@ func (s *Server) RejectApproval(w http.ResponseWriter, r *http.Request) {
 
 // ListEvalSets handles GET /api/v1/evals.
 func (s *Server) ListEvalSets(w http.ResponseWriter, r *http.Request) {
+	limit := intQuery(r, "limit", 50)
+	offset := intQuery(r, "offset", 0)
+	if limit <= 0 {
+		limit = 50
+	}
+
+	if s.EvalService == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"items":  []map[string]any{},
+			"total":  0,
+			"limit":  limit,
+			"offset": offset,
+		})
+		return
+	}
+
+	sets, total, err := s.EvalService.ListSets(limit, offset)
+	if err != nil {
+		writeError(w, r, NewInternal(err))
+		return
+	}
+
+	out := make([]map[string]any, 0, len(sets))
+	for _, set := range sets {
+		out = append(out, map[string]any{
+			"id":          set.ID,
+			"set_id":      set.SetID,
+			"domain_id":   set.DomainID,
+			"description": set.Description,
+			"case_count":  len(set.Cases),
+			"created_at":  queries.FormatTimeValue(set.CreatedAt),
+		})
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": []map[string]any{},
-		"total": 0,
+		"items":  out,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+// CreateEvalSet handles POST /api/v1/evals.
+func (s *Server) CreateEvalSet(w http.ResponseWriter, r *http.Request) {
+	if s.EvalService == nil {
+		writeError(w, r, NewInternal(errors.New("eval service not configured")))
+		return
+	}
+
+	var body struct {
+		SetID       string              `json:"set_id"`
+		DomainID    string              `json:"domain_id"`
+		Description string              `json:"description,omitempty"`
+		Cases       []evalmodel.EvalCase `json:"cases"`
+	}
+	if err := decodeJSONBody(r, &body); err != nil {
+		writeError(w, r, NewValidation(err))
+		return
+	}
+	if body.SetID == "" || body.DomainID == "" {
+		writeError(w, r, NewValidation(errors.New("set_id and domain_id are required")))
+		return
+	}
+	_, _, ok := queries.GetDomain(s.AppState, body.DomainID)
+	if !ok {
+		writeError(w, r, NewDomainNotFound(body.DomainID))
+		return
+	}
+
+	set := &evalmodel.EvalSet{
+		ID:          body.SetID,
+		SetID:       body.SetID,
+		DomainID:    body.DomainID,
+		Description: body.Description,
+		Cases:       body.Cases,
+	}
+	if err := s.EvalService.CreateSet(set); err != nil {
+		writeError(w, r, NewInternal(err))
+		return
+	}
+
+	w.Header().Set("Location", "/api/v1/evals/"+set.ID)
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"id":         set.ID,
+		"set_id":     set.SetID,
+		"domain_id":  set.DomainID,
+		"created_at": queries.FormatTimeValue(set.CreatedAt),
 	})
 }
 
 // GetEvalSet handles GET /api/v1/evals/{setId}.
 func (s *Server) GetEvalSet(w http.ResponseWriter, r *http.Request) {
-	writeError(w, r, &APIError{
-		Code:    "EVAL_SET_NOT_FOUND",
-		Message: "eval subsystem not yet implemented (target: Phase 2)",
+	id := chi.URLParam(r, "setId")
+	if s.EvalService == nil {
+		writeError(w, r, &APIError{
+			Code:    "EVAL_SET_NOT_FOUND",
+			Message: "eval service not configured",
+		})
+		return
+	}
+
+	set, err := s.EvalService.GetSet(id)
+	if err != nil {
+		if errors.Is(err, evalmodel.ErrEvalSetNotFound) {
+			writeError(w, r, &APIError{
+				Code:    "EVAL_SET_NOT_FOUND",
+				Message: err.Error(),
+			})
+			return
+		}
+		writeError(w, r, NewInternal(err))
+		return
+	}
+
+	cases := make([]map[string]any, 0, len(set.Cases))
+	for _, c := range set.Cases {
+		cases = append(cases, map[string]any{
+			"id":     c.ID,
+			"name":   c.Name,
+			"input":  c.Input,
+			"expect": c.Expect,
+			"scorer": c.Scorer,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":          set.ID,
+		"set_id":      set.SetID,
+		"domain_id":   set.DomainID,
+		"description": set.Description,
+		"cases":       cases,
+		"created_at":  queries.FormatTimeValue(set.CreatedAt),
+		"updated_at":  queries.FormatTimeValue(set.UpdatedAt),
 	})
 }
 
 // RunEval handles POST /api/v1/evals/{setId}/run.
 func (s *Server) RunEval(w http.ResponseWriter, r *http.Request) {
-	writeError(w, r, &APIError{
-		Code:    "ADAPTER_NOT_IMPLEMENTED",
-		Message: "eval runner not yet implemented (target: Phase 2)",
+	id := chi.URLParam(r, "setId")
+	if s.EvalService == nil {
+		writeError(w, r, &APIError{
+			Code:    "ADAPTER_NOT_IMPLEMENTED",
+			Message: "eval runner not yet implemented (target: Phase 2)",
+		})
+		return
+	}
+
+	set, err := s.EvalService.GetSet(id)
+	if err != nil {
+		if errors.Is(err, evalmodel.ErrEvalSetNotFound) {
+			writeError(w, r, &APIError{
+				Code:    "EVAL_SET_NOT_FOUND",
+				Message: err.Error(),
+			})
+			return
+		}
+		writeError(w, r, NewInternal(err))
+		return
+	}
+
+	_, domain, ok := queries.GetDomain(s.AppState, set.DomainID)
+	if !ok {
+		writeError(w, r, NewDomainNotFound(set.DomainID))
+		return
+	}
+
+	run := &evalmodel.EvalRun{
+		ID:            runtime.NewSessionID(set.ID),
+		EvalSetID:     set.ID,
+		DomainID:      set.DomainID,
+		DomainVersion: domain.Version,
+		Orchestration: domain.Spec.Harness.Session.Mode,
+		State:         "running",
+		TotalCases:    len(set.Cases),
+	}
+	if err := s.EvalService.CreateRun(run); err != nil {
+		writeError(w, r, NewInternal(err))
+		return
+	}
+
+	// Phase 1 skeleton: mark the run completed with a neutral score. The actual
+	// eval execution loop will be implemented once the worker pipeline can run
+	// sessions in batch.
+	_ = s.EvalService.FinishRun(run.ID, 0.0, 0, run.TotalCases, 0, 0)
+
+	w.Header().Set("Location", fmt.Sprintf("/api/v1/evals/%s/runs/%s", set.ID, run.ID))
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"run_id": run.ID,
+		"state":  "running",
 	})
 }
 
 // GetEvalRun handles GET /api/v1/evals/{setId}/runs/{runId}.
 func (s *Server) GetEvalRun(w http.ResponseWriter, r *http.Request) {
-	writeError(w, r, &APIError{
-		Code:    "ADAPTER_NOT_IMPLEMENTED",
-		Message: "eval runner not yet implemented (target: Phase 2)",
+	runID := chi.URLParam(r, "runId")
+	if s.EvalService == nil {
+		writeError(w, r, &APIError{
+			Code:    "ADAPTER_NOT_IMPLEMENTED",
+			Message: "eval runner not yet implemented (target: Phase 2)",
+		})
+		return
+	}
+
+	run, err := s.EvalService.GetRun(runID)
+	if err != nil {
+		if errors.Is(err, evalmodel.ErrEvalRunNotFound) {
+			writeError(w, r, &APIError{
+				Code:    "EVAL_RUN_NOT_FOUND",
+				Message: err.Error(),
+			})
+			return
+		}
+		writeError(w, r, NewInternal(err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":             run.ID,
+		"eval_set_id":    run.EvalSetID,
+		"domain_id":      run.DomainID,
+		"domain_version": run.DomainVersion,
+		"orchestration":  run.Orchestration,
+		"state":          run.State,
+		"score":          run.Score,
+		"total_cases":    run.TotalCases,
+		"passed_cases":   run.PassedCases,
+		"total_cost_usd": run.TotalCostUSD,
+		"duration_ms":    run.DurationMs,
+		"created_at":     queries.FormatTimeValue(run.CreatedAt),
+		"completed_at":   queries.FormatTime(run.CompletedAt),
 	})
 }
 
