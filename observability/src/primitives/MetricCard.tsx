@@ -53,7 +53,8 @@ export function MetricCard({
       className={cn(
         'relative overflow-hidden rounded-lg border border-[var(--chart-grid)] bg-[var(--card)] p-4 shadow-sm',
         'border-l-4 border-l-[var(--chart-1)]',
-        isClickable && 'cursor-pointer transition-colors hover:bg-[var(--chart-grid)]/40',
+        'transition-all duration-200',
+        isClickable && 'cursor-pointer hover:-translate-y-0.5 hover:bg-[var(--chart-grid)]/40 hover:shadow-md',
         className,
       )}
     >
