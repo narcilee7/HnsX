@@ -55,9 +55,32 @@ class AdapterRegistry:
         return sorted(cls._registry.keys())
 
     @classmethod
+    def reset(cls) -> None:
+        """Drop cached singletons and the 'initialized' flag (test-only helper)."""
+        cls._singletons.clear()
+        cls._initialized = False
+
+    @classmethod
     def _ensure_builtins(cls) -> None:
         if cls._initialized:
             return
+        # Built-in / no-network adapters (always available).
         cls._registry.setdefault("noop", NoopAdapter)
         cls._registry.setdefault("echo", EchoAdapter)
+        # Real provider adapters (lazy-imported so missing SDK / httpx
+        # doesn't break the worker if a user only needs noop/echo).
+        _try_register(cls, "anthropic", "hnsx_worker.adapters.anthropic", "AnthropicAdapter")
+        _try_register(cls, "openai", "hnsx_worker.adapters.openai", "OpenAIAdapter")
+        _try_register(cls, "ollama", "hnsx_worker.adapters.ollama", "OllamaAdapter")
         cls._initialized = True
+
+
+def _try_register(reg: type[AdapterRegistry], kind: str, module: str, class_name: str) -> None:
+    try:
+        mod = __import__(module, fromlist=[class_name])
+        cls = getattr(mod, class_name, None)
+    except Exception:  # noqa: BLE001 — missing dep shouldn't break startup
+        return
+    if cls is not None:
+        reg._registry[kind] = cls  # type: ignore[attr-defined]
+        reg._singletons.pop(kind, None)
