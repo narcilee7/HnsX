@@ -1,23 +1,40 @@
-# Rust
-/target
-**/*.rs.bk
-Cargo.lock.bak
-
-# Editor / OS
+# --- Editor / OS ---
 .DS_Store
 .idea/
 .vscode/
 *.swp
 *.swo
+*.swn
 
-# Tooling
+# --- Local env / secrets ---
 .env
 .env.local
+.env.*.local
 
-# Design artifacts (binary sketches, proprietary notes)
+# --- Frontend (hnsx-console) ---
+hnsx-console/node_modules/
+hnsx-console/dist/
+hnsx-console/.vite/
+hnsx-console/.next/
+hnsx-console/coverage/
+hnsx-console/.pnpm-store/
+
+# --- SDK (sdk/node) ---
+sdk/node/node_modules/
+sdk/node/dist/
+
+# --- Backend (hnsx-server) build/test artifacts ---
+hnsx-server/hnsx                 # local-built CLI binary
+hnsx-server/hnsx-server          # local-built server binary
+hnsx-server/coverage.out
+hnsx-server/*.test
+hnsx-server/.cache/
+
+# --- Proto plugin cache ---
+.proto/
+
+# --- Misc scratch / local artifacts ---
 design/
-
-web/dist
-web/node_modules
-
-docs/
+scratch/
+*.log
+*.tmp

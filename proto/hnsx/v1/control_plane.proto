@@ -5,7 +5,7 @@ package hnsx.v1;
 import "hnsx/v1/domain.proto";
 import "hnsx/v1/observation.proto";
 
-option go_package = "github.com/hnsx-io/hnsx/proto/gen/go/hnsx/v1";
+option go_package = "github.com/hnsx-io/hnsx/go/proto/gen/go/hnsx/v1";
 
 service DomainRegistryService {
   rpc RegisterDomain(RegisterDomainRequest) returns (RegisterDomainResponse);

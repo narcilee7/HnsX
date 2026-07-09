@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package hnsx.v1;
 
-option go_package = "github.com/hnsx-io/hnsx/proto/gen/go/hnsx/v1";
+option go_package = "github.com/hnsx-io/hnsx/go/proto/gen/go/hnsx/v1";
 
 // Observation is the atomic unit of observable agent behavior.
 message Observation {

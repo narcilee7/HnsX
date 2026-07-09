@@ -1,10 +1,13 @@
 version: v2
+
 modules:
   - path: .
     name: buf.build/hnsx-io/hnsx
+
 lint:
   use:
     - STANDARD
+
 breaking:
   use:
     - FILE
