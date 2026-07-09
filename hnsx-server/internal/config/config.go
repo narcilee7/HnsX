@@ -109,14 +109,14 @@ func Load(path string) (*Config, error) {
 
 // applyEnv overlays HNSX_* environment variables onto cfg.
 func applyEnv(cfg *Config) {
-	if v := os.Getenv("HNSX_HTTP_ADDR"); v != "" {
-		cfg.HTTPAddr = v
+	if _, ok := os.LookupEnv("HNSX_HTTP_ADDR"); ok {
+		cfg.HTTPAddr = os.Getenv("HNSX_HTTP_ADDR")
 	}
-	if v := os.Getenv("HNSX_GRPC_ADDR"); v != "" {
-		cfg.GRPCAddr = v
+	if _, ok := os.LookupEnv("HNSX_GRPC_ADDR"); ok {
+		cfg.GRPCAddr = os.Getenv("HNSX_GRPC_ADDR")
 	}
-	if v := os.Getenv("HNSX_DATABASE_URL"); v != "" {
-		cfg.DatabaseURL = v
+	if _, ok := os.LookupEnv("HNSX_DATABASE_URL"); ok {
+		cfg.DatabaseURL = os.Getenv("HNSX_DATABASE_URL")
 	}
 	if v := os.Getenv("HNSX_MIGRATIONS_DIR"); v != "" {
 		cfg.MigrationsDir = v

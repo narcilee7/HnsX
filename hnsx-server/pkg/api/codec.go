@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/hnsx-io/hnsx/core/domain"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
 
 // loadedDomain is an alias used by decodeDomainBody. It deliberately mirrors
 // domain.DomainSpec so the loader's Validate function can run unchanged.
-type loadedDomain = domain.DomainSpec
+type loadedDomain = spec.DomainSpec
 
 // decodeJSONBody is a small wrapper that reads the request body and decodes
 // it into v as JSON. Empty body is treated as empty-object success.

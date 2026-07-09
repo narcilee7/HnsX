@@ -16,29 +16,29 @@ import (
 	"math"
 	"sync/atomic"
 
-	"github.com/hnsx-io/hnsx/core/domain"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
 
 // Engine evaluates policy rules.
 type Engine struct {
-	spec             domain.PolicySpec
+	spec             spec.PolicySpec
 	turns            atomic.Int64
 	promptTokens     atomic.Int64
 	completionTokens atomic.Int64
 	costUSD          atomic.Uint64 // float64 bits
 }
 
-func newEngine(spec domain.PolicySpec) *Engine {
-	return &Engine{spec: spec}
+func newEngine(s spec.PolicySpec) *Engine {
+	return &Engine{spec: s}
 }
 
 // NewEngine constructs a policy engine.
-func NewEngine(spec domain.PolicySpec) *Engine {
-	return newEngine(spec)
+func NewEngine(s spec.PolicySpec) *Engine {
+	return newEngine(s)
 }
 
 // Spec returns a defensive copy of the underlying policy.
-func (e *Engine) Spec() domain.PolicySpec { return e.spec }
+func (e *Engine) Spec() spec.PolicySpec { return e.spec }
 
 // ErrBudgetExceeded is returned when an invocation would breach the budget.
 var ErrBudgetExceeded = errors.New("budget exceeded")
@@ -144,8 +144,8 @@ func (e *Engine) CanUseShell() error {
 }
 
 // Guardrails returns the configured guardrails in order.
-func (e *Engine) Guardrails() []domain.GuardrailSpec {
-	out := make([]domain.GuardrailSpec, len(e.spec.Guardrails))
+func (e *Engine) Guardrails() []spec.GuardrailSpec {
+	out := make([]spec.GuardrailSpec, len(e.spec.Guardrails))
 	copy(out, e.spec.Guardrails)
 	return out
 }

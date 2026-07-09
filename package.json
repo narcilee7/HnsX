@@ -8,7 +8,14 @@
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "type-check": "pnpm -r type-check"
+    "type-check": "pnpm -r type-check",
+    "ci": "make ci",
+    "proto": "make proto-all",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@changesets/cli": "^2.27.7"
+  }
 }

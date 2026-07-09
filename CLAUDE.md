@@ -27,8 +27,7 @@ HnsX/
 │   └── project_management/          周会 / TODO 跟踪
 ├── proto/                           Protobuf — API 单一真相源
 │   └── hnsx/v1/*.proto              domain / control_plane / observation / runtime
-├── hnsx-server/                     Go 后端（CLI + 控制面 + Runtime）
-├── hnsx-core/                       Go 核心库
+├── hnsx-server/                     Go 后端（单一 module，双 cmd：CLI + 控制面）
 ├── sdk/node/                        Node/TS SDK（protobuf 生成的类型）
 ├── observability/                   @hnsx/observability 前端组件库 ⭐
 ├── hnsx-console/                    React 19 + Vite + Shadcn 控制台 ⭐
