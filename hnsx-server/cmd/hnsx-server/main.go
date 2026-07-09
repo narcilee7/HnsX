@@ -43,7 +43,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/pkg/controlplane"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 	hsxruntime "github.com/hnsx-io/hnsx/server/pkg/session"
-	"github.com/hnsx-io/hnsx/server/pkg/telemetry"
+	"github.com/hnsx-io/hnsx/server/internal/telemetry"
 	tracerepository "github.com/hnsx-io/hnsx/server/internal/trace/repository"
 	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
 
@@ -129,7 +129,7 @@ func cmdServer(args []string) int {
 		log.Printf("[hnsx-server] running in no-db mode (set HNSX_DATABASE_URL to enable)")
 	}
 
-	sinks := []telemetry.Sink{telemetry.NewStdoutSink()}
+	sinks := []runtime.Sink{telemetry.NewStdoutSink()}
 	if store != nil && !store.IsNoDB() {
 		sinks = append(sinks, telemetry.NewDBSink(store.Pool))
 	}
@@ -329,7 +329,7 @@ func (r *auditRecorder) Record(ctx context.Context, entry hsxruntime.AuditEntry)
 	})
 }
 
-// funcSink adapts a function to the telemetry.Sink interface.
+// funcSink adapts a function to the runtime.Sink interface.
 type funcSink struct {
 	name   string
 	record func(context.Context, runtime.Observation) error

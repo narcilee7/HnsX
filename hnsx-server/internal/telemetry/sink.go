@@ -1,9 +1,9 @@
-// Package telemetry centralizes HnsX telemetry sinks.
+// Package telemetry centralizes HnsX telemetry sink implementations.
 //
 // The runtime emits runtime.Observation values; the implementations in this
 // package convert those into either OTLP spans/metrics, structured stdout,
 // or DB rows. Sinks are designed to be plug-and-play: the runtime passes
-// observations to every registered sink via a Sink implementation.
+// observations to every registered sink via runtime.Sink.
 //
 // Phase 1 ships:
 //
@@ -23,20 +23,6 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
-
-// Sink is the contract any telemetry backend must satisfy. Implementations
-// MUST be safe for concurrent use.
-type Sink interface {
-	// Name returns the sink identifier for logging/metrics.
-	Name() string
-	// Record is called for each observation the runtime emits.
-	Record(ctx context.Context, obs runtime.Observation) error
-	// Flush forces any buffered events to the backend. Best-effort; nil
-	// return value indicates success.
-	Flush(ctx context.Context) error
-	// Close releases any resources (spans, exporters, etc.).
-	Close(ctx context.Context) error
-}
 
 // ----------------------------------------------------------------------------
 // StdoutSink
@@ -82,11 +68,11 @@ func (s *StdoutSink) Close(_ context.Context) error { return nil }
 
 // FanOutSink dispatches every observation to one or more child sinks.
 type FanOutSink struct {
-	sinks []Sink
+	sinks []runtime.Sink
 }
 
 // NewFanOutSink composes multiple sinks.
-func NewFanOutSink(sinks ...Sink) *FanOutSink { return &FanOutSink{sinks: sinks} }
+func NewFanOutSink(sinks ...runtime.Sink) *FanOutSink { return &FanOutSink{sinks: sinks} }
 
 // Name returns "fanout".
 func (f *FanOutSink) Name() string { return "fanout" }
