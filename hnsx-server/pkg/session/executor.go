@@ -13,7 +13,6 @@ import (
 	"github.com/hnsx-io/hnsx/server/pkg/policy"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
-	"github.com/hnsx-io/hnsx/server/pkg/telemetry"
 )
 
 // PolicyEngineProvider returns a session-scoped policy engine for a domain.
@@ -63,7 +62,7 @@ func (noopRecorder) Record(context.Context, AuditEntry) error { return nil }
 //   - Record policy decisions and lifecycle events to the audit log.
 type Executor struct {
 	adapter   runtime.Adapter
-	sinks     []telemetry.Sink
+	sinks     []runtime.Sink
 	broadcast *broadcaster.Broadcaster
 	policies  PolicyEngineProvider
 	audit     AuditRecorder
@@ -73,7 +72,7 @@ type Executor struct {
 // NewExecutor constructs an Executor bound to a single runtime.Adapter and zero or
 // more telemetry sinks. The broadcaster is the same per-session broadcaster
 // supplied by the API layer; it is shared (one broadcaster per session).
-func NewExecutor(adapter runtime.Adapter, sinks ...telemetry.Sink) *Executor {
+func NewExecutor(adapter runtime.Adapter, sinks ...runtime.Sink) *Executor {
 	return &Executor{
 		adapter:  adapter,
 		sinks:    sinks,
@@ -203,7 +202,7 @@ func (e *Executor) publish(ctx context.Context, obs runtime.Observation) {
 
 	for _, s := range sinks {
 		// Telemetry sinks should not stall the runner — fan out concurrently.
-		go func(s telemetry.Sink) {
+		go func(s runtime.Sink) {
 			_ = s.Record(ctx, obs)
 		}(s)
 	}

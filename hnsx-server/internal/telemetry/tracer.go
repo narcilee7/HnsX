@@ -32,7 +32,7 @@ type TracerSink struct {
 // NewTracerSink creates a TracerSink that uses the global TracerProvider.
 func NewTracerSink() *TracerSink {
 	return &TracerSink{
-		tracer: otel.Tracer("github.com/hnsx-io/hnsx/server/pkg/telemetry"),
+		tracer: otel.Tracer("github.com/hnsx-io/hnsx/server/internal/telemetry"),
 	}
 }
 
