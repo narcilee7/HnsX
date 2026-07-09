@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	iworker "github.com/hnsx-io/hnsx/server/internal/worker"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
@@ -82,7 +83,16 @@ func (s *SchedulerServiceServer) PullSession(ctx context.Context, req *pb.PullSe
 	pollCtx, cancel := context.WithTimeout(ctx, time.Duration(maxWait)*time.Second)
 	defer cancel()
 
-	got, ok := s.Queue.Dequeue(pollCtx, req.GetRequiredCapabilities())
+	// Derive the worker's capabilities from its registered WorkerInfo. Falls
+	// back to any capabilities explicitly supplied in the request.
+	required := req.GetRequiredCapabilities()
+	if len(required) == 0 {
+		if snap, ok := s.Registry.Get(req.GetWorkerId()); ok {
+			required = iworker.CapabilitiesFromInfo(snap.Info)
+		}
+	}
+
+	got, ok := s.Queue.Dequeue(pollCtx, required)
 	if !ok {
 		// Empty result on timeout / cancel; the worker re-issues.
 		return &pb.PullSessionResponse{}, nil
