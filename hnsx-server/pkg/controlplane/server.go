@@ -41,7 +41,7 @@ func NewServer(addr string) *Server { return &Server{addr: addr} }
 // server. “reg“ and “q“ are shared with the API layer so REST session
 // creation can enqueue and REST cancel can publish to the worker's
 // StreamChannel.
-func (s *Server) WithWorkerServices(reg *worker.Registry, q *worker.SessionQueue) *Server {
+func (s *Server) WithWorkerServices(reg *worker.Registry, q worker.SessionQueue) *Server {
 	s.Worker = &WorkerServiceServer{Registry: reg}
 	s.Sched = NewSchedulerServiceServer(reg, q)
 	return s

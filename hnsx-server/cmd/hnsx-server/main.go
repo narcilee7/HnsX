@@ -24,6 +24,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/hnsx-io/hnsx/server/pkg/adapter"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
@@ -82,6 +84,10 @@ Environment:
   HNSX_OTEL_OTLP_ENDPOINT  OTLP gRPC endpoint (default 127.0.0.1:4317)
   HNSX_OTEL_SERVICE_NAME   service.name attribute
   HNSX_LOG_LEVEL           debug | info | warn | error
+  HNSX_REDIS_ADDR          Redis address for the session queue (e.g. 127.0.0.1:6379)
+  HNSX_REDIS_PASSWORD      Redis AUTH password
+  HNSX_REDIS_DB            Redis logical database number
+  HNSX_REDIS_QUEUE_PREFIX  Redis key prefix for the queue (default hnsx:queue)
 `)
 }
 
@@ -167,16 +173,28 @@ func cmdServer(args []string) int {
 	// V1.1: worker pool is only enabled when a gRPC address is configured.
 	// When nil, the REST API falls back to the in-process executor.
 	var workerSvc *service.Service
+	var workerReg *worker.Registry
+	var sessionQ worker.SessionQueue
 	if cfg.GRPCAddr != "" {
-		workerSvc = service.NewService(repository.NewInMemoryRepository())
+		if cfg.RedisEnabled() {
+			rdb := redis.NewClient(&redis.Options{
+				Addr:     cfg.Redis.Addr,
+				Password: cfg.Redis.Password,
+				DB:       cfg.Redis.DB,
+			})
+			defer func() {
+				_ = rdb.Close()
+			}()
+			sessionQ = worker.NewRedisSessionQueue(rdb, cfg.Redis.QueueKeyPrefix)
+			log.Printf("[hnsx-server] session queue: redis=%s prefix=%s", cfg.Redis.Addr, cfg.Redis.QueueKeyPrefix)
+		} else {
+			sessionQ = worker.NewSessionQueue()
+			log.Printf("[hnsx-server] session queue: in-memory")
+		}
+		workerSvc = service.NewServiceWithQueue(repository.NewInMemoryRepository(), sessionQ)
+		workerReg = workerSvc.Registry()
 	}
 
-	var workerReg *worker.Registry
-	var sessionQ *worker.SessionQueue
-	if workerSvc != nil {
-		workerReg = workerSvc.Registry()
-		sessionQ = workerSvc.Queue()
-	}
 	srv := api.NewServerWithWorkerPool(build, store, exec, workerReg, sessionQ).
 		WithPolicyService(policySvc).
 		WithAuditService(auditSvc).

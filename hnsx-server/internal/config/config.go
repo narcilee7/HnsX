@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,6 +46,24 @@ type Config struct {
 	// DomainCache controls whether DomainSpec YAML contents are cached
 	// in memory after first load.
 	DomainCache bool `yaml:"domain_cache"`
+
+	// Redis is the optional Redis configuration. When present, the worker
+	// scheduling queue is backed by Redis so multiple Control Plane
+	// instances can share the same queue.
+	Redis RedisConfig `yaml:"redis"`
+}
+
+// RedisConfig selects a Redis server and queue key namespace.
+type RedisConfig struct {
+	// Addr is the Redis server address (e.g. "127.0.0.1:6379").
+	Addr string `yaml:"addr"`
+	// Password is the Redis AUTH password. Optional.
+	Password string `yaml:"password"`
+	// DB is the Redis logical database number. Optional.
+	DB int `yaml:"db"`
+	// QueueKeyPrefix is the Redis key prefix for the session queue.
+	// Defaults to "hnsx:queue".
+	QueueKeyPrefix string `yaml:"queue_key_prefix"`
 }
 
 // OTelConfig selects an OpenTelemetry exporter.
@@ -78,6 +97,10 @@ func Default() *Config {
 			Level: "info",
 		},
 		DomainCache: true,
+		Redis: RedisConfig{
+			Addr:           "127.0.0.1:6379",
+			QueueKeyPrefix: "hnsx:queue",
+		},
 	}
 }
 
@@ -133,6 +156,20 @@ func applyEnv(cfg *Config) {
 	if v := os.Getenv("HNSX_LOG_LEVEL"); v != "" {
 		cfg.Log.Level = v
 	}
+	if v := os.Getenv("HNSX_REDIS_ADDR"); v != "" {
+		cfg.Redis.Addr = v
+	}
+	if v := os.Getenv("HNSX_REDIS_PASSWORD"); v != "" {
+		cfg.Redis.Password = v
+	}
+	if v := os.Getenv("HNSX_REDIS_DB"); v != "" {
+		if db, err := strconv.Atoi(v); err == nil {
+			cfg.Redis.DB = db
+		}
+	}
+	if v := os.Getenv("HNSX_REDIS_QUEUE_PREFIX"); v != "" {
+		cfg.Redis.QueueKeyPrefix = v
+	}
 }
 
 // Validate enforces structural invariants.
@@ -166,6 +203,10 @@ func (c *Config) Validate() error {
 
 // PostgresEnabled reports whether a database connection is configured.
 func (c *Config) PostgresEnabled() bool { return strings.TrimSpace(c.DatabaseURL) != "" }
+
+// RedisEnabled reports whether a Redis connection is configured for the
+// session scheduling queue.
+func (c *Config) RedisEnabled() bool { return strings.TrimSpace(c.Redis.Addr) != "" }
 
 // MigrationsToRun returns the duration budget for running migrations on
 // startup. Currently a single shot; future version may retry.

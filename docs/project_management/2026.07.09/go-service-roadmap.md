@@ -179,13 +179,13 @@ internal/app/
 
 ### Phase 7：部署与扩展（2 周）
 
-| 能力 | 说明 |
-|---|---|
-| **持久化 Queue** | SessionQueue 从内存改为 Postgres/Redis，支持多实例 Control Plane。 |
-| **Worker 自动发现** | K8s DaemonSet / Deployment，Worker 启动后自注册。 |
-| ** graceful shutdown** | Control Plane 停止前 draining 请求；Worker 停止前完成或移交手中 session。 |
-| **Multi-tenant** | `tenant_id` 贯穿 domain / session / worker / audit。 |
-| **混沌测试** | 随机 kill worker / 网络分区，验证任务不丢、状态一致。 |
+| 能力 | 说明 | 状态 |
+|---|---|---|
+| **持久化 Queue** | SessionQueue 从内存改为 Redis，支持多实例 Control Plane。 | ✅ RedisSessionQueue 已实现（LPUSH→RPUSH FIFO，Lua 原子匹配） |
+| **Worker 自动发现** | K8s DaemonSet / Deployment，Worker 启动后自注册。 | 🔄 待做 |
+| ** graceful shutdown** | Control Plane 停止前 draining 请求；Worker 停止前完成或移交手中 session。 | ✅ draining 已实现 |
+| **Multi-tenant** | `tenant_id` 贯穿 domain / session / worker / audit。 | 🔄 待做 |
+| **混沌测试** | 随机 kill worker / 网络分区，验证任务不丢、状态一致。 | 🔄 待做 | 🔄 待做 |
 
 **验收标准**：
 - 两个 Control Plane 实例共用一个 Postgres queue，session 不重复分发。
@@ -196,9 +196,9 @@ internal/app/
 ## 4. 近期优先级（接下来 1–2 周）
 
 1. **Phase 7 部署与扩展**：
-   - 持久化 Queue（Postgres/Redis）支持多 Control Plane 实例。
-   - Control Plane graceful shutdown + draining。
-   - Worker 自动发现（K8s）与优雅退出。
+   - ✅ 持久化 Queue（Redis）支持多 Control Plane 实例。
+   - ✅ Control Plane graceful shutdown + draining。
+   - 🔄 Worker 自动发现（K8s）与优雅退出。
 2. **Store 领域深入**：把 `store` 从配置字段升级为 `internal/store` 领域，支持 in_memory/postgres 后端。
 3. **Cost 聚合**：从 observation 流汇总 session/domain/worker 维度的 cost、latency、token。
 4. **Guardrail 内容校验**：把 `policy.Engine` 从 budget/permission 扩展到输出内容 guardrail。
