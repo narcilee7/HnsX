@@ -9,17 +9,20 @@ This package contains:
   session, streams observations back via the `StreamChannel` bidi gRPC.
 - The **session runtime** (`hnsx_worker.session_runtime`) — loaded inside each
   subprocess. Loads the DomainSpec, routes by `session.mode` (single-task /
-  workflow / supervisor / multi-turn), invokes the Agent Adapter, emits
-  Observations.
+  workflow / multi-turn), invokes the Agent Adapter, emits Observations.
 - Adapters, Tools, MCP clients, Sandbox backends, Memory backends, Skill
   engine — all the capability-layer implementations that V1.0 had as Go stubs.
 
 ## Status
 
-- **Step 1 (this build):** wire contract + scaffolding only. Proto stubs are
-  generated from `proto/hnsx/v1/*.proto`; the package is importable and the
-  CLI `hnsx-worker check-proto` validates that the contract is consistent.
-  Worker logic, subprocess supervisor, and adapters land in subsequent steps.
+- **Step 1:** wire contract + scaffolding. ✅
+- **Step 2:** parent process + subprocess + Noop/Echo adapters. ✅
+- **Step 3:** real provider adapters (`anthropic` / `openai` / `ollama`) with
+  streaming + tool use; session executor streams chunks into observations and
+  supports a multi-turn loop with stub tool result (real Tool Registry lands
+  in M3). ✅ (this build)
+- **Step 4+:** Tool Registry / MCP / Sandbox / Policy / Skill engine — see
+  `docs/project_management/2026.07.09/v1_2_roadmap.md`.
 
 ## Install
 

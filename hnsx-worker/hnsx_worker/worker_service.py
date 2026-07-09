@@ -1,21 +1,23 @@
 """WorkerService — the parent process that talks to the Go control plane.
 
-Threading model (Step 2):
+Threading model:
 
-  - main thread:    ``_pull_loop`` — long-polls ``PullSession`` and forks
+  - main thread:    ``_pull_loop`` — long-polls the server and forks
                     one subprocess per assigned session.
   - heartbeat:      ``_heartbeat_loop`` — every ``heartbeat_interval_seconds``
                     sends a Heartbeat RPC.
   - stream producer:``_stream_producer_loop`` — opens the bidi
-                    ``StreamChannel`` and feeds observations from
+                    StreamChannel and feeds outbound messages from
                     ``_obs_queue`` to the server.
   - per-subprocess: ``_pump_subprocess_stdout`` — one daemon thread per
                     session subprocess, parsing JSONL observations and
                     pushing them into ``_obs_queue``.
 
 The parent process NEVER executes the session itself — that's the subprocess's
-job. This keeps the harness "session = subprocess" invariant from
-``design/Tech/V1/Architecture.md`` §10.3.
+job. This keeps the harness "session = subprocess" invariant.
+
+This module is wire-format agnostic: all gRPC types live behind
+``ControlPlaneClient`` in :mod:`hnsx_worker.proto_client`.
 """
 
 from __future__ import annotations
@@ -34,10 +36,22 @@ import uuid
 from collections.abc import Iterator
 from typing import Any
 
-import grpc
-
 from hnsx_worker.config import WorkerConfig
-from hnsx_worker.proto.gen.hnsx.v1 import observation_pb2, worker_pb2, worker_pb2_grpc
+from hnsx_worker.proto_client import (
+    AckRequest,
+    ControlPlaneClient,
+    HeartbeatRequest,
+    NackRequest,
+    Observation,
+    OutboundMessage,
+    ResourceCapacity,
+    ResourceUsage,
+    ServerEvent,
+    SessionStatusUpdate,
+    WorkerHealth,
+    WorkerHealthStatus,
+    WorkerInfo,
+)
 
 log = logging.getLogger("hnsx_worker.worker_service")
 
@@ -48,11 +62,11 @@ _SHUTDOWN_GRACE_SECONDS = 5.0
 class WorkerService:
     def __init__(self, config: WorkerConfig) -> None:
         self.config = config
-        self.channel = grpc.insecure_channel(config.server_addr)
-        self.worker_stub = worker_pb2_grpc.WorkerServiceStub(self.channel)
-        self.scheduler_stub = worker_pb2_grpc.SchedulerServiceStub(self.channel)
+        self.client = ControlPlaneClient(
+            config.server_addr, auth_token=config.auth_token
+        )
         self.worker_id: str = config.worker_id  # server may overwrite on Register
-        self._obs_queue: queue.Queue[worker_pb2.StreamChannelRequest] = queue.Queue()
+        self._obs_queue: queue.Queue[OutboundMessage] = queue.Queue()
         self._running: dict[str, _SessionHandle] = {}
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
@@ -90,25 +104,25 @@ class WorkerService:
             except subprocess.TimeoutExpired:
                 handle.proc.kill()
                 handle.proc.wait()
-        try:
-            self.channel.close()
-        except Exception:  # noqa: BLE001
-            pass
+        self.client.close()
 
     # ------------------------------------------------------------------ lifecycle
 
     def _register(self) -> None:
-        info = worker_pb2.WorkerInfo(
+        info = WorkerInfo(
             worker_id=self.config.worker_id,
             tenant_id="local",  # V1.1: single-tenant local dev
-            version="0.1.0",
+            version="0.2.0",
             region=self.config.region,
             hostname=socket.gethostname(),
             pid=str(os.getpid()),
-            capacity=self.config.capacity,
+            capacity=ResourceCapacity(
+                max_concurrent_sessions=self.config.capacity.max_concurrent_sessions,
+                providers=list(self.config.capacity.providers),
+                models=list(self.config.capacity.models),
+            ),
         )
-        req = worker_pb2.RegisterRequest(info=info, auth_token=self.config.auth_token)
-        resp = self.worker_stub.Register(req, timeout=10.0)
+        resp = self.client.register(info)
         self.worker_id = resp.worker_id or self.worker_id or f"w-{uuid.uuid4().hex[:8]}"
         log.info(
             "registered as %s (heartbeat every %ds)",
@@ -122,24 +136,23 @@ class WorkerService:
             try:
                 with self._lock:
                     running_ids = list(self._running.keys())
-                usage = worker_pb2.ResourceUsage(
-                    running_sessions=len(running_ids),
-                    free_slots=max(
-                        0, self.config.capacity.max_concurrent_sessions - len(running_ids)
-                    ),
-                )
-                req = worker_pb2.HeartbeatRequest(
+                req = HeartbeatRequest(
                     worker_id=self.worker_id,
                     timestamp_ms=int(time.time() * 1000),
-                    usage=usage,
-                    running_session_ids=running_ids,
-                    health=worker_pb2.WorkerHealth(
-                        status=worker_pb2.WorkerHealth.STATUS_HEALTHY,
+                    usage=ResourceUsage(
+                        running_sessions=len(running_ids),
+                        free_slots=max(
+                            0,
+                            self.config.capacity.max_concurrent_sessions
+                            - len(running_ids),
+                        ),
                     ),
+                    running_session_ids=running_ids,
+                    health=WorkerHealth(status=WorkerHealthStatus.HEALTHY),
                 )
-                self.worker_stub.Heartbeat(req, timeout=5.0)
-            except grpc.RpcError as e:
-                log.warning("heartbeat failed: %s", e.code().name)
+                self.client.heartbeat(req)
+            except Exception as e:  # noqa: BLE001 — network blips shouldn't kill the loop
+                log.warning("heartbeat failed: %s", e)
             self._stop_event.wait(interval)
 
     # ------------------------------------------------------------------ pull
@@ -148,28 +161,25 @@ class WorkerService:
         max_wait = 30  # seconds; server may hold the call up to this long
         while not self._stop_event.is_set():
             try:
-                req = worker_pb2.PullSessionRequest(
+                assignment = self.client.pull_session(
                     worker_id=self.worker_id,
                     max_wait_seconds=max_wait,
                 )
-                resp = self.scheduler_stub.PullSession(req, timeout=max_wait + 10.0)
-            except grpc.RpcError as e:
-                if e.code() == grpc.StatusCode.CANCELLED:
-                    return
-                log.warning("pull failed: %s; retrying", e.code().name)
+            except Exception as e:  # noqa: BLE001 — channel-level errors
+                log.warning("pull failed: %s; retrying", e)
                 self._stop_event.wait(2.0)
                 continue
-            if not resp.session_id:
+            if assignment.is_empty():
                 continue  # empty result == no work; loop again
-            self._on_session(resp)
+            self._on_session(assignment)
 
-    def _on_session(self, resp: worker_pb2.PullSessionResponse) -> None:
+    def _on_session(self, assignment: Any) -> None:
         with self._lock:
             if len(self._running) >= self.config.capacity.max_concurrent_sessions:
                 # no slot; requeue
-                self._nack(resp, reason="no_free_slots", requeue=True, error_code="CAPACITY")
+                self._nack(assignment, reason="no_free_slots", requeue=True, error_code="CAPACITY")
                 return
-        log.info("assigned session %s (domain=%s)", resp.session_id, resp.domain_id)
+        log.info("assigned session %s (domain=%s)", assignment.session_id, assignment.domain_id)
         try:
             proc = subprocess.Popen(
                 [sys.executable, "-m", "hnsx_worker.session_runtime"],
@@ -181,19 +191,19 @@ class WorkerService:
             )
         except OSError as e:
             log.error("failed to spawn subprocess: %s", e)
-            self._nack(resp, reason=f"spawn_failed: {e}", requeue=False, error_code="SPAWN")
+            self._nack(assignment, reason=f"spawn_failed: {e}", requeue=False, error_code="SPAWN")
             return
 
         payload = json.dumps(
             {
-                "session_id": resp.session_id,
-                "correlation_id": resp.correlation_id,
-                "domain_id": resp.domain_id,
-                "domain_version": resp.domain_version,
-                "trace_id": resp.trace_id,
-                "domain_spec_json": resp.domain_spec_json,
-                "trigger_payload_json": resp.trigger_payload_json,
-                "session_timeout_seconds": resp.session_timeout_seconds,
+                "session_id": assignment.session_id,
+                "correlation_id": assignment.correlation_id,
+                "domain_id": assignment.domain_id,
+                "domain_version": assignment.domain_version,
+                "trace_id": assignment.trace_id,
+                "domain_spec_json": assignment.domain_spec_json,
+                "trigger_payload_json": assignment.trigger_payload_json,
+                "session_timeout_seconds": assignment.session_timeout_seconds,
             }
         )
         assert proc.stdin is not None
@@ -204,30 +214,31 @@ class WorkerService:
             pass
 
         handle = _SessionHandle(
-            proc=proc, session_id=resp.session_id, correlation_id=resp.correlation_id
+            proc=proc,
+            session_id=assignment.session_id,
+            correlation_id=assignment.correlation_id,
         )
         with self._lock:
-            self._running[resp.session_id] = handle
+            self._running[assignment.session_id] = handle
 
         threading.Thread(
             target=self._pump_subprocess_stdout,
             args=(handle,),
-            name=f"pump-{resp.session_id[:8]}",
+            name=f"pump-{assignment.session_id[:8]}",
             daemon=True,
         ).start()
 
         try:
-            self.scheduler_stub.AckSession(
-                worker_pb2.AckSessionRequest(
+            self.client.ack_session(
+                AckRequest(
                     worker_id=self.worker_id,
-                    session_id=resp.session_id,
+                    session_id=assignment.session_id,
+                    correlation_id=assignment.correlation_id,
                     acknowledged_at_ms=int(time.time() * 1000),
-                    correlation_id=resp.correlation_id,
-                ),
-                timeout=5.0,
+                )
             )
-        except grpc.RpcError as e:
-            log.warning("ack failed for %s: %s", resp.session_id, e.code().name)
+        except Exception as e:  # noqa: BLE001
+            log.warning("ack failed for %s: %s", assignment.session_id, e)
 
     def _pump_subprocess_stdout(self, handle: "_SessionHandle") -> None:
         assert handle.proc.stdout is not None
@@ -261,34 +272,30 @@ class WorkerService:
 
     def _enqueue_observation(self, handle: "_SessionHandle", obs: dict[str, Any]) -> None:
         # All observations from the subprocess are batched through the
-        # ``observations`` oneof arm. Session end events are special: they
-        # are both forwarded as an observation (so SSE clients see the
-        # terminal event) and as a status update (so the scheduler can
-        # update its bookkeeping and the API session state).
-        base = observation_pb2.Observation(
+        # ``observations`` envelope. Session end events are special: they are
+        # also forwarded as a status update so the scheduler can update its
+        # bookkeeping and the API session state.
+        observation = Observation(
             session_id=handle.session_id,
             domain_id=obs.get("domain_id", ""),
             step_id=obs.get("step_id", ""),
             agent_id=obs.get("agent_id", ""),
             kind=obs.get("kind", ""),
-            payload=json.dumps(obs.get("payload", {}), default=str),
+            payload=dict(obs.get("payload", {}) or {}),
             created_at_ms=int(obs.get("created_at_ms") or time.time() * 1000),
         )
         self._obs_queue.put(
-            worker_pb2.StreamChannelRequest(
-                worker_id=self.worker_id,
-                observations=worker_pb2.ObservationBatch(observations=[base]),
-            )
+            OutboundMessage(kind="observations", observations=[observation])
         )
 
         if obs.get("kind") == "session_end":
             self._obs_queue.put(
-                worker_pb2.StreamChannelRequest(
-                    worker_id=self.worker_id,
-                    status=worker_pb2.SessionStatusUpdate(
+                OutboundMessage(
+                    kind="status",
+                    status=SessionStatusUpdate(
                         session_id=handle.session_id,
                         state=obs.get("state", "completed"),
-                        message=json.dumps(obs.get("payload", {})),
+                        message=json.dumps(obs.get("payload", {}), default=str),
                         timestamp_ms=int(obs.get("created_at_ms") or time.time() * 1000),
                     ),
                 )
@@ -296,71 +303,75 @@ class WorkerService:
 
     def _nack(
         self,
-        resp: worker_pb2.PullSessionResponse,
+        assignment: Any,
         *,
         reason: str,
         requeue: bool,
         error_code: str,
     ) -> None:
         try:
-            self.scheduler_stub.NackSession(
-                worker_pb2.NackSessionRequest(
+            self.client.nack_session(
+                NackRequest(
                     worker_id=self.worker_id,
-                    session_id=resp.session_id,
+                    session_id=assignment.session_id,
+                    correlation_id=assignment.correlation_id,
                     reason=reason,
                     error_code=error_code,
                     requeue=requeue,
-                ),
-                timeout=5.0,
+                )
             )
-        except grpc.RpcError as e:
-            log.warning("nack failed for %s: %s", resp.session_id, e.code().name)
+        except Exception as e:  # noqa: BLE001
+            log.warning("nack failed for %s: %s", assignment.session_id, e)
 
     # ------------------------------------------------------------------ stream
 
     def _stream_producer_loop(self) -> None:
-        """Open the bidi StreamChannel and forward observations to the server.
+        """Open the bidi StreamChannel and forward outbound messages to the server.
 
-        Server-pushed messages (Cancel / Drain / DomainInvalidation) are
-        received here too. Step 2 just logs them; full handling is #9+#11.
+        Server-pushed events (Cancel / Drain / DomainInvalidation) are received
+        here too. Full handling lands in #9+#11.
         """
         backoff = 0.5
         while not self._stop_event.is_set():
             try:
-                stream = self.scheduler_stub.StreamChannel(
-                    _outbound_iter(self._obs_queue, self._stop_event)
+                events = self.client.open_stream(
+                    _outbound_iter(self._obs_queue, self._stop_event),
+                    timeout=None,
                 )
                 backoff = 0.5
-                for server_event in stream:
+                for server_event in events:
                     if self._stop_event.is_set():
                         break
                     self._handle_server_event(server_event)
-            except grpc.RpcError as e:
+            except Exception as e:  # noqa: BLE001 — channel-level errors
                 if self._stop_event.is_set():
                     return
                 log.warning(
-                    "stream channel error: %s; reconnecting in %.1fs", e.code().name, backoff
+                    "stream channel error: %s; reconnecting in %.1fs", e, backoff
                 )
                 self._stop_event.wait(backoff)
                 backoff = min(backoff * 2, 10.0)
 
-    def _handle_server_event(self, event: worker_pb2.StreamChannelResponse) -> None:
-        kind = event.WhichOneof("payload")
-        if kind == "cancel":
+    def _handle_server_event(self, event: ServerEvent) -> None:
+        if event.kind == "cancel" and event.cancel is not None:
             self._cancel_session(event.cancel.session_id, reason=event.cancel.reason)
-        elif kind == "drain":
-            log.info("server requested drain: %s", event.drain.reason)
-            # Step 2: log only; full drain handling is #9.
-        elif kind == "invalidate":
+        elif event.kind == "drain" and event.drain is not None:
+            log.info(
+                "server requested drain: %s (deadline=%ds)",
+                event.drain.reason,
+                event.drain.deadline_seconds,
+            )
+            # Full drain handling is #9.
+        elif event.kind == "invalidate" and event.invalidate is not None:
             log.info(
                 "server invalidated domain %s/%s",
                 event.invalidate.domain_id,
                 event.invalidate.version,
             )
-        elif kind == "ping":
+        elif event.kind == "ping":
             log.debug("server ping")
         else:
-            log.debug("server event: %r", event)
+            log.debug("server event: kind=%s", event.kind)
 
     def _cancel_session(self, session_id: str, *, reason: str) -> None:
         with self._lock:
@@ -398,9 +409,9 @@ class _SessionHandle:
 
 
 def _outbound_iter(
-    q: "queue.Queue[worker_pb2.StreamChannelRequest]", stop_event: threading.Event
-) -> Iterator[worker_pb2.StreamChannelRequest]:
-    """Bridge a queue.Queue into a generator for gRPC client-streaming."""
+    q: "queue.Queue[OutboundMessage]", stop_event: threading.Event
+) -> Iterator[OutboundMessage]:
+    """Bridge a queue.Queue into a generator for the bidi stream."""
     while not stop_event.is_set():
         try:
             item = q.get(timeout=0.5)
