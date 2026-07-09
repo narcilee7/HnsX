@@ -19,12 +19,58 @@ import {
 import { useTraces } from '@/hooks/useTraces'
 import { useDomains } from '@/hooks/useDomains'
 import type { TraceViewModel } from '@/api/mappers'
+import { TraceMiniBar } from '@hnsx/observability'
 import { Search, RotateCcw } from 'lucide-react'
 
 function formatDuration(ms: number | undefined): string {
   if (ms === undefined || Number.isNaN(ms)) return '-'
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(2)}s`
+}
+
+/**
+ * 从 trace 里的 observations 构造 mini bar 数据。
+ * 真实数据里 observations 是 JsonValue[]，每条带 createdAtMs；
+ * 我们把它当作 startMs 序列，相邻 observation 之间形成 segment。
+ */
+function buildMiniSpans(trace: TraceViewModel): { id: string; startMs: number; endMs: number; variant: 'chart-1' | 'chart-2' | 'chart-3' | 'chart-4' | 'chart-5' | 'success' | 'warning' | 'danger' | 'info' }[] {
+  const obs = trace.observations
+  if (!Array.isArray(obs) || obs.length === 0) return []
+  const KIND_VARIANT: Record<string, 'chart-1' | 'chart-2' | 'chart-3' | 'chart-4' | 'chart-5' | 'success' | 'warning' | 'danger' | 'info'> = {
+    text: 'chart-1',
+    message: 'chart-1',
+    tool_call: 'chart-2',
+    tool_result: 'chart-2',
+    user: 'chart-3',
+    state: 'chart-5',
+    cost: 'chart-4',
+    error: 'danger',
+  }
+  const points = obs
+    .map((o) => {
+      if (!o || typeof o !== 'object') return null
+      const r = o as Record<string, unknown>
+      const t =
+        typeof r.created_at_ms === 'number'
+          ? r.created_at_ms
+          : typeof r.createdAtMs === 'number'
+            ? r.createdAtMs
+            : typeof r.created_at === 'string'
+              ? Date.parse(r.created_at as string)
+              : 0
+      const kind = (r.kind as string) || 'message'
+      return { t, variant: KIND_VARIANT[kind] ?? 'chart-1' }
+    })
+    .filter((p): p is { t: number; variant: 'chart-1' | 'chart-2' | 'chart-3' | 'chart-4' | 'chart-5' | 'success' | 'warning' | 'danger' | 'info' } => p !== null && p.t > 0)
+    .sort((a, b) => a.t - b.t)
+
+  if (points.length < 2) return []
+  return points.slice(1).map((p, i) => ({
+    id: `seg-${i}`,
+    startMs: points[i]!.t,
+    endMs: p.t,
+    variant: p.variant,
+  }))
 }
 
 export default function TracesPage() {
@@ -89,7 +135,17 @@ export default function TracesPage() {
       {
         accessorKey: 'durationMs',
         header: 'Duration',
-        cell: ({ row }) => formatDuration(row.original.durationMs),
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            <TraceMiniBar
+              spans={buildMiniSpans(row.original)}
+              height={10}
+              width={120}
+              totalMs={row.original.durationMs}
+            />
+            <span className="text-xs tabular-nums">{formatDuration(row.original.durationMs)}</span>
+          </div>
+        ),
       },
       {
         accessorKey: 'agentRefs',
