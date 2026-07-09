@@ -11,19 +11,21 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/internal/app"
+	"github.com/hnsx-io/hnsx/server/internal/app/commands"
+	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	"github.com/hnsx-io/hnsx/server/internal/session/broadcaster"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
 )
 
 // ListSessions handles GET /api/v1/sessions.
 func (s *Server) ListSessions(w http.ResponseWriter, r *http.Request) {
-	items := s.listSessionItems()
+	items := queries.ListSessions(s.AppState)
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].StartedAt.After(items[j].StartedAt)
 	})
 
-	// Optional filters via ?domain=&state=
 	q := r.URL.Query()
 	domainFilter := q.Get("domain")
 	stateFilter := q.Get("state")
@@ -42,8 +44,8 @@ func (s *Server) ListSessions(w http.ResponseWriter, r *http.Request) {
 			"domain_version": sess.DomainVersion,
 			"orchestration":  sess.Orchestration,
 			"state":          sess.State,
-			"started_at":     sess.StartedAt.Format(time.RFC3339),
-			"completed_at":   formatCompletedAt(sess.CompletedAt),
+			"started_at":     queries.FormatTimeValue(sess.StartedAt),
+			"completed_at":   queries.FormatTime(sess.CompletedAt),
 			"summary":        sessionSummary(sess),
 		})
 	}
@@ -59,7 +61,7 @@ func (s *Server) ListSessions(w http.ResponseWriter, r *http.Request) {
 // GetSession handles GET /api/v1/sessions/{id}.
 func (s *Server) GetSession(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	sess, ok := s.lookupSession(id)
+	sess, ok := queries.GetSession(s.AppState, id)
 	if !ok {
 		writeError(w, r, NewSessionNotFound(id))
 		return
@@ -90,33 +92,26 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, domainID
 		})
 		return
 	}
-	d, ok := s.lookupDomain(domainID)
+	_, d, ok := queries.GetDomain(s.AppState, domainID)
 	if !ok {
 		writeError(w, r, NewDomainNotFound(domainID))
 		return
 	}
 
-	sess := &registeredSession{
-		ID:            runtime.NewSessionID(domainID),
-		DomainID:      d.ID,
-		DomainVersion: d.Version,
-		Orchestration: d.Spec.Harness.Session.Mode,
-		State:         "pending",
-		Trigger:       trigger,
-		StartedAt:     time.Now().UTC(),
+	sess, err := commands.TriggerSession(s.AppState, d, trigger, runtime.NewSessionID)
+	if err != nil {
+		writeError(w, r, NewInternal(err))
+		return
 	}
-	s.registerSession(sess)
 
-	bc := s.attachBroadcaster(sess.ID)
+	bc := s.AppState.AttachBroadcaster(sess.ID)
 
-	// V1.1: if a worker pool is wired, enqueue the session for a Python
-	// worker. Otherwise fall back to the in-process Go executor.
 	if s.SessionQueue != nil {
 		if err := s.enqueueForWorker(sess, d, trigger); err != nil {
 			writeError(w, r, NewInternal(err))
 			return
 		}
-		w.Header().Set("Location", "/api/v1/sessions/"+sess.ID)
+		w.Header().Set("Location", commands.BuildSessionLocation(sess.ID))
 		writeJSON(w, http.StatusAccepted, map[string]any{
 			"id":    sess.ID,
 			"state": sess.State,
@@ -129,11 +124,9 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, domainID
 		return
 	}
 
-	// Execute synchronously for Phase 1; an async variant lands in a
-	// follow-up PR (the API surface stays the same).
 	go s.runInBackground(sess, d, bc, trigger)
 
-	w.Header().Set("Location", "/api/v1/sessions/"+sess.ID)
+	w.Header().Set("Location", commands.BuildSessionLocation(sess.ID))
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"id":    sess.ID,
 		"state": sess.State,
@@ -143,7 +136,7 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, domainID
 // enqueueForWorker serializes the domain spec + trigger and puts the session
 // on the worker queue. The worker will PullSession, run it, and stream
 // observations back via the gRPC StreamChannel.
-func (s *Server) enqueueForWorker(sess *registeredSession, d *registeredDomain, trigger map[string]any) error {
+func (s *Server) enqueueForWorker(sess *app.RegisteredSession, d *app.RegisteredDomain, trigger map[string]any) error {
 	specJSON, err := json.Marshal(d.Spec)
 	if err != nil {
 		return fmt.Errorf("marshal domain spec: %w", err)
@@ -165,7 +158,7 @@ func (s *Server) enqueueForWorker(sess *registeredSession, d *registeredDomain, 
 
 	s.SessionQueue.Enqueue(req)
 
-	bc := s.attachBroadcaster(sess.ID)
+	bc := s.AppState.AttachBroadcaster(sess.ID)
 	_ = bc.Publish(context.Background(), runtime.Observation{
 		Kind:      "state",
 		SessionID: sess.ID,
@@ -177,71 +170,70 @@ func (s *Server) enqueueForWorker(sess *registeredSession, d *registeredDomain, 
 }
 
 // runInBackground executes the registered session via the executor.
-func (s *Server) runInBackground(sess *registeredSession, d *registeredDomain, bc *broadcaster.Broadcaster, trigger map[string]any) {
-	sess.State = "running"
+func (s *Server) runInBackground(sess *app.RegisteredSession, d *app.RegisteredDomain, bc *broadcaster.Broadcaster, trigger map[string]any) {
+	s.AppState.UpdateSessionState(sess.ID, "running")
 	executor := s.Executor.WithBroadcaster(bc)
 
 	ctx := runtime.WithSessionID(context.Background(), sess.ID)
 
 	result, err := executor.Execute(ctx, d.Spec, trigger)
 	if result != nil {
-		sess.Result = result
+		s.AppState.SetSessionResult(sess.ID, result)
 	}
 	if err != nil {
-		sess.State = "failed"
+		s.AppState.UpdateSessionState(sess.ID, "failed")
 	} else {
-		sess.State = "completed"
+		s.AppState.UpdateSessionState(sess.ID, "completed")
 	}
-	done := time.Now().UTC()
-	sess.CompletedAt = &done
 
+	state, _ := queries.GetSession(s.AppState, sess.ID)
 	bc.Publish(ctx, runtime.Observation{
 		Kind:      "state",
 		SessionID: sess.ID,
 		DomainID:  sess.DomainID,
-		Payload:   map[string]any{"state": sess.State, "result": result},
+		Payload:   map[string]any{"state": state.State, "result": result},
 	})
 }
 
 // CancelSession handles POST /api/v1/sessions/{id}/cancel.
 func (s *Server) CancelSession(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	sess, ok := s.lookupSession(id)
-	if !ok {
-		writeError(w, r, NewSessionNotFound(id))
-		return
-	}
-	if sess.State == "completed" || sess.State == "failed" {
+	sess, err := commands.CancelSession(s.AppState, id)
+	if err != nil {
+		if errors.Is(err, commands.ErrSessionNotFound) {
+			writeError(w, r, NewSessionNotFound(id))
+			return
+		}
 		writeError(w, r, &APIError{
 			Code:    "INVALID_REQUEST",
-			Message: fmt.Sprintf("session is already in terminal state %q", sess.State),
+			Message: err.Error(),
 		})
 		return
 	}
 
-	// V1.1: if a worker pool is wired, ask the assigned worker to cancel.
 	if s.WorkerRegistry != nil {
 		if workerID, ok := s.WorkerRegistry.SessionWorker(id); ok {
 			s.WorkerRegistry.SendCancel(workerID, id, "user requested cancel", time.Now().Add(5*time.Second).UnixMilli())
 		}
 	}
 
-	sess.State = "canceled"
-	done := time.Now().UTC()
-	sess.CompletedAt = &done
-	s.detachBroadcaster(sess.ID)
 	writeJSON(w, http.StatusOK, jsonSession(sess))
 }
 
 // RerunSession handles POST /api/v1/sessions/{id}/rerun.
 func (s *Server) RerunSession(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	prev, ok := s.lookupSession(id)
-	if !ok {
-		writeError(w, r, NewSessionNotFound(id))
+	_, err := commands.RerunSession(s.AppState, id, runtime.NewSessionID)
+	if err != nil {
+		if errors.Is(err, commands.ErrSessionNotFound) {
+			writeError(w, r, NewSessionNotFound(id))
+			return
+		}
+		writeError(w, r, NewInternal(err))
 		return
 	}
-	s.triggerSession(w, r, prev.DomainID, prev.Trigger)
+	// Re-trigger uses the same backend as a fresh session.
+	s.triggerSession(w, r, id, nil)
 }
 
 // GetSessionTrace handles GET /api/v1/sessions/{id}/trace.
@@ -249,14 +241,15 @@ func (s *Server) RerunSession(w http.ResponseWriter, r *http.Request) {
 // Phase 1 returns a summary envelope pointing at the SSE replay endpoint.
 func (s *Server) GetSessionTrace(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if _, ok := s.lookupSession(id); !ok {
+	trace, ok := queries.GetSessionTrace(s.AppState, id)
+	if !ok {
 		writeError(w, r, NewSessionNotFound(id))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"trace_id":   id,
-		"session_id": id,
-		"replay":     "/api/v1/sessions/" + id + "/events",
+		"trace_id":   trace.TraceID,
+		"session_id": trace.SessionID,
+		"replay":     trace.Replay,
 	})
 }
 
@@ -267,7 +260,7 @@ func (s *Server) GetSessionTrace(w http.ResponseWriter, r *http.Request) {
 // client disconnects.
 func (s *Server) StreamSessionEvents(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if _, ok := s.lookupSession(id); !ok {
+	if _, ok := queries.GetSession(s.AppState, id); !ok {
 		writeError(w, r, NewSessionNotFound(id))
 		return
 	}
@@ -284,8 +277,7 @@ func (s *Server) StreamSessionEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 
-	// Subscribe to broadcaster.
-	bc := s.attachBroadcaster(id)
+	bc := s.AppState.AttachBroadcaster(id)
 	ch, unsubscribe := bc.Subscribe()
 	defer unsubscribe()
 
@@ -325,7 +317,7 @@ func writeSSE(w http.ResponseWriter, flusher http.Flusher, event string, payload
 // helpers
 // ----------------------------------------------------------------------------
 
-func jsonSession(sess *registeredSession) map[string]any {
+func jsonSession(sess *app.RegisteredSession) map[string]any {
 	out := map[string]any{
 		"id":             sess.ID,
 		"domain_id":      sess.DomainID,
@@ -333,37 +325,37 @@ func jsonSession(sess *registeredSession) map[string]any {
 		"orchestration":  sess.Orchestration,
 		"state":          sess.State,
 		"trigger":        sess.Trigger,
-		"started_at":     sess.StartedAt.Format(time.RFC3339),
+		"started_at":     queries.FormatTimeValue(sess.StartedAt),
 	}
 	if sess.CompletedAt != nil {
-		out["completed_at"] = sess.CompletedAt.Format(time.RFC3339)
+		out["completed_at"] = queries.FormatTime(sess.CompletedAt)
 	}
 	if sess.Result != nil {
 		out["result"] = sess.Result
-		out["summary"] = sessionSummary(sess)
+		out["summary"] = sessionSummary(queries.SessionListItem{
+			ID:            sess.ID,
+			DomainID:      sess.DomainID,
+			DomainVersion: sess.DomainVersion,
+			Orchestration: sess.Orchestration,
+			State:         sess.State,
+			StartedAt:     sess.StartedAt,
+			CompletedAt:   sess.CompletedAt,
+		})
 	}
 	return out
 }
 
-func sessionSummary(sess *registeredSession) map[string]any {
+func sessionSummary(sess queries.SessionListItem) map[string]any {
 	out := map[string]any{
 		"duration_ms": uint64(0),
 	}
 	if sess.CompletedAt != nil {
 		out["duration_ms"] = uint64(sess.CompletedAt.Sub(sess.StartedAt).Milliseconds())
 	}
-	if sess.Result != nil {
-		out["mode"] = sess.Result.Mode
-		out["agent_invocations"] = 0
-		out["tool_invocations"] = 0
-		out["total_cost_usd"] = 0.0
-	}
+	out["mode"] = sess.Orchestration
+	out["agent_invocations"] = 0
+	out["tool_invocations"] = 0
+	out["total_cost_usd"] = 0.0
 	return out
 }
 
-func formatCompletedAt(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
-}
