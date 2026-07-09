@@ -2,17 +2,26 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+interface CardProps extends React.ComponentProps<"div"> {
+  size?: "default" | "sm"
+  /** 开启 hover 抬升效果（通常配 onClick 使用） */
+  hoverable?: boolean
+}
+
 function Card({
   className,
   size = "default",
+  hoverable = false,
   ...props
-}: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
+}: CardProps) {
   return (
     <div
       data-slot="card"
       data-size={size}
       className={cn(
         "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl bg-card py-(--card-spacing) text-sm text-card-foreground ring-1 ring-foreground/10 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
+        "transition-all duration-200",
+        hoverable && "cursor-pointer hover:-translate-y-0.5 hover:shadow-md",
         className
       )}
       {...props}
