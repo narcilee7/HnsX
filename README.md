@@ -1,238 +1,199 @@
-# HnsX
+# HnsX — Harness as a Service
 
-> **Harness for Autonomous Agents**
+> **Don't build weaker agents. Harness stronger ones.**
 
-HnsX 让企业直接消费 Claude Code、Codex 以及未来的 Claw、Hermes 等最强 Agent 的能力，而不是从头构建更弱的 Agent。
+HnsX is a platform for safely running the strongest available agents
+(Claude Code, Codex, OpenAI, Anthropic, Ollama, …) inside enterprise
+constraints — declarative Harness configurations, fine-grained observability,
+budgets, audit, evaluations, and a control plane for production deployments.
 
-用户通过声明式配置（YAML/TOML/JSON）定义自己的 **Harness（驾驭体系）**：接入 Agent、配置能力层（Tools / Skills / MCP / Prompts）、设定沙箱与策略、接入记忆与观测。HnsX 运行时负责在约束下安全、可控、可审计地执行 Agent 会话。
+This repository contains Phase 1 of HnsX: the foundational CLI + control
+plane + REST/SSE API + observation pipeline + proto contracts that every
+subsequent phase builds on.
 
----
-
-## 一句话定位
-
-**Don't build weaker agents. Harness stronger ones.**
-
----
-
-## HnsX 不是什么
-
-| 产品类型 | HnsX 的态度 |
-|---|---|
-| **MLflow / LangSmith / W&B** | 互补。它们是模型/调用观测平台，HnsX 是 Agent 执行 harness。 |
-| **Coze / Dify / FastGPT** | 差异化。它们让用户构建弱 Agent；HnsX 让用户驾驭强 Agent。 |
-| **n8n / Zapier** | 互补。它们是通用工作流自动化；HnsX 是 Agent 运行时基础设施。 |
-| **LangGraph / CrewAI** | 互补。它们是开发者框架；HnsX 是声明式运行时。 |
-
-更多见 [`design/ProjectManagement/V1/Positioning.md`](design/ProjectManagement/V1/Positioning.md)。
+> Phase 1 deliberately **does not** ship a low-code Workflow editor, a
+> self-hosted model runtime, or a SaaS control plane. Those are later
+> phases. See [`docs/tech_overview.md`](docs/tech_overview.md) for the
+> full roadmap.
 
 ---
 
-## Workspace layout
+## Repository layout
 
 ```
-go/                    # Go monorepo: CLI / runtime / control plane
-  cmd/hnsx/            # hnsx CLI
-  pkg/core/            # domain, harness, session, turn, observation
-  pkg/adapter/         # Claude Code / Codex / OpenAI / Anthropic / Ollama / Custom
-  pkg/tool/            # HTTP / Shell / SQL / Python tools
-  pkg/skill/           # Skill engine
-  pkg/mcp/             # MCP client
-  pkg/sandbox/         # Sandbox backends
-  pkg/memory/          # Memory backends
-  pkg/telemetry/       # Trace / metrics / audit
-  pkg/controlplane/    # Registry / scheduler / API
-
-python/                # Python runtime bridge + SDK
-  hnsx/                # Python SDK
-  bridges/             # Claude Code / Codex Python bridges
-  tools/               # Python tool executor
-
-console/               # Web Console (Vue + Vite)
-  src/
-  public/
-  package.json
-  vite.config.ts
-
-domains/               # example domain YAMLs
-legacy/                # archived Rust implementation (reference only)
-docs/                  # public docs
-design/                # architecture, spec, roadmap
-```
-
----
-
-## Tech stack
-
-| 模块 | 技术 | 理由 |
-|---|---|---|
-| CLI / Runtime / Control Plane | Go | 部署简单、并发强、单二进制 |
-| Agent Bridges / SDK | Python | AI/ML 生态、与 Agent CLI 集成 |
-| Web Console | Vue + TypeScript | 现代前端、适合控制台类 UI |
-| Protocol | gRPC + REST + YAML/TOML/JSON | 内部高效、外部通用、配置友好 |
-
----
-
-## Build
-
-### Go
-
-```bash
-cd go
-go mod tidy
-go build -o ../bin/hnsx ./cmd/hnsx
-../bin/hnsx --help
-```
-
-### Web Console
-
-```bash
-cd console
-pnpm install
-pnpm dev
-```
-
-### Python SDK
-
-```bash
-cd python
-pip install -e .
+hnsx/
+├── docs/                            Design docs (vision, API, schema, orchestration, evaluation, observation)
+├── proto/                           Protobuf source — single source of truth for the API contract
+│   ├── hnsx/v1/                     .proto files (domain, control_plane, observation, runtime)
+│   └── buf.{yaml,gen.yaml}          buf config — `make proto` regenerates everything
+├── go/migrations/                   Postgres migrations (goose format)
+├── hnsx-server/                     Go server: control plane, REST+SSE API, runtime, telemetry
+│   ├── cmd/
+│   │   ├── hnsx/                    Operator CLI (validate / run / version)
+│   │   └── hnsx-server/             Control-plane daemon (server / version)
+│   ├── internal/{config,version}    Internal helpers (config loading, build info)
+│   ├── pkg/
+│   │   ├── api/                     REST handlers + chi router + SSE + error envelope
+│   │   ├── adapter/                 Provider adapters (Noop, Echo; Anthropic/OpenAI in Phase 2)
+│   │   ├── core/domain/             DomainSpec v2 model
+│   │   ├── core/loader/             YAML loader + structural validator
+│   │   ├── controlplane/            gRPC control plane server (Phase 2 service impls)
+│   │   ├── db/                      pgx wrapper + goose migration runner
+│   │   ├── observation/             Cross-package Observation event type
+│   │   ├── policy/                  Budget / permission / guardrail engine
+│   │   ├── runtime/                 Runner + Executor + Broadcaster + Supervisor + Workflow
+│   │   ├── telemetry/               OTel + stdout + DB sinks
+│   │   └── proto/gen/go/hnsx/v1/    buf-generated Go code (DO NOT EDIT)
+│   ├── go.mod
+│   └── *_test.go                    Unit tests (loader, runtime, api, config, observation, adapter)
+├── hnsx-console/                    React 19 + Vite + Shadcn-style UI (built by a separate stream)
+├── example-domains/                 4 v2 DomainSpec YAMLs (customer-service / claude-triage / code-review / financial-analysis)
+├── bin/                             Built artifacts (hnsx, hnsx-server)
+├── scripts/                         build.sh / test.sh / smoke.sh
+├── deployments/local/               docker-compose (Postgres + Tempo + Grafana)
+├── Makefile                         Top-level targets
+└── .github/workflows/ci.yml         CI: proto lint+gen / go vet+test+smoke / console type-check+build
 ```
 
 ---
 
 ## Quick start
 
-Validate an example domain:
-
 ```bash
-./bin/hnsx validate --domain domains/customer-service/domain.yaml
-```
+# 1. Build the CLI + server.
+make build
 
-Run a domain once locally with the noop adapter (no network required):
+# 2. Validate the bundled domains.
+./bin/hnsx validate --domain example-domains/customer-service/domain.yaml --json
 
-```bash
+# 3. Run a session directly from the CLI (no server needed).
 ./bin/hnsx run \
-  --domain domains/customer-service/domain.yaml \
-  --adapter noop \
-  --trigger '{"question":"What is the status of my order?"}'
+  --domain example-domains/customer-service/domain.yaml \
+  --adapter  noop \
+  --trigger  '{"question":"why was I billed twice?"}' \
+  --json
+
+# 4. Start the control-plane daemon (REST + SSE on 127.0.0.1:50051 by default).
+HNSX_HTTP_ADDR=127.0.0.1:51001 ./bin/hnsx-server server
+
+# 5. Trigger a session via REST and watch it stream back via SSE.
+SID=$(curl -fsS -X POST :51001/api/v1/sessions \
+  -H 'Content-Type: application/json' \
+  -d '{"domain_id":"customer-service","trigger":{"question":"hi"}}' | jq -r .id)
+curl -N :51001/api/v1/sessions/$SID/events
 ```
 
-Run with a real provider (set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`):
+The server boots in **DB-less mode** by default. To enable Postgres-backed
+session storage + automatic migrations:
 
 ```bash
-./bin/hnsx run \
-  --domain domains/customer-service/domain.yaml \
-  --trigger '{"question":"What is the status of my order?"}'
+docker compose -f deployments/local/docker-compose.yaml up -d postgres
+HNSX_DATABASE_URL='postgres://hnsx:hnsx@127.0.0.1:5432/hnsx?sslmode=disable' \
+HNSX_OTEL_EXPORTER=otlp \
+HNSX_OTEL_OTLP_ENDPOINT=127.0.0.1:4317 \
+./bin/hnsx-server server
 ```
-
-Start the control plane (gRPC on 50051, HTTP + Web UI on 50052):
-
-```bash
-./bin/hnsx control-plane --addr 127.0.0.1:50051 --static-dir console/dist
-```
-
-Register a domain with the control plane:
-
-```bash
-./bin/hnsx register \
-  --domain domains/customer-service/domain.yaml \
-  --control-plane http://127.0.0.1:50051
-```
-
-Run a domain and report telemetry to the control plane:
-
-```bash
-./bin/hnsx run \
-  --domain domains/customer-service/domain.yaml \
-  --adapter noop \
-  --trigger '{"question":"hello"}' \
-  --control-plane http://127.0.0.1:50051
-```
-
-Inspect telemetry:
-
-```bash
-./bin/hnsx traces --control-plane http://127.0.0.1:50051 --domain-id customer-service
-./bin/hnsx metrics --control-plane http://127.0.0.1:50051 --domain-id customer-service
-```
-
-Browse the Web UI at `http://127.0.0.1:50052` when the control plane is running with `--static-dir console/dist`.
 
 ---
 
-## Harness 五要素
+## REST API surface (Phase 1)
 
-```yaml
-harness:
-  agents:      # 接入 Claude Code / Codex / OpenAI / Anthropic / Ollama / Custom
-  prompts:     # System / Structured Prompts
-  skills:      # 可复用业务能力包
-  tools:       # 内置 HTTP / Shell / SQL / Python tools
-  mcp:         # Model Context Protocol servers
-  sandbox:     # 执行隔离策略
-  policy:      # 预算、权限、guardrails
-  memory:      # 跨会话上下文
-  session:     # 会话模式：single-task / multi-turn / hierarchical / autonomous / workflow
-```
+| Method | Path                                 | Description                  |
+|--------|--------------------------------------|------------------------------|
+| GET    | `/healthz`                           | Liveness                     |
+| GET    | `/readyz`                            | Readiness (DB ping)          |
+| GET    | `/api/v1/domains`                    | List registered domains      |
+| POST   | `/api/v1/domains`                    | Register a new domain        |
+| GET    | `/api/v1/domains/{id}`               | Domain detail                |
+| PUT    | `/api/v1/domains/{id}`               | Update domain                |
+| DELETE | `/api/v1/domains/{id}`               | Delete domain                |
+| POST   | `/api/v1/domains/{id}/validate`      | Validate a DomainSpec body   |
+| POST   | `/api/v1/domains/{id}/run`           | Trigger a session for domain |
+| GET    | `/api/v1/sessions`                   | List sessions                |
+| POST   | `/api/v1/sessions`                   | Trigger a session            |
+| GET    | `/api/v1/sessions/{id}`              | Session detail + summary     |
+| GET    | `/api/v1/sessions/{id}/trace`        | Trace summary (Phase 1: stub)|
+| GET    | `/api/v1/sessions/{id}/events`       | **SSE** live observation     |
+| POST   | `/api/v1/sessions/{id}/cancel`       | Cancel a running session     |
+| POST   | `/api/v1/sessions/{id}/rerun`        | Re-trigger a session         |
+| GET    | `/api/v1/traces`                     | List traces                  |
+| GET    | `/api/v1/traces/{traceId}`           | Trace detail                 |
+| GET    | `/api/v1/audit`                      | Audit log                    |
+| GET    | `/api/v1/metrics`                    | Aggregate metrics            |
+| GET    | `/api/v1/runtimes`                   | Runtime workers              |
+| GET    | `/api/v1/secrets`                    | Secret registry (read-mask)  |
+| GET    | `/api/v1/policies`                   | Policy registry              |
 
-完整 schema 见 [`design/Tech/V1/DomainSpec-v2.md`](design/Tech/V1/DomainSpec-v2.md)。
+OpenAPI / generated TS types land in the **`hnsx-console/`** workspace
+once proto generation is wired into pnpm.
 
----
-
-## Status
-
-项目正在进行 **V1 Harness 运行时** 的 pivot：
-
-- 从旧的 Workflow-DAG 运行时代码模型，迁移到以 **Harness / Session / Turn / Observation** 为核心的新模型。
-- 新 domain spec 以 `harness` 为顶层字段，旧 `workflow` 语法保持兼容。
-- 技术栈从 Rust 迁移到 **Go + Python + Vue** 异构架构。
-- 控制面、Web UI、CLI 将按新架构重新实现。
-
-详细路线图见 [`design/ProjectManagement/V1/RoadMap.md`](design/ProjectManagement/V1/RoadMap.md)。
-
-| Phase | Milestone | Status |
-|---|---|---|
-| 0 | Product & Architecture design | ✅ |
-| 1 | Go runtime skeleton | 🚧 |
-| 2 | Harness runtime core | 🚧 |
-| 3 | Tools / Skills / MCP skeleton | 🚧 |
-| 4 | Agent adapters | 🚧 |
-| 5 | Sandbox & Policy | 🚧 |
-| 6 | Memory & Telemetry | 🚧 |
-| 7 | Control plane | 🚧 |
-| 8 | Web Console (Vue) | 🚧 |
-| 9 | Python SDK | 🚧 |
-| 10 | Build / Deploy / Release | 🚧 |
+See [`docs/server-design/api-design.md`](docs/server-design/api-design.md)
+for the full contract including the standard error envelope.
 
 ---
 
-## Test
+## Architecture in one picture
 
-### Go
-
-```bash
-cd go
-go test ./...
-go vet ./...
+```
+┌──────────────────────────────────────────────────────┐
+│  hnsx-server                                         │
+│  ┌────────────┐  ┌─────────────┐  ┌──────────────┐    │
+│  │ API Layer  │  │   Runtime   │  │  Telemetry   │    │
+│  │  chi + SSE │──│  Executor + │──│  StdoutSink  │    │
+│  │            │  │ Broadcaster │  │ OtlpGRPCSink │    │
+│  └─────┬──────┘  └─────┬───────┘  └──────┬───────┘    │
+│        │               │               │            │
+│        └─────┬─────────┴─────────┬─────┘            │
+│              │         ┌─────────┴───────┐          │
+│              │         │     DB          │          │
+│              │         │   pgx + goose   │          │
+│              │         └────────┬────────┘          │
+└──────────────┼──────────────────┼──────────────────┘
+               │                  │
+        ┌──────┴──────┐    ┌──────┴───────┐
+        │ hnsx (CLI)  │    │ hnsx-console │
+        │   validate  │    │  (Phase 1+)  │
+        │   run       │    └──────────────┘
+        └─────────────┘
 ```
 
-### Python
+The **observation** type is shared between runtime, telemetry, and SSE so
+the same JSON shape is emitted everywhere (stdout, OTLP span attributes,
+DB row payload, SSE event data).
+
+---
+
+## Development
 
 ```bash
-cd python
-pytest
+make proto           # buf lint + buf generate  (regenerates Go proto)
+make build           # build CLI + server
+make vet             # go vet
+make test-go         # go test ./...
+./scripts/smoke.sh   # end-to-end smoke against in-process server
 ```
 
-### Console
+### Proto changes
 
-```bash
-cd console
-pnpm type-check
-pnpm lint
-```
+1. Edit `proto/hnsx/v1/*.proto`.
+2. Run `make proto` (regenerates `proto/gen/go/hnsx/v1/`).
+3. Update the API handlers in `pkg/api/` to match.
+4. Update the `pkg/core/domain/` model if the changes touch DomainSpec.
+
+### Database changes
+
+1. Add a new `NNNN_*.up.sql` (and matching `.down.sql`) under `go/migrations/`.
+2. The server applies them automatically on boot via `pkg/db.Migrate`.
+
+### Configuration
+
+All runtime knobs come from `internal/config` and resolve in this order:
+`flag` → `HNSX_*` env vars → YAML file (`--config`) → defaults.
+
+See [`scripts/smoke.sh`](scripts/smoke.sh) for the canonical env contract.
 
 ---
 
 ## License
 
-Apache-2.0
+See source headers. Phase 1 work-in-progress.

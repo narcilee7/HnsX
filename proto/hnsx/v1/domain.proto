@@ -1,0 +1,218 @@
+syntax = "proto3";
+
+package hnsx.v1;
+
+option go_package = "github.com/hnsx-io/hnsx/go/proto/gen/go/hnsx/v1";
+
+// DomainSpec is the top-level declarative harness definition.
+message DomainSpec {
+  string id = 1;
+  string version = 2;
+  string description = 3;
+  Harness harness = 4;
+  Eval eval = 5;
+}
+
+// DomainRef references a domain by id and version.
+message DomainRef {
+  string id = 1;
+  string version = 2;
+}
+
+// Harness is the set of constraints and capabilities wrapped around Agents.
+message Harness {
+  repeated Agent agents = 1;
+  repeated Prompt prompts = 2;
+  repeated Skill skills = 3;
+  repeated Tool tools = 4;
+  repeated MCPConfig mcps = 5;
+  Sandbox sandbox = 6;
+  Policy policy = 7;
+  Memory memory = 8;
+  Session session = 9;
+}
+
+// Agent describes an external agent to be harnessed.
+message Agent {
+  string id = 1;
+  string description = 2;
+  ModelRef model = 3;
+  AdapterRef adapter = 4;
+  PromptRef prompt = 5;
+  repeated string skill_refs = 6;
+  repeated string tool_refs = 7;
+}
+
+// ModelRef references a model provider and model name.
+message ModelRef {
+  string provider = 1;
+  string model = 2;
+}
+
+// AdapterRef references an adapter configuration.
+message AdapterRef {
+  string kind = 1;
+  int32 timeout_seconds = 2;
+}
+
+// Prompt is a reusable prompt template.
+message Prompt {
+  string id = 1;
+  string template = 2;
+  map<string, string> variables = 3;
+}
+
+// PromptRef references a prompt by ID.
+message PromptRef {
+  string id = 1;
+}
+
+// Skill is a reusable business capability package.
+message Skill {
+  string id = 1;
+  string description = 2;
+  repeated Prompt prompts = 3;
+  repeated Tool tools = 4;
+  repeated string mcp_refs = 5;
+  repeated Example examples = 6;
+}
+
+// Example is a few-shot example for a skill.
+message Example {
+  string id = 1;
+  string input = 2;
+  string output = 3;
+}
+
+// Tool is an atomic capability.
+message Tool {
+  string id = 1;
+  string description = 2;
+  string type = 3;
+  string config = 4;
+}
+
+// MCPConfig describes an MCP server connection.
+message MCPConfig {
+  string id = 1;
+  string command = 2;
+  repeated string args = 3;
+  map<string, string> env = 4;
+}
+
+// Sandbox defines execution isolation.
+message Sandbox {
+  string backend = 1;
+  string config = 2;
+}
+
+// Policy defines constraints.
+message Policy {
+  double budget_usd = 1;
+  repeated string allowed_tools = 2;
+  repeated string denied_tools = 3;
+  bool require_human_approval = 4;
+  string guardrails = 5;
+}
+
+// Memory defines context storage.
+message Memory {
+  string backend = 1;
+  string config = 2;
+}
+
+// Session defines orchestration strategy and runtime mode.
+message Session {
+  string mode = 1;
+  SingleSession single = 2;
+  SupervisorSession supervisor = 3;
+  WorkflowSession workflow = 4;
+  AutonomousSession autonomous = 5;
+}
+
+// SingleSession runs one agent for the entire session.
+message SingleSession {
+  string agent_ref = 1;
+  int32 max_turns = 2;
+  string exit = 3;
+}
+
+// SupervisorSession uses a supervisor agent to dispatch specialists.
+message SupervisorSession {
+  string supervisor_ref = 1;
+  int32 max_turns = 2;
+  repeated Transition transitions = 3;
+  string fallback = 4;
+  map<string, SpecialistConfig> specialists = 5;
+}
+
+// SpecialistConfig defines the runtime behavior of a specialist agent.
+message SpecialistConfig {
+  string agent_ref = 1;
+  string exit = 2;
+  repeated Transition transitions = 3;
+}
+
+// WorkflowSession defines a graph of steps.
+message WorkflowSession {
+  string entry = 1;
+  repeated Step steps = 2;
+}
+
+// AutonomousSession gives the agent maximum freedom.
+message AutonomousSession {
+  string agent_ref = 1;
+  repeated string allowed_tools = 2;
+  repeated string allowed_agents = 3;
+  int32 max_turns = 4;
+  string exit = 5;
+}
+
+// Step is a single node in a workflow.
+message Step {
+  string id = 1;
+  string agent_ref = 2;
+  string prompt_ref = 3;
+  string exit = 4;
+  repeated Transition transitions = 5;
+}
+
+// Transition defines when to move from one step/agent to another.
+message Transition {
+  string when = 1;
+  string to = 2;
+  string reason = 3;
+}
+
+// Eval defines evaluation sets.
+message Eval {
+  repeated EvalSet sets = 1;
+}
+
+// EvalSet is a collection of eval cases.
+message EvalSet {
+  string id = 1;
+  string description = 2;
+  repeated EvalCase cases = 3;
+}
+
+// EvalCase is a single evaluation case.
+message EvalCase {
+  string id = 1;
+  string name = 2;
+  string input = 3;
+  string expect = 4;
+  ScorerConfig scorer = 5;
+}
+
+// ScorerConfig defines how to score a case.
+message ScorerConfig {
+  repeated Scorer scorers = 1;
+}
+
+message Scorer {
+  string name = 1;
+  string kind = 2;
+  double weight = 3;
+  string config = 4;
+}
