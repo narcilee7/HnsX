@@ -260,6 +260,9 @@ func cmdServer(args []string) int {
 		}
 		shutdownCtx, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel2()
+		if err := srv.Drain(shutdownCtx); err != nil {
+			log.Printf("[hnsx-server] api drain: %v", err)
+		}
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			log.Printf("[hnsx-server] api shutdown: %v", err)
 		}
