@@ -16,8 +16,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
+	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
 // Server is the gRPC control-plane server.
@@ -30,15 +30,15 @@ type Server struct {
 	// Worker / scheduler services; nil-safe (the gRPC server still
 	// starts even if these aren't wired, but the corresponding RPCs
 	// will return Unimplemented).
-	Worker   *WorkerServiceServer
-	Sched    *SchedulerServiceServer
+	Worker *WorkerServiceServer
+	Sched  *SchedulerServiceServer
 }
 
 // NewServer constructs a Server bound to addr.
 func NewServer(addr string) *Server { return &Server{addr: addr} }
 
 // WithWorkerServices wires the V1.1 worker + scheduler services into the
-// server. ``reg`` and ``q`` are shared with the API layer so REST session
+// server. “reg“ and “q“ are shared with the API layer so REST session
 // creation can enqueue and REST cancel can publish to the worker's
 // StreamChannel.
 func (s *Server) WithWorkerServices(reg *worker.Registry, q *worker.SessionQueue) *Server {

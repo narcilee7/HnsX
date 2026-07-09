@@ -11,15 +11,15 @@ import (
 // from the original /api/v1/sessions trigger; we just plumb them through
 // to the worker.
 type SessionRequest struct {
-	SessionID         string
-	DomainID          string
-	DomainVersion     string
-	DomainSpecJSON    string
-	TriggerPayloadJSON string
-	TraceID           string
+	SessionID            string
+	DomainID             string
+	DomainVersion        string
+	DomainSpecJSON       string
+	TriggerPayloadJSON   string
+	TraceID              string
 	RequiredCapabilities []string // e.g. ["provider:anthropic","model:claude-haiku-4-5"]
-	EnqueuedAt        time.Time
-	CorrelationID     string
+	EnqueuedAt           time.Time
+	CorrelationID        string
 }
 
 // SessionQueue is an in-memory FIFO with capability matching and
@@ -60,8 +60,8 @@ func (q *SessionQueue) Enqueue(req *SessionRequest) {
 	q.cond.Signal()
 }
 
-// Dequeue blocks until either a session matching ``required`` is
-// available or ``ctx`` is cancelled. The match rule is "all required
+// Dequeue blocks until either a session matching “required“ is
+// available or “ctx“ is cancelled. The match rule is "all required
 // capabilities must be present in the request's RequiredCapabilities"
 // (intersection is non-empty for every key). Returns (nil, false) on
 // cancellation.

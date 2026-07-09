@@ -56,7 +56,7 @@ def check_proto() -> None:
 
 
 @cli.command("run")
-@click.option("--server", default="127.0.0.1:50051", help="hnsx-server gRPC address (host:port).")
+@click.option("--server", default="127.0.0.1:50061", help="hnsx-server gRPC address (host:port).")
 @click.option("--worker-id", default="", help="Stable worker id (empty = server-assigned).")
 @click.option("--region", default="local", help="Free-form region tag.")
 @click.option("--max-concurrent-sessions", default=4, type=int, help="Max subprocesses this worker runs in parallel.")

@@ -65,13 +65,13 @@ func TestQueue_Dequeue_CancelReturnsEmpty(t *testing.T) {
 func TestQueue_CapabilityMatch(t *testing.T) {
 	q := NewSessionQueue()
 	q.Enqueue(&SessionRequest{
-		SessionID:           "s-anthropic",
-		DomainID:            "d",
+		SessionID:            "s-anthropic",
+		DomainID:             "d",
 		RequiredCapabilities: []string{"provider:anthropic"},
 	})
 	q.Enqueue(&SessionRequest{
-		SessionID:           "s-openai",
-		DomainID:            "d",
+		SessionID:            "s-openai",
+		DomainID:             "d",
 		RequiredCapabilities: []string{"provider:openai"},
 	})
 
