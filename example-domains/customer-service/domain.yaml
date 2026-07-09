@@ -1,0 +1,72 @@
+id: customer-service
+version: 0.2.0
+description: |
+  Routes customer questions to the right specialist agent
+  (triage -> billing/technical). V2 DomainSpec shape.
+harness:
+  agents:
+    triage:
+      id: triage
+      provider: anthropic
+      model: claude-haiku-4-5
+      adapter:
+        kind: anthropic
+        timeout_seconds: 30
+      system_prompt: triage-prompt
+    billing:
+      id: billing
+      provider: openai
+      model: gpt-4o-mini
+      adapter:
+        kind: openai
+        timeout_seconds: 60
+      system_prompt: billing-prompt
+    technical:
+      id: technical
+      provider: anthropic
+      model: claude-haiku-4-5
+      adapter:
+        kind: anthropic
+        timeout_seconds: 60
+      system_prompt: technical-prompt
+  prompts:
+    triage-prompt:
+      type: system
+      template: |
+        You are a triage agent. Classify the user's question into one of
+        {billing, technical, other} and reply with JSON only.
+    billing-prompt:
+      type: system
+      template: |
+        You are the billing specialist. Answer the user's billing question
+        concisely.
+    technical-prompt:
+      type: system
+      template: |
+        You are the technical specialist. Diagnose and answer the user's
+        technical question concisely.
+  sandbox:
+    policy: none
+  policy:
+    budget:
+      max_cost_usd: 1.0
+      max_turns: 20
+    permissions:
+      allow_network: true
+      allow_file_write: false
+      allow_file_delete: false
+      allow_shell: false
+  session:
+    mode: workflow
+    workflow:
+      entry: classify
+      steps:
+        - id: classify
+          agent: triage
+          next: respond
+          output: classification
+        - id: respond
+          agent: billing
+          input:
+            classification: "${classification}"
+          output: response

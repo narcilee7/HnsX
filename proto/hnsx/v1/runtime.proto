@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package hnsx.v1;
+
+option go_package = "github.com/hnsx-io/hnsx/go/proto/gen/go/hnsx/v1";
+
+import "hnsx/v1/observation.proto";
+
+service RuntimeService {
+  rpc Trigger(TriggerRequest) returns (stream TriggerResponse);
+}
+
+message TriggerRequest {
+  string domain_id = 1;
+  string domain_version = 2;
+  string session_id = 3;
+  string payload = 4;
+}
+
+message TriggerResponse {
+  oneof item {
+    Observation observation = 1;
+    StateUpdate state = 2;
+    ErrorChunk error = 3;
+    DoneChunk done = 4;
+  }
+}
+
+message StateUpdate {
+  string session_id = 1;
+  string state = 2;
+  string result = 3;
+}
+
+message ErrorChunk {
+  string code = 1;
+  string message = 2;
+}
+
+message DoneChunk {
+  string session_id = 1;
+  string result = 2;
+}
