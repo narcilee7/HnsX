@@ -29,7 +29,3 @@ plugins:
 #   out: ../sdk/node/src/gen
 #   opt:
 #     - target=ts
-
-# TODO (Phase 1.1): enable Python generation once plugin is added.
-# - local: protoc-gen-python
-#   out: ../sdk/python/src/gen

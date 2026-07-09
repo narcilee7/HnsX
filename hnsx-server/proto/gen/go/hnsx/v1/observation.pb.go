@@ -491,8 +491,8 @@ const file_hnsx_v1_observation_proto_rawDesc = "" +
 	"\ftimestamp_ms\x18\x04 \x01(\x03R\vtimestampMs\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x8d\x01\n" +
-	"\vcom.hnsx.v1B\x10ObservationProtoP\x01Z/github.com/hnsx-io/hnsx/go/proto/gen/go/hnsx/v1\xa2\x02\x03HXX\xaa\x02\aHnsx.V1\xca\x02\aHnsx\\V1\xe2\x02\x13Hnsx\\V1\\GPBMetadata\xea\x02\bHnsx::V1b\x06proto3"
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x91\x01\n" +
+	"\vcom.hnsx.v1B\x10ObservationProtoP\x01Z3github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1\xa2\x02\x03HXX\xaa\x02\aHnsx.V1\xca\x02\aHnsx\\V1\xe2\x02\x13Hnsx\\V1\\GPBMetadata\xea\x02\bHnsx::V1b\x06proto3"
 
 var (
 	file_hnsx_v1_observation_proto_rawDescOnce sync.Once
