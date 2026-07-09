@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
+	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
 func newTestServer(t *testing.T) (*SchedulerServiceServer, *worker.Registry, *worker.SessionQueue) {
@@ -34,9 +34,9 @@ func TestScheduler_PullSession_returnsEmptyWhenNoWork(t *testing.T) {
 func TestScheduler_PullSession_returnsEnqueuedSession(t *testing.T) {
 	s, _, q := newTestServer(t)
 	q.Enqueue(&worker.SessionRequest{
-		SessionID:         "s-1",
-		DomainID:          "d-1",
-		DomainSpecJSON:    `{"id":"d-1"}`,
+		SessionID:          "s-1",
+		DomainID:           "d-1",
+		DomainSpecJSON:     `{"id":"d-1"}`,
 		TriggerPayloadJSON: `{"q":"hi"}`,
 	})
 
@@ -58,20 +58,20 @@ func TestScheduler_PullSession_returnsEnqueuedSession(t *testing.T) {
 func TestScheduler_PullSession_respectsRequiredCapabilities(t *testing.T) {
 	s, _, q := newTestServer(t)
 	q.Enqueue(&worker.SessionRequest{
-		SessionID:           "s-anthropic",
-		DomainID:            "d",
+		SessionID:            "s-anthropic",
+		DomainID:             "d",
 		RequiredCapabilities: []string{"provider:anthropic"},
 	})
 	q.Enqueue(&worker.SessionRequest{
-		SessionID:           "s-openai",
-		DomainID:            "d",
+		SessionID:            "s-openai",
+		DomainID:             "d",
 		RequiredCapabilities: []string{"provider:openai"},
 	})
 
 	resp, err := s.PullSession(context.Background(), &pb.PullSessionRequest{
-		WorkerId:              "w-openai",
-		MaxWaitSeconds:        1,
-		RequiredCapabilities:  []string{"provider:openai"},
+		WorkerId:             "w-openai",
+		MaxWaitSeconds:       1,
+		RequiredCapabilities: []string{"provider:openai"},
 	})
 	if err != nil {
 		t.Fatalf("PullSession: %v", err)

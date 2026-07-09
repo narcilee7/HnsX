@@ -4,16 +4,16 @@ import (
 	"context"
 	"time"
 
-	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
+	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
 // WorkerServiceServer implements the WorkerService gRPC surface that
 // Python workers call into. The two RPCs are:
 //
 //   - Register  : first call after a worker process starts; returns the
-//                 canonical worker_id and the server's preferred
-//                 heartbeat cadence.
+//     canonical worker_id and the server's preferred
+//     heartbeat cadence.
 //   - Heartbeat : every ~5s; carries resource usage + liveness signal.
 type WorkerServiceServer struct {
 	pb.UnimplementedWorkerServiceServer

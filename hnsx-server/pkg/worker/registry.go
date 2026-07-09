@@ -29,11 +29,11 @@ type WorkerRecord struct {
 
 // Snapshot is a read-only view of a worker's runtime state.
 type Snapshot struct {
-	WorkerID    string
-	Info        *pb.WorkerInfo
-	LastSeen    time.Time
-	AgeSeconds  float64
-	Healthy     bool
+	WorkerID   string
+	Info       *pb.WorkerInfo
+	LastSeen   time.Time
+	AgeSeconds float64
+	Healthy    bool
 }
 
 // ErrUnknownWorker is returned by Heartbeat / Get when the worker_id has
@@ -42,16 +42,18 @@ var ErrUnknownWorker = errors.New("worker: unknown worker_id")
 
 // Registry tracks all live workers and their resource views.
 type Registry struct {
-	mu      sync.RWMutex
-	workers map[string]*WorkerRecord
-	now     func() time.Time
+	mu                 sync.RWMutex
+	workers            map[string]*WorkerRecord
+	sessionAssignments map[string]string // session_id -> worker_id
+	now                func() time.Time
 }
 
 // NewRegistry constructs an empty Registry.
 func NewRegistry() *Registry {
 	return &Registry{
-		workers: map[string]*WorkerRecord{},
-		now:     time.Now,
+		workers:            map[string]*WorkerRecord{},
+		sessionAssignments: map[string]string{},
+		now:                time.Now,
 	}
 }
 
@@ -59,7 +61,7 @@ func NewRegistry() *Registry {
 func (r *Registry) SetClock(fn func() time.Time) { r.now = fn }
 
 // Register records a worker's WorkerInfo and returns a canonical worker_id.
-// If ``info.WorkerId`` is empty a fresh id is minted from the current
+// If “info.WorkerId“ is empty a fresh id is minted from the current
 // nanosecond clock + a short random suffix; otherwise the supplied id is
 // reused (idempotent re-registration).
 func (r *Registry) Register(info *pb.WorkerInfo) (string, error) {
@@ -153,7 +155,7 @@ func (r *Registry) List() []Snapshot {
 
 // Inbound returns the cancel/drain push channel for the named worker, or
 // nil if the worker_id is unknown. Producers (e.g. cancel APIs) call
-// ``SendInbound(workerID, event)`` which is non-blocking; if the buffer
+// “SendInbound(workerID, event)“ which is non-blocking; if the buffer
 // is full the event is dropped and the caller can fall back to
 // best-effort status updates.
 func (r *Registry) Inbound(workerID string) chan *pb.StreamChannelResponse {
@@ -192,7 +194,7 @@ func (r *Registry) SendCancel(workerID, sessionID, reason string, deadlineMs int
 	}
 }
 
-// EvictStale removes workers whose last heartbeat is older than ``maxAge``.
+// EvictStale removes workers whose last heartbeat is older than “maxAge“.
 // Returns the list of evicted worker_ids so callers can log / re-queue
 // their in-flight sessions.
 func (r *Registry) EvictStale(maxAge time.Duration) []string {
@@ -209,6 +211,30 @@ func (r *Registry) EvictStale(maxAge time.Duration) []string {
 		}
 	}
 	return evicted
+}
+
+// AssignSession records that “workerID“ is now responsible for
+// “sessionID“. Used by the scheduler after a successful PullSession.
+func (r *Registry) AssignSession(workerID, sessionID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sessionAssignments[sessionID] = workerID
+}
+
+// UnassignSession removes the session-to-worker mapping.
+func (r *Registry) UnassignSession(sessionID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.sessionAssignments, sessionID)
+}
+
+// SessionWorker returns the worker_id currently assigned to “sessionID“,
+// or false if none.
+func (r *Registry) SessionWorker(sessionID string) (string, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	wid, ok := r.sessionAssignments[sessionID]
+	return wid, ok
 }
 
 // Len returns the number of registered workers (including stale).

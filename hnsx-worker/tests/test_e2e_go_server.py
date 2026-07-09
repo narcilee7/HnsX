@@ -24,7 +24,7 @@ import pytest
 
 from hnsx_worker.adapters import AdapterRegistry
 from hnsx_worker.adapters.anthropic import AnthropicAdapter
-from hnsx_worker.proto.gen.hnsx.v1 import worker_pb2, worker_pb2_grpc
+from hnsx_worker.proto.gen.hnsx.v1 import observation_pb2, worker_pb2, worker_pb2_grpc
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVER_BIN = REPO_ROOT / "bin" / "hnsx-server"
@@ -142,7 +142,7 @@ def test_python_worker_against_go_server(go_server: str, monkeypatch) -> None:
             worker_id="w-e2e-1",
             observations=worker_pb2.ObservationBatch(
                 observations=[
-                    worker_pb2.Observation(
+                    observation_pb2.Observation(
                         session_id="s-1",
                         domain_id="d-1",
                         kind="test_ping",

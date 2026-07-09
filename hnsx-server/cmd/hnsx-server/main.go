@@ -14,6 +14,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -21,9 +22,11 @@ import (
 	"os/signal"
 	stdruntime "runtime"
 	"syscall"
+	"time"
 
 	"github.com/hnsx-io/hnsx/core/adapter"
 	"github.com/hnsx-io/hnsx/core/loader"
+	"github.com/hnsx-io/hnsx/core/observation"
 	"github.com/hnsx-io/hnsx/core/version"
 	"github.com/hnsx-io/hnsx/server/internal/config"
 	"github.com/hnsx-io/hnsx/server/pkg/api"
@@ -32,6 +35,8 @@ import (
 	hsxruntime "github.com/hnsx-io/hnsx/server/pkg/session"
 	"github.com/hnsx-io/hnsx/server/pkg/telemetry"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
+
+	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
 func main() {
@@ -129,18 +134,17 @@ func cmdServer(args []string) int {
 		Built:     version.Built,
 		GoVersion: stdruntime.Version(),
 	}
-	srv := api.NewServer(build, store, exec)
-
-	if *seedFrom != "" {
-		seedFromDir(srv, *seedFrom)
-	}
-
-	// V1.1: V1.1 worker pool. The registry + queue are shared with the
+	// V1.1: worker pool. The registry + queue are shared with the
 	// REST API so session creation enqueues and cancel APIs publish to
 	// the worker's StreamChannel. Both pieces are in-memory; V1.2
 	// persists worker state into the runtimes table.
 	workerReg := worker.NewRegistry()
 	sessionQ := worker.NewSessionQueue()
+	srv := api.NewServerWithWorkerPool(build, store, exec, workerReg, sessionQ)
+
+	if *seedFrom != "" {
+		seedFromDir(srv, *seedFrom)
+	}
 
 	// Stale-worker GC: every 30s, evict workers that haven't heartbeat
 	// in over 60s and log how many were reaped.
@@ -163,6 +167,28 @@ func cmdServer(args []string) int {
 	var grpcSrv *controlplane.Server
 	if cfg.GRPCAddr != "" {
 		grpcSrv = controlplane.NewServer(cfg.GRPCAddr).WithWorkerServices(workerReg, sessionQ)
+		if grpcSrv.Sched != nil {
+			grpcSrv.Sched.OnObservation = func(sessionID string, obs *pb.Observation) {
+				payload := map[string]any{}
+				if obs.GetPayload() != "" {
+					_ = json.Unmarshal([]byte(obs.GetPayload()), &payload)
+				}
+				srv.PublishObservation(sessionID, observation.Observation{
+					Kind:      obs.GetKind(),
+					SessionID: obs.GetSessionId(),
+					DomainID:  obs.GetDomainId(),
+					StepID:    obs.GetStepId(),
+					AgentID:   obs.GetAgentId(),
+					ParentID:  obs.GetParentId(),
+					TraceID:   obs.GetTraceId(),
+					Payload:   payload,
+					Timestamp: time.UnixMilli(obs.GetCreatedAtMs()),
+				})
+			}
+			grpcSrv.Sched.OnSessionStatus = func(sessionID, state string) {
+				srv.UpdateSessionState(sessionID, state)
+			}
+		}
 	}
 
 	log.Printf("[hnsx-server] listening on http=%s grpc=%s", cfg.HTTPAddr, cfg.GRPCAddr)
