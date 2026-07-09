@@ -2,7 +2,11 @@
 // the CLI and the HTTP API.
 package queries
 
-import "time"
+import (
+	"time"
+
+	"github.com/hnsx-io/hnsx/server/internal/app"
+)
 
 // DomainListItem is the public view returned by ListDomains.
 type DomainListItem struct {
@@ -23,6 +27,97 @@ type SessionListItem struct {
 	State         string
 	StartedAt     time.Time
 	CompletedAt   *time.Time
+}
+
+// SessionTrace is the public view returned by GetSessionTrace.
+type SessionTrace struct {
+	TraceID   string
+	SessionID string
+	Replay    string
+}
+
+// ListDomains returns every registered domain as a list item.
+func ListDomains(state *app.State) []DomainListItem {
+	if state == nil {
+		return nil
+	}
+	items := state.ListDomains()
+	out := make([]DomainListItem, 0, len(items))
+	for _, d := range items {
+		out = append(out, DomainListItem{
+			ID:          d.ID,
+			Version:     d.Version,
+			Description: d.Description,
+			Status:      "active",
+			CreatedAt:   d.CreatedAt,
+			UpdatedAt:   d.UpdatedAt,
+		})
+	}
+	return out
+}
+
+// GetDomain returns the public view of a single domain.
+func GetDomain(state *app.State, id string) (*DomainListItem, *app.RegisteredDomain, bool) {
+	if state == nil {
+		return nil, nil, false
+	}
+	d, ok := state.LookupDomain(id)
+	if !ok {
+		return nil, nil, false
+	}
+	item := &DomainListItem{
+		ID:          d.ID,
+		Version:     d.Version,
+		Description: d.Description,
+		Status:      "active",
+		CreatedAt:   d.CreatedAt,
+		UpdatedAt:   d.UpdatedAt,
+	}
+	return item, d, true
+}
+
+// ListSessions returns every registered session as a list item.
+func ListSessions(state *app.State) []SessionListItem {
+	if state == nil {
+		return nil
+	}
+	items := state.ListSessions()
+	out := make([]SessionListItem, 0, len(items))
+	for _, s := range items {
+		out = append(out, SessionListItem{
+			ID:            s.ID,
+			DomainID:      s.DomainID,
+			DomainVersion: s.DomainVersion,
+			Orchestration: s.Orchestration,
+			State:         s.State,
+			StartedAt:     s.StartedAt,
+			CompletedAt:   s.CompletedAt,
+		})
+	}
+	return out
+}
+
+// GetSession returns a single session by ID.
+func GetSession(state *app.State, id string) (*app.RegisteredSession, bool) {
+	if state == nil {
+		return nil, false
+	}
+	return state.LookupSession(id)
+}
+
+// GetSessionTrace returns the trace envelope for a session.
+func GetSessionTrace(state *app.State, id string) (*SessionTrace, bool) {
+	if state == nil {
+		return nil, false
+	}
+	if _, ok := state.LookupSession(id); !ok {
+		return nil, false
+	}
+	return &SessionTrace{
+		TraceID:   id,
+		SessionID: id,
+		Replay:    "/api/v1/sessions/" + id + "/events",
+	}, true
 }
 
 // FormatTime returns the RFC3339 representation or empty string for nil.

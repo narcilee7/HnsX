@@ -5,19 +5,18 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 )
 
 // ListTraces handles GET /api/v1/traces — returns the per-domain trace index.
-//
-// Phase 1 derives the index from registered sessions. A real implementation
-// would source from Tempo.
 func (s *Server) ListTraces(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	domainFilter := q.Get("domain")
 	limit := intQuery(r, "limit", 50)
 	offset := intQuery(r, "offset", 0)
 
-	items := s.listSessionItems()
+	items := queries.ListSessions(s.AppState)
 	out := make([]map[string]any, 0, len(items))
 	for _, sess := range items {
 		if domainFilter != "" && sess.DomainID != domainFilter {
@@ -29,7 +28,7 @@ func (s *Server) ListTraces(w http.ResponseWriter, r *http.Request) {
 			"domain_id":      sess.DomainID,
 			"domain_version": sess.DomainVersion,
 			"status":         sess.State,
-			"started_at":     sess.StartedAt.Format(time.RFC3339),
+			"started_at":     queries.FormatTimeValue(sess.StartedAt),
 			"duration_ms":    durationMs(sess),
 		})
 	}
@@ -52,7 +51,7 @@ func (s *Server) ListTraces(w http.ResponseWriter, r *http.Request) {
 // GetTrace handles GET /api/v1/traces/{traceId}.
 func (s *Server) GetTrace(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "traceId")
-	sess, ok := s.lookupSession(id)
+	sess, ok := queries.GetSession(s.AppState, id)
 	if !ok {
 		writeError(w, r, NewSessionNotFound(id))
 		return
@@ -63,8 +62,12 @@ func (s *Server) GetTrace(w http.ResponseWriter, r *http.Request) {
 		"domain_id":     sess.DomainID,
 		"orchestration": sess.Orchestration,
 		"state":         sess.State,
-		"started_at":    sess.StartedAt.Format(time.RFC3339),
-		"duration_ms":   durationMs(sess),
+		"started_at":    queries.FormatTimeValue(sess.StartedAt),
+		"duration_ms": durationMs(queries.SessionListItem{
+			ID:          sess.ID,
+			StartedAt:   sess.StartedAt,
+			CompletedAt: sess.CompletedAt,
+		}),
 	})
 }
 
@@ -138,7 +141,7 @@ func (s *Server) ListAudit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	domainFilter := q.Get("domain")
-	sessions := s.listSessionItems()
+	sessions := queries.ListSessions(s.AppState)
 	total := 0
 	completed := 0
 	failed := 0
@@ -171,6 +174,7 @@ func (s *Server) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		"tool_invocations":   0,
 	})
 }
+
 
 // ListRuntimes handles GET /api/v1/runtimes.
 func (s *Server) ListRuntimes(w http.ResponseWriter, r *http.Request) {
@@ -247,7 +251,7 @@ func intQuery(r *http.Request, key string, def int) int {
 	return n
 }
 
-func durationMs(sess *registeredSession) uint64 {
+func durationMs(sess queries.SessionListItem) uint64 {
 	if sess.CompletedAt == nil {
 		return 0
 	}
