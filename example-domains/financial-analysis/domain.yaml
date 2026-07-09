@@ -1,0 +1,75 @@
+id: financial-analysis
+version: 0.2.0
+description: |
+  Pulls a stock quote via an http tool, then writes a short analysis.
+  Demonstrates the v2 harness shape with a configured tool.
+harness:
+  agents:
+    quoter:
+      id: quoter
+      provider: ollama
+      model: llama3.1
+      adapter:
+        kind: ollama
+        timeout_seconds: 15
+      system_prompt: quoter-prompt
+    analyst:
+      id: analyst
+      provider: openai
+      model: gpt-4o
+      adapter:
+        kind: openai
+        timeout_seconds: 60
+      system_prompt: analyst-prompt
+  prompts:
+    quoter-prompt:
+      type: system
+      template: |
+        You are the quoter. Use the `yahoo_quote` http tool to fetch the
+        latest price for the requested ticker from Yahoo Finance and return
+        it as JSON.
+    analyst-prompt:
+      type: system
+      template: |
+        You are the analyst. Given the quote and news, write a 4-sentence
+        analysis with a clear directional view.
+  tools:
+    yahoo_quote:
+      kind: http
+      name: yahoo_quote
+      description: Fetch a stock quote from the Yahoo Finance v8 API.
+      config:
+        base_url: https://query1.finance.yahoo.com
+        schema:
+          type: object
+          properties:
+            path:
+              type: string
+              description: |
+                Full URL path including query string, e.g.
+                /v8/finance/chart/AAPL?interval=1d&range=1d
+          required:
+            - path
+  policy:
+    permissions:
+      allow_network: true
+      allow_file_write: false
+      allow_shell: false
+      allow_file_delete: false
+    budget:
+      max_cost_usd: 0.50
+      max_turns: 10
+  session:
+    mode: workflow
+    workflow:
+      entry: fetch_quote
+      steps:
+        - id: fetch_quote
+          agent: quoter
+          next: analyze
+          output: quote
+        - id: analyze
+          agent: analyst
+          input:
+            quote: "${quote}"
+          output: analysis
