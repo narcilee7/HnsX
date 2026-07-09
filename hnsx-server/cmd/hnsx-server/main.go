@@ -28,7 +28,12 @@ import (
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/version"
+	"github.com/hnsx-io/hnsx/server/internal/audit/model"
+	auditrepository "github.com/hnsx-io/hnsx/server/internal/audit/repository"
+	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
 	"github.com/hnsx-io/hnsx/server/internal/config"
+	policyrepository "github.com/hnsx-io/hnsx/server/internal/policy/repository"
+	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
 	"github.com/hnsx-io/hnsx/server/internal/worker"
 	"github.com/hnsx-io/hnsx/server/internal/worker/repository"
 	"github.com/hnsx-io/hnsx/server/internal/worker/service"
@@ -128,7 +133,15 @@ func cmdServer(args []string) int {
 		sinks = append(sinks, telemetry.NewTracerSink())
 	}
 
-	exec := hsxruntime.NewExecutor(adapter.NewNoopAdapter(), sinks...)
+	// Policy + audit services are backed by in-memory repositories in Phase 1.
+	// Future PRs will add Postgres-backed repositories once the domain/tenant
+	// mapping is stable.
+	policySvc := policyservice.NewService(policyrepository.NewInMemoryRepository())
+	auditSvc := auditservice.NewService(auditrepository.NewInMemoryRepository())
+
+	exec := hsxruntime.NewExecutor(adapter.NewNoopAdapter(), sinks...).
+		WithPolicyProvider(policySvc).
+		WithAuditRecorder(&auditRecorder{svc: auditSvc})
 
 	build := api.BuildInfo{
 		Version:   version.Version,
@@ -150,7 +163,9 @@ func cmdServer(args []string) int {
 		workerReg = workerSvc.Registry()
 		sessionQ = workerSvc.Queue()
 	}
-	srv := api.NewServerWithWorkerPool(build, store, exec, workerReg, sessionQ)
+	srv := api.NewServerWithWorkerPool(build, store, exec, workerReg, sessionQ).
+		WithPolicyService(policySvc).
+		WithAuditService(auditSvc)
 
 	if *seedFrom != "" {
 		seedFromDir(srv, *seedFrom)
@@ -276,4 +291,24 @@ func seedFromDir(s *api.Server, dir string) {
 	if registered > 0 {
 		log.Printf("[seed] registered %d domain(s) from %s", registered, dir)
 	}
+}
+
+// auditRecorder adapts the internal audit service to the pkg/session
+// AuditRecorder interface used by the executor.
+type auditRecorder struct {
+	svc *auditservice.Service
+}
+
+func (r *auditRecorder) Record(ctx context.Context, entry hsxruntime.AuditEntry) error {
+	return r.svc.Record(ctx, &model.Entry{
+		SessionID: entry.SessionID,
+		DomainID:  entry.DomainID,
+		Action:    entry.Action,
+		Actor:     "executor",
+		ActorType: model.ActorTypeSystem,
+		Resource:  entry.Resource,
+		Decision:  entry.Decision,
+		Reason:    entry.Reason,
+		Details:   entry.Details,
+	})
 }
