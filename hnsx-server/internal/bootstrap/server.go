@@ -89,7 +89,7 @@ func NewServerFromArgs(args []string) (*Server, error) {
 				if obs.GetPayload() != "" {
 					_ = json.Unmarshal([]byte(obs.GetPayload()), &payload)
 				}
-				apiServer.PublishObservation(sessionID, runtime.Observation{
+				ro := runtime.Observation{
 					Kind:      obs.GetKind(),
 					SessionID: obs.GetSessionId(),
 					DomainID:  obs.GetDomainId(),
@@ -99,7 +99,11 @@ func NewServerFromArgs(args []string) (*Server, error) {
 					TraceID:   obs.GetTraceId(),
 					Payload:   payload,
 					Timestamp: time.UnixMilli(obs.GetCreatedAtMs()),
-				})
+				}
+				apiServer.PublishObservation(sessionID, ro)
+				if apiServer.TraceService != nil {
+					_ = apiServer.TraceService.Record(context.Background(), ro)
+				}
 			}
 			grpcSrv.Sched.OnSessionStatus = func(tid tenant.ID, sessionID, state string) {
 				if application.SessionService != nil {

@@ -1,0 +1,96 @@
+id: customer-service-e2e
+version: 0.3.0-e2e
+description: |
+  E2E variant of customer-service. Structure mirrors the real domain
+  (triage -> billing/technical workflow, human_approval tool, budget
+  policy) but uses the offline echo adapter so the docker-compose e2e
+  pipeline runs without Anthropic/OpenAI API keys.
+harness:
+  agents:
+    triage:
+      id: triage
+      provider: anthropic
+      model: claude-haiku-4-5
+      adapter:
+        kind: echo
+      system_prompt: triage-prompt
+    billing:
+      id: billing
+      provider: openai
+      model: gpt-4o-mini
+      adapter:
+        kind: echo
+      system_prompt: billing-prompt
+    technical:
+      id: technical
+      provider: anthropic
+      model: claude-haiku-4-5
+      adapter:
+        kind: echo
+      system_prompt: technical-prompt
+  prompts:
+    triage-prompt:
+      type: system
+      template: |
+        You are a triage agent. Classify the user's question into one of
+        {billing, technical, other} and reply with JSON only.
+    billing-prompt:
+      type: system
+      template: |
+        You are the billing specialist. Before issuing a refund, call
+        `request_human_approval` with a clear reason and a draft of the
+        message you'd send the customer. Never invent refund confirmations.
+    technical-prompt:
+      type: system
+      template: |
+        You are the technical specialist. Diagnose and answer the user's
+        technical question concisely.
+  tools:
+    request_human_approval:
+      type: human_approval
+      name: request_human_approval
+      description: |
+        Pause the session and ask a human operator to approve, deny, or
+        edit the proposed action. Use before refunds or any write to a
+        sensitive resource.
+      config:
+        default_options:
+          - approve
+          - deny
+          - edit
+        default_timeout_seconds: 900
+  sandbox:
+    policy: none
+  policy:
+    budget:
+      max_cost_usd: 1.0
+      max_turns: 20
+    permissions:
+      allow_network: true
+      allow_file_write: false
+      allow_file_delete: false
+      allow_shell: false
+    approval:
+      default_timeout_seconds: 600
+      required_for:
+        tools:
+          - issue_refund
+          - export_customer_data
+        resources:
+          - "billing:write"
+          - "customer:*"
+        cost_threshold_usd: 0.25
+  session:
+    mode: workflow
+    workflow:
+      entry: classify
+      steps:
+        - id: classify
+          agent: triage
+          next: respond
+          output: classification
+        - id: respond
+          agent: billing
+          input:
+            classification: "${classification}"
+          output: response

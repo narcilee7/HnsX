@@ -157,6 +157,9 @@ class WorkerService:
                 max_concurrent_sessions=self.config.capacity.max_concurrent_sessions,
                 providers=list(self.config.capacity.providers),
                 models=list(self.config.capacity.models),
+                sandbox_runtimes=list(self.config.capacity.sandbox_runtimes),
+                memory_total_bytes=self.config.capacity.memory_total_bytes,
+                cpu_total_cores=self.config.capacity.cpu_total_cores,
             ),
         )
         resp = self.client.register(info)
@@ -426,15 +429,9 @@ class WorkerService:
             log.warning("pump for %s ended: %s", handle.session_id, e)
         finally:
             rc = handle.proc.wait()
-            self._enqueue_observation(
-                handle,
-                {
-                    "kind": "session_end",
-                    "session_id": handle.session_id,
-                    "state": "completed" if rc == 0 else ("cancelled" if rc == 130 else "failed"),
-                    "payload": {"exit_code": rc},
-                },
-            )
+            # The subprocess is responsible for emitting the authoritative
+            # session_end (completed/failed/cancelled). We only keep the
+            # bookkeeping cleanup here to avoid duplicate observations.
             with self._lock:
                 self._running.pop(handle.session_id, None)
             log.info("session %s exited rc=%d", handle.session_id, rc)

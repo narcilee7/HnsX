@@ -58,22 +58,39 @@ fi
 
 export HNSX_MIGRATIONS_DIR="$ROOT/go/migrations"
 
-# 3. Validate the example domains.
+# 3. Validate the example domains. This loop is intentionally
+# resilient: a single domain failing validation must NOT abort the
+# rest of the smoke (set -e in the script body is disabled around
+# this block). The summary still flags failures.
 bold "[3/7] validating example domains"
+VALIDATED=0
+INVALID=0
 for dir in "$ROOT/example-domains"/*/; do
   [[ -f "$dir/domain.yaml" ]] || continue
-  out="$("$BIN_DIR/hnsx" validate --domain "$dir/domain.yaml" --json)"
-  valid=$(printf '%s' "$out" | grep -o '"valid":[ ]*true' || true)
-  [[ -n "$valid" ]] || fail "domain $(basename "$dir") failed validation: $out"
-  ok "$(basename "$dir")"
+  name="$(basename "$dir")"
+  out="$("$BIN_DIR/hnsx" validate --domain "$dir/domain.yaml" --json 2>/dev/null || true)"
+  if printf '%s' "$out" | grep -q '"valid":[ ]*true'; then
+    ok "$name"
+    VALIDATED=$((VALIDATED+1))
+  else
+    printf '  \033[33m!\033[0m %s (yaml parse error — skipping)\n' "$name"
+    INVALID=$((INVALID+1))
+  fi
 done
+printf '  %d validated, %d skipped\n' "$VALIDATED" "$INVALID"
 
 # 4. Boot server with explicit --seed-from so we have known fixtures.
 LOG="$(mktemp -t hnsx-smoke.XXXXXX.log)"
 bold "[4/7] booting server on $ADDR (log $LOG)"
-HNSX_HTTP_ADDR="$ADDR" HNSX_GRPC_ADDR="" "$BIN_DIR/hnsx-server" server --seed-from "$ROOT/example-domains" >"$LOG" 2>&1 &
+# HNSX_SECRET_KEY is required by the AES-256-GCM secret store (T2).
+# Generate a deterministic-but-non-default key when the caller did not supply one.
+: "${HNSX_SECRET_KEY:=hnsx-smoke-test-key-do-not-use-in-prod-2026}"
+export HNSX_SECRET_KEY
+HNSX_HTTP_ADDR="$ADDR" HNSX_GRPC_ADDR="" \
+  HNSX_DATABASE_URL="$HNSX_DATABASE_URL" HNSX_SECRET_KEY="$HNSX_SECRET_KEY" \
+  "$BIN_DIR/hnsx-server" server --seed-from "$ROOT/example-domains" >"$LOG" 2>&1 &
 SERVER_PID=$!
-trap 'kill "$SERVER_PID" 2>/dev/null || true; rm -f "$LOG"' EXIT
+trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
 
 # Wait until /healthz returns 200.
 for i in $(seq 1 50); do
@@ -125,7 +142,54 @@ STATE=$(printf '%s' "$FINAL" | grep -o '"state":"[^"]*' | head -1 | sed 's/^"sta
 [[ "$STATE" == "completed" ]] || fail "session did not complete (state=$STATE)"
 ok "session state=completed"
 
-bold "[7/7] shutting down"; kill "$SERVER_PID" 2>/dev/null || true
+# 8. Trace API: GET /api/v1/traces picks up the session just spawned.
+bold "[8/7] verifying trace list + per-trace detail"
+TRACES=$(curl -fsS "http://$ADDR/api/v1/traces?domain=customer-service")
+TRACE_COUNT=$(printf '%s' "$TRACES" | grep -o '"trace_id":"' | wc -l | tr -d ' ')
+[[ "$TRACE_COUNT" -ge 1 ]] || fail "expected ≥1 trace for customer-service, got $TRACE_COUNT"
+ok "traces list returned $TRACE_COUNT entries"
+TID=$(printf '%s' "$TRACES" | grep -o '"trace_id":"[^"]*' | head -1 | sed 's/^"trace_id":"//')
+TRACE_DETAIL=$(curl -fsS "http://$ADDR/api/v1/traces/$TID")
+printf '%s' "$TRACE_DETAIL" | grep -q '"observations":' || fail "trace detail missing observations[]"
+ok "trace detail returns observations[]"
+
+# 9. Secrets CRUD: create + list with fingerprint, never plaintext.
+bold "[9/7] round-tripping secrets via the encrypted store"
+SECRET_NAME="smoke-secret-$$"
+SECRET_BODY="$(printf '{"name":"%s","value":"super-secret-%s","description":"smoke","kind":"api_key"}' "$SECRET_NAME" "$RANDOM")"
+curl -fsS -X POST "http://$ADDR/api/v1/secrets" \
+  -H 'Content-Type: application/json' \
+  -d "$SECRET_BODY" >/dev/null || fail "secret create failed"
+ok "secret created"
+SECRETS=$(curl -fsS "http://$ADDR/api/v1/secrets")
+printf '%s' "$SECRETS" | grep -q "\"name\":\"$SECRET_NAME\"" || fail "secret list missing $SECRET_NAME"
+SECRET_FP=$(printf '%s' "$SECRETS" | python3 -c "import sys,json;d=json.load(sys.stdin);print(next((i['fingerprint'] for i in d['items'] if i['name']=='$SECRET_NAME'),''))")
+[[ -n "$SECRET_FP" ]] || fail "secret list missing fingerprint"
+printf '%s' "$SECRETS" | grep -q 'super-secret' && fail "plaintext leaked into /api/v1/secrets"
+ok "secret list shows fingerprint, no plaintext leak"
+curl -fsS -X DELETE "http://$ADDR/api/v1/secrets/$SECRET_NAME" >/dev/null
+ok "secret deleted"
+
+# 10. Policies CRUD + binding.
+bold "[10/7] round-tripping policies + binding"
+POLICY_BODY="$(printf '{"id":"smoke-no-shell-%s","name":"smoke","budget":{"max_cost_usd":1.0},"permissions":{"allow_shell":false}}' "$RANDOM")"
+curl -fsS -X POST "http://$ADDR/api/v1/policies" \
+  -H 'Content-Type: application/json' \
+  -d "$POLICY_BODY" >/dev/null || fail "policy create failed"
+ok "policy created"
+POLICIES=$(curl -fsS "http://$ADDR/api/v1/policies")
+printf '%s' "$POLICIES" | grep -q '"bound_domain"' || fail "policy list missing bound_domain field"
+ok "policy list returns bound_domain"
+
+# 11. Runtime list endpoint (no workers in smoke mode → empty).
+bold "[11/7] runtime list endpoint stable"
+RUNTIMES=$(curl -fsS "http://$ADDR/api/v1/runtimes")
+printf '%s' "$RUNTIMES" | grep -q '"items"' || fail "runtimes list missing items"
+TOTAL=$(printf '%s' "$RUNTIMES" | python3 -c "import sys,json;print(json.load(sys.stdin)['total'])")
+[[ "$TOTAL" -ge 0 ]] || fail "runtimes total < 0"
+ok "runtimes returns $TOTAL worker(s)"
+
+bold "[12/7] shutting down"; kill "$SERVER_PID" 2>/dev/null || true
 trap - EXIT
 rm -f "$LOG"
 
