@@ -4,9 +4,13 @@ description: |
   Demonstrates long-term memory: the support agent can recall user
   preferences from previous sessions and store new ones.
 harness:
-  memory:
-    backend: sqlite
-    path: .hnsx-memory/customer-service.db
+  store:
+    context:
+      backend: in_memory
+    knowledge:
+      backend: in_memory
+    ephemeral:
+      backend: in_memory
 
   agents:
     support:

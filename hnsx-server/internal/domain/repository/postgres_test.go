@@ -3,9 +3,9 @@ package repository
 import (
 	"testing"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
 	"github.com/hnsx-io/hnsx/server/internal/testutil"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
 
 func TestPostgresRepository_RegisterAndGet(t *testing.T) {
@@ -23,7 +23,7 @@ func TestPostgresRepository_RegisterAndGet(t *testing.T) {
 			Agents: map[string]spec.AgentSpec{
 				"agent": {ID: "agent", Provider: "noop", Adapter: spec.AdapterConfig{Kind: "noop"}},
 			},
-			Session: spec.SessionSpec{Mode: "single", Agent: "agent"},
+			Session: spec.SessionSpec{Mode: spec.Single, Agent: "agent"},
 		},
 	}
 

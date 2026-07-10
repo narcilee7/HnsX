@@ -90,3 +90,31 @@ func TestInMemoryRepository_RunNotFound(t *testing.T) {
 		t.Fatalf("expected ErrEvalRunNotFound, got %v", err)
 	}
 }
+
+func TestInMemoryRepository_SaveResults(t *testing.T) {
+	r := NewInMemoryRepository()
+	run := &model.EvalRun{ID: "run1", EvalSetID: "set1", DomainID: "d1", State: "running"}
+	if err := r.SaveRun(run); err != nil {
+		t.Fatalf("save run: %v", err)
+	}
+
+	results := []model.EvalResult{
+		{CaseID: "c1", Score: 1, Passed: true},
+		{CaseID: "c2", Score: 0, Passed: false},
+	}
+	if err := r.SaveResults("run1", results); err != nil {
+		t.Fatalf("save results: %v", err)
+	}
+
+	got, err := r.RunByID("run1")
+	if err != nil {
+		t.Fatalf("run by id: %v", err)
+	}
+	if len(got.Results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(got.Results))
+	}
+
+	if err := r.SaveResults("missing", results); err != model.ErrEvalRunNotFound {
+		t.Fatalf("expected ErrEvalRunNotFound for unknown run, got %v", err)
+	}
+}

@@ -158,6 +158,12 @@ func (e *Executor) Execute(ctx context.Context, s *spec.DomainSpec, trigger map[
 		if obs.Timestamp.IsZero() {
 			obs.Timestamp = time.Now().UTC()
 		}
+		// Attach the current policy-engine cost snapshot to the observations
+		// that represent the outcome of an adapter invocation. This unifies
+		// budget tracking with trace/metric aggregation.
+		if obs.Kind == "agent_text" || obs.Kind == "error" {
+			obs.Cost = engine.Snapshot()
+		}
 		e.publish(ctx, obs)
 		e.auditObservation(ctx, audit, obs)
 	})
@@ -271,10 +277,32 @@ func (a *policyAdapter) Invoke(ctx context.Context, agent spec.AgentSpec, prompt
 	out, err := a.inner.Invoke(ctx, agent, prompt, input)
 
 	// Estimate token spend from output length when the adapter does not report
-	// it. Real adapters will populate runtime.Observation.Cost in future PRs.
+	// it. The estimate is fed into the policy engine so budget enforcement and
+	// trace/metric aggregation share the same numbers.
 	completionTokens := len(out) / 4
 	a.engine.RecordTokens(0, completionTokens)
-	a.engine.RecordCost(0)
+	a.engine.RecordCost(estimateCostUSD(0, completionTokens))
+
+	// Content guardrails run on the adapter output.
+	decision := a.engine.EvaluateGuardrails(policy.GuardrailEvent{
+		Kind:    "agent_text",
+		AgentID: agent.ID,
+		Text:    out,
+	})
+	if decision.Matched {
+		a.recordAllow(ctx, "guardrail_hit", resource, map[string]any{
+			"guardrail_id": decision.GuardrailID,
+			"action":       decision.Action,
+			"message":      decision.Message,
+		})
+		switch decision.Action {
+		case "block":
+			a.recordDeny(ctx, "guardrail_block", resource, decision.Message)
+			return "", fmt.Errorf("%w: %s", policy.ErrGuardrailBlocked, decision.Message)
+		case "human_approval":
+			// Phase 1: human approval is not yet implemented; fall through to log.
+		}
+	}
 
 	if err != nil {
 		a.recordDeny(ctx, "adapter_invoke", resource, err.Error())
@@ -364,6 +392,18 @@ func EncodeSessionID(id, domainID string) ([]byte, error) {
 
 // ErrCanceled is returned when the executor is canceled mid-session.
 var ErrCanceled = errors.New("executor: canceled")
+
+// estimateCostUSD computes a placeholder cost from token counts. Real adapters
+// will report actual usage; this fallback lets local runs produce non-zero
+// cost traces for development and eval.
+func estimateCostUSD(promptTokens, completionTokens int) float64 {
+	const (
+		promptRateUSDPer1K     = 0.0015
+		completionRateUSDPer1K = 0.0060
+	)
+	return float64(promptTokens)*promptRateUSDPer1K/1000 +
+		float64(completionTokens)*completionRateUSDPer1K/1000
+}
 
 // String representation for log lines.
 func shortError(err error) string {

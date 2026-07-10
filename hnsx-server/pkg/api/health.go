@@ -29,7 +29,7 @@ func (s *Server) Readiness(c *gin.Context) {
 	if s.DB != nil && !s.DB.IsNoDB() {
 		probeCtx, cancel := s.timeoutCtx(c.Request)
 		defer cancel()
-		if err := s.DB.Pool.Ping(probeCtx); err != nil {
+		if err := s.DB.SQL.PingContext(probeCtx); err != nil {
 			checks = append(checks, check{Name: "database", Status: "down", Error: err.Error()})
 			writeJSON(c, http.StatusServiceUnavailable, map[string]any{
 				"status": "not_ready",

@@ -14,8 +14,11 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
+	"strings"
 	"sync/atomic"
 
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
 
@@ -148,6 +151,110 @@ func (e *Engine) Guardrails() []spec.GuardrailSpec {
 	out := make([]spec.GuardrailSpec, len(e.spec.Guardrails))
 	copy(out, e.spec.Guardrails)
 	return out
+}
+
+// Snapshot returns the current cost/token/turn counters as a runtime.Cost
+// value. This is the single source of truth used to populate
+// runtime.Observation.Cost and drive trace/metric aggregation.
+func (e *Engine) Snapshot() *runtime.Cost {
+	return &runtime.Cost{
+		PromptTokens:     int(e.promptTokens.Load()),
+		CompletionTokens: int(e.completionTokens.Load()),
+		CostUSD:          float64FromBits(e.costUSD.Load()),
+	}
+}
+
+// ErrGuardrailBlocked is returned when a guardrail with action=block fires.
+var ErrGuardrailBlocked = errors.New("guardrail blocked")
+
+// GuardrailEvent describes something that happened during a session and may
+// trigger a guardrail.
+type GuardrailEvent struct {
+	Kind    string
+	AgentID string
+	Text    string
+	Payload map[string]any
+}
+
+// GuardrailDecision is the result of evaluating a guardrail event.
+type GuardrailDecision struct {
+	Matched     bool
+	Action      string // "block", "log", "human_approval"
+	GuardrailID string
+	Message     string
+}
+
+// EvaluateGuardrails checks the event against every configured guardrail and
+// returns the first matching decision. If nothing matches, it returns a
+// Matched=false decision with Action="allow".
+func (e *Engine) EvaluateGuardrails(event GuardrailEvent) GuardrailDecision {
+	for _, g := range e.spec.Guardrails {
+		if !guardrailApplies(g, event) {
+			continue
+		}
+		matched, err := guardrailMatches(g, event)
+		if err != nil || !matched {
+			continue
+		}
+		action := g.Action
+		if action == "" {
+			action = "log"
+		}
+		return GuardrailDecision{
+			Matched:     true,
+			Action:      action,
+			GuardrailID: g.ID,
+			Message:     g.Message,
+		}
+	}
+	return GuardrailDecision{Matched: false, Action: "allow"}
+}
+
+func guardrailApplies(g spec.GuardrailSpec, event GuardrailEvent) bool {
+	if g.On == "" {
+		return true
+	}
+	return g.On == event.Kind
+}
+
+func guardrailMatches(g spec.GuardrailSpec, event GuardrailEvent) (bool, error) {
+	text := event.Text
+	if text == "" && event.Payload != nil {
+		if s, ok := event.Payload["content"].(string); ok {
+			text = s
+		}
+	}
+
+	switch g.Type {
+	case "contains":
+		pattern := guardrailPattern(g)
+		return pattern != "" && strings.Contains(text, pattern), nil
+	case "regex":
+		pattern := guardrailPattern(g)
+		if pattern == "" {
+			return false, nil
+		}
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return false, err
+		}
+		return re.MatchString(text), nil
+	case "json_schema":
+		// Phase 1 does not implement schema validation; treat as no-match.
+		return false, nil
+	default:
+		return false, nil
+	}
+}
+
+func guardrailPattern(g spec.GuardrailSpec) string {
+	if g.Schema != "" {
+		return g.Schema
+	}
+	if s, ok := g.Config.(string); ok {
+		return s
+	}
+	return fmt.Sprintf("%v", g.Config)
 }
 
 // ----------------------------------------------------------------------------

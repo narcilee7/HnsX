@@ -1,8 +1,10 @@
 id: customer-service
-version: 0.2.0
+version: 0.3.0
 description: |
   Routes customer questions to the right specialist agent
-  (triage -> billing/technical). V2 DomainSpec shape.
+  (triage -> billing/technical). V2 DomainSpec shape. W14 adds
+  human-in-the-loop approval gating for refund and sensitive
+  resource access.
 harness:
   agents:
     triage:
@@ -38,13 +40,28 @@ harness:
     billing-prompt:
       type: system
       template: |
-        You are the billing specialist. Answer the user's billing question
-        concisely.
+        You are the billing specialist. Before issuing a refund, call
+        `request_human_approval` with a clear reason and a draft of the
+        message you'd send the customer. Never invent refund confirmations.
     technical-prompt:
       type: system
       template: |
         You are the technical specialist. Diagnose and answer the user's
         technical question concisely.
+  tools:
+    request_human_approval:
+      type: human_approval
+      name: request_human_approval
+      description: |
+        Pause the session and ask a human operator to approve, deny, or
+        edit the proposed action. Use before refunds or any write to a
+        sensitive resource.
+      config:
+        default_options:
+          - approve
+          - deny
+          - edit
+        default_timeout_seconds: 900
   sandbox:
     policy: none
   policy:
@@ -56,6 +73,17 @@ harness:
       allow_file_write: false
       allow_file_delete: false
       allow_shell: false
+    # W14 approval DSL: gate sensitive tools + resources + high-cost calls.
+    approval:
+      default_timeout_seconds: 600
+      required_for:
+        tools:
+          - issue_refund
+          - export_customer_data
+        resources:
+          - "billing:write"
+          - "customer:*"
+        cost_threshold_usd: 0.25
   session:
     mode: workflow
     workflow:

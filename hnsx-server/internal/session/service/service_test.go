@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/internal/session/model"
 	"github.com/hnsx-io/hnsx/server/internal/session/repository"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
 
 func TestService_CreateAndGet(t *testing.T) {
@@ -79,7 +80,7 @@ func TestService_MarkCompleted(t *testing.T) {
 	svc := NewService(repo)
 
 	_, _ = svc.Create(CreateParams{SessionID: "s", DomainID: "d", Orchestration: "single"})
-	result := &runtime.Result{Mode: "single"}
+	result := &runtime.Result{Mode: spec.Single}
 	sess, err := svc.MarkCompleted("s", result)
 	if err != nil {
 		t.Fatalf("mark completed: %v", err)
