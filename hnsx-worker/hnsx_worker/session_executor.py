@@ -404,6 +404,7 @@ def _run_multi_turn(
     stop_reason = "natural"
 
     # Build the ToolRegistry from the agent's ``tools`` spec entries.
+    skill_tool_specs = _resolve_skill_tool_specs(spec=spec, agent=agent)
     registry, schema_failures = _build_tool_registry(
         spec=spec,
         agent=agent,
@@ -412,6 +413,7 @@ def _run_multi_turn(
         emit=emit,
         policy_decision=policy.check_tool,
         memory=memory,
+        extra_tool_specs=skill_tool_specs,
     )
     if schema_failures:
         for failure in schema_failures:
@@ -905,6 +907,39 @@ def _append_tool_result(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_skill_tool_specs(
+    *,
+    spec: dict[str, Any],
+    agent: dict,
+) -> list[dict[str, Any]]:
+    """Resolve W15 skill tools into a flat list of tool-spec dicts.
+
+    Reads spec.harness.skills via :class:``SkillRegistry`` and
+    agent.skill_refs via :func:``resolve_agent_skills``; returns
+    the merged tool entries in first-seen order (preserving the
+    agent's declaration). An empty list when no skills are referenced.
+    """
+    harness = (spec or {}).get("harness") or {}
+    raw_skills = harness.get("skills")
+    if not raw_skills:
+        return []
+    refs = agent.get("skill_refs")
+    if not refs:
+        return []
+    from hnsx_worker.skills import SkillRegistry, resolve_agent_skills
+    try:
+        registry = SkillRegistry.from_dict(raw_skills)
+    except ValueError:
+        # Malformed skill definitions are surfaced by HarnessSpec at load
+        # time; at runtime we silently skip so a bad Skill doesn't break
+        # the agent.
+        return []
+    out: list[dict[str, Any]] = []
+    for resolved in resolve_agent_skills(agent, registry):
+        out.extend(resolved.tools)
+    return out
+
+
 def _build_tool_registry(
     *,
     spec: dict[str, Any],
@@ -914,15 +949,27 @@ def _build_tool_registry(
     emit: EmitFn,
     policy_decision: Any = None,
     memory: MemoryStore | None = None,
+    extra_tool_specs: list[dict[str, Any]] | None = None,
 ) -> tuple[ToolRegistry, list[str]]:
-    """Build a ToolRegistry from ``agent.tools``.
+    """Build a ToolRegistry from ``agent.tools`` + optional skill tools.
 
     Returns ``(registry, failures)`` where ``failures`` is a list of
     human-readable error strings for entries that couldn't be built.
     The executor emits a ``tool_spec_invalid`` observation so the user
     can see what was dropped.
+
+    ``extra_tool_specs`` are tool entries contributed by W15 Skills
+    (resolved via :func:``resolve_agent_skills``); they are appended
+    after the agent's own ``tools`` so explicit agent config still
+    wins on name collisions (entries with the same name keep the agent's
+    copy).
     """
-    raw_tools = agent.get("tools") or []
+    raw_tools = list(agent.get("tools") or [])
+    if extra_tool_specs:
+        # Skill tools come last; existing agent.tools entries with the
+        # same name take precedence in tool_schemas_for_adapter /
+        # registry insertion order.
+        raw_tools.extend(extra_tool_specs)
     mcp_server_map = build_mcp_server_map(spec)
 
     # Discover remote tool schemas for any referenced MCP servers so the
@@ -1610,6 +1657,7 @@ def build_agent_loop_context(
     # Re-use _build_tool_registry so the agent sees the same schemas as the
     # built-in multi-turn mode. We pass through memory so memory_* tools are
     # auto-injected when configured.
+    skill_tool_specs = _resolve_skill_tool_specs(spec=spec, agent=agent_cfg)
     registry, _failures = _build_tool_registry(
         spec=spec,
         agent=agent_cfg,
@@ -1618,6 +1666,7 @@ def build_agent_loop_context(
         emit=_noop_emit,
         policy_decision=policy.check_tool,
         memory=memory,
+        extra_tool_specs=skill_tool_specs,
     )
     if extra_tools:
         for tool in extra_tools:
