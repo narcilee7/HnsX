@@ -25,6 +25,12 @@ func (s *Service) Record(ctx context.Context, obs runtime.Observation) error {
 	return s.repo.Save(&rec)
 }
 
+// Aggregate returns rolled-up cost/token/invocation counts for the given
+// session IDs.
+func (s *Service) Aggregate(sessionIDs []string) (model.Aggregate, error) {
+	return s.repo.Aggregate(sessionIDs)
+}
+
 // BySession returns observations for a session in chronological order.
 func (s *Service) BySession(sessionID string) ([]model.ObservationRecord, error) {
 	return s.repo.BySession(sessionID)

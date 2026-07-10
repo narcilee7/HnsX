@@ -8,9 +8,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 
 	"github.com/hnsx-io/hnsx/server/internal/audit/model"
 	auditrepository "github.com/hnsx-io/hnsx/server/internal/audit/repository"
@@ -43,6 +43,7 @@ type Application struct {
 	Config   *config.Config
 	DB       *db.DB
 	OTelProv *telemetry.Provider
+	Log      *zap.Logger
 
 	DomainService  *domainservice.Service
 	SessionService *sessionservice.Service
@@ -63,7 +64,11 @@ type Application struct {
 }
 
 // NewApplication wires repositories, services, and infrastructure based on cfg.
-func NewApplication(ctx context.Context, cfg *config.Config) (*Application, error) {
+func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*Application, error) {
+	if log == nil {
+		return nil, errors.New("application: nil logger")
+	}
+
 	otelProv, err := telemetry.Init(ctx, telemetry.OTelOptions{
 		ServiceName:  cfg.OTel.ServiceName,
 		Exporter:     cfg.OTel.Exporter,
@@ -84,7 +89,7 @@ func NewApplication(ctx context.Context, cfg *config.Config) (*Application, erro
 	if err := db.Migrate(ctx, store.SQL, cfg.MigrationsDir); err != nil {
 		return nil, fmt.Errorf("db: migrate: %w", err)
 	}
-	log.Printf("[hnsx-server] migrations applied from %s", cfg.MigrationsDir)
+	log.Info("migrations applied", zap.String("dir", cfg.MigrationsDir))
 
 	appState := NewState()
 
@@ -142,10 +147,12 @@ func NewApplication(ctx context.Context, cfg *config.Config) (*Application, erro
 				DB:       cfg.Redis.DB,
 			})
 			sessionQ = worker.NewRedisSessionQueue(rdb, cfg.Redis.QueueKeyPrefix)
-			log.Printf("[hnsx-server] session queue: redis=%s prefix=%s", cfg.Redis.Addr, cfg.Redis.QueueKeyPrefix)
+			log.Info("session queue: redis",
+				zap.String("addr", cfg.Redis.Addr),
+				zap.String("prefix", cfg.Redis.QueueKeyPrefix))
 		} else {
 			sessionQ = worker.NewSessionQueue()
-			log.Printf("[hnsx-server] session queue: in-memory")
+			log.Info("session queue: in-memory")
 		}
 		workerSvc = workerservice.NewServiceWithQueue(workerRepo, sessionQ)
 		workerReg = workerSvc.Registry()
@@ -155,6 +162,7 @@ func NewApplication(ctx context.Context, cfg *config.Config) (*Application, erro
 		Config:         cfg,
 		DB:             store,
 		OTelProv:       otelProv,
+		Log:            log,
 		DomainService:  domainSvc,
 		SessionService: sessionSvc,
 		WorkerService:  workerSvc,
