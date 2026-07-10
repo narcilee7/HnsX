@@ -131,3 +131,34 @@ func TestScheduler_AckSession_removesFromActive(t *testing.T) {
 		t.Fatalf("expected s-1 removed from active after nack")
 	}
 }
+
+func TestScheduler_RequeueSessions_onDisconnect(t *testing.T) {
+	s, _, q := newTestServer(t)
+	q.Enqueue(&worker.SessionRequest{SessionID: "s-1", DomainID: "d"})
+	q.Enqueue(&worker.SessionRequest{SessionID: "s-2", DomainID: "d"})
+
+	_, _ = s.PullSession(context.Background(), &pb.PullSessionRequest{WorkerId: "w-1", MaxWaitSeconds: 1})
+	_, _ = s.PullSession(context.Background(), &pb.PullSessionRequest{WorkerId: "w-2", MaxWaitSeconds: 1})
+
+	if q.Len() != 0 {
+		t.Fatalf("queue should be empty after pull, got %d", q.Len())
+	}
+
+	requeued := s.RequeueSessions("w-1")
+	if len(requeued) != 1 || requeued[0] != "s-1" {
+		t.Fatalf("requeued = %v, want [s-1]", requeued)
+	}
+
+	if q.Len() != 1 {
+		t.Fatalf("queue should have 1 requeued session, got %d", q.Len())
+	}
+
+	// Active bookkeeping for w-1 should be gone.
+	if _, ok := s.ActiveSessions()["s-1"]; ok {
+		t.Fatal("expected s-1 removed from active after requeue")
+	}
+	// w-2 session should remain active.
+	if _, ok := s.ActiveSessions()["s-2"]; !ok {
+		t.Fatal("expected s-2 to remain active")
+	}
+}

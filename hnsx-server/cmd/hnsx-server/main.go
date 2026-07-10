@@ -210,22 +210,6 @@ func cmdServer(args []string) int {
 	// in over 60s and log how many were reaped. Only runs when worker pool
 	// is enabled.
 	stopGC := make(chan struct{})
-	if workerSvc != nil {
-		go func() {
-			ticker := time.NewTicker(30 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-stopGC:
-					return
-				case <-ticker.C:
-					if evicted := workerSvc.EvictStale(60 * time.Second); len(evicted) > 0 {
-						log.Printf("[hnsx-server] evicted %d stale worker(s): %v", len(evicted), evicted)
-					}
-				}
-			}
-		}()
-	}
 
 	var grpcSrv *controlplane.Server
 	if cfg.GRPCAddr != "" {
@@ -252,6 +236,30 @@ func cmdServer(args []string) int {
 				srv.UpdateSessionState(tid, sessionID, state)
 			}
 		}
+	}
+
+	if workerSvc != nil {
+		go func() {
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-stopGC:
+					return
+				case <-ticker.C:
+					if evicted := workerSvc.EvictStale(60 * time.Second); len(evicted) > 0 {
+						log.Printf("[hnsx-server] evicted %d stale worker(s): %v", len(evicted), evicted)
+						if grpcSrv != nil && grpcSrv.Sched != nil {
+							for _, wid := range evicted {
+								if requeued := grpcSrv.Sched.RequeueSessions(wid); len(requeued) > 0 {
+									log.Printf("[hnsx-server] requeued %d session(s) from worker %s", len(requeued), wid)
+								}
+							}
+						}
+					}
+				}
+			}
+		}()
 	}
 
 	log.Printf("[hnsx-server] listening on http=%s grpc=%s", cfg.HTTPAddr, cfg.GRPCAddr)

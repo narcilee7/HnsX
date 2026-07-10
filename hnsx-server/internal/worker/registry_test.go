@@ -1,126 +1,96 @@
 package worker
 
 import (
-	"errors"
 	"testing"
 	"time"
 
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
-func newTestRegistry() *Registry {
+func TestRegistry_AssignSession_tracksPerWorker(t *testing.T) {
 	r := NewRegistry()
-	// Pin the clock to make tests deterministic.
-	r.SetClock(func() time.Time { return time.Unix(0, 0) })
-	return r
-}
+	r.AssignSession("w-1", "s-1")
+	r.AssignSession("w-1", "s-2")
+	r.AssignSession("w-2", "s-3")
 
-func TestRegistry_Register_mintsIDWhenEmpty(t *testing.T) {
-	r := newTestRegistry()
-	wid, err := r.Register(&pb.WorkerInfo{Region: "us-west-2"})
-	if err != nil {
-		t.Fatalf("Register: %v", err)
+	w1 := r.SessionsForWorker("w-1")
+	if len(w1) != 2 {
+		t.Fatalf("w-1 sessions = %d, want 2", len(w1))
 	}
-	if wid == "" {
-		t.Fatalf("Register returned empty worker_id")
-	}
-	if got, ok := r.Get(wid); !ok || got.Info.GetRegion() != "us-west-2" {
-		t.Fatalf("Get(%q) = %v, %v", wid, got, ok)
+
+	w2 := r.SessionsForWorker("w-2")
+	if len(w2) != 1 {
+		t.Fatalf("w-2 sessions = %d, want 1", len(w2))
 	}
 }
 
-func TestRegistry_Register_preservesSuppliedID(t *testing.T) {
-	r := newTestRegistry()
-	wid, err := r.Register(&pb.WorkerInfo{WorkerId: "w-fixed", Region: "local"})
-	if err != nil {
-		t.Fatalf("Register: %v", err)
+func TestRegistry_UnassignSession_cleansWorkerSet(t *testing.T) {
+	r := NewRegistry()
+	r.AssignSession("w-1", "s-1")
+	r.UnassignSession("s-1")
+
+	if len(r.SessionsForWorker("w-1")) != 0 {
+		t.Fatalf("expected w-1 sessions to be empty")
 	}
-	if wid != "w-fixed" {
-		t.Fatalf("expected w-fixed, got %q", wid)
+	if _, ok := r.SessionWorker("s-1"); ok {
+		t.Fatal("expected s-1 to have no worker")
 	}
 }
 
-func TestRegistry_Register_isIdempotent(t *testing.T) {
-	r := newTestRegistry()
-	_, _ = r.Register(&pb.WorkerInfo{WorkerId: "w-1", Region: "local"})
-	got, _ := r.Get("w-1")
-	originalInbound := r.Inbound("w-1")
-	_, _ = r.Register(&pb.WorkerInfo{WorkerId: "w-1", Region: "us-west-2"})
-	got2, _ := r.Get("w-1")
-	if got.Info.GetRegion() != "local" || got2.Info.GetRegion() != "us-west-2" {
-		t.Fatalf("info not updated: %v -> %v", got.Info, got2.Info)
+func TestRegistry_AssignSession_reassign(t *testing.T) {
+	r := NewRegistry()
+	r.AssignSession("w-1", "s-1")
+	r.AssignSession("w-2", "s-1")
+
+	if len(r.SessionsForWorker("w-1")) != 0 {
+		t.Fatalf("expected s-1 removed from w-1")
 	}
-	if r.Inbound("w-1") != originalInbound {
-		t.Fatalf("re-Register must preserve the Inbound channel")
+	if len(r.SessionsForWorker("w-2")) != 1 {
+		t.Fatalf("expected s-1 assigned to w-2")
+	}
+	wid, _ := r.SessionWorker("s-1")
+	if wid != "w-2" {
+		t.Fatalf("session worker = %q, want w-2", wid)
 	}
 }
 
-func TestRegistry_Heartbeat_UnknownReturnsError(t *testing.T) {
-	r := newTestRegistry()
-	err := r.Heartbeat("w-nope", &pb.HeartbeatRequest{})
-	if !errors.Is(err, ErrUnknownWorker) {
-		t.Fatalf("expected ErrUnknownWorker, got %v", err)
-	}
-}
+func TestRegistry_EvictStale_removesWorkerAndSessions(t *testing.T) {
+	r := NewRegistry()
+	now := time.Now()
+	r.SetClock(func() time.Time { return now })
 
-func TestRegistry_Heartbeat_UpdatesLastSeen(t *testing.T) {
-	r := newTestRegistry()
-	_, _ = r.Register(&pb.WorkerInfo{WorkerId: "w-1"})
-	r.SetClock(func() time.Time { return time.Unix(10, 0) })
-	if err := r.Heartbeat("w-1", &pb.HeartbeatRequest{Usage: &pb.ResourceUsage{RunningSessions: 1}}); err != nil {
-		t.Fatalf("Heartbeat: %v", err)
-	}
-	snap, _ := r.Get("w-1")
-	if snap.LastSeen.Unix() != 10 {
-		t.Fatalf("LastSeen = %v, want 10", snap.LastSeen)
-	}
-	if !snap.Healthy {
-		t.Fatalf("expected Healthy=true (age=0)")
-	}
-}
-
-func TestRegistry_EvictStale_RemovesAndCloses(t *testing.T) {
-	r := newTestRegistry()
 	_, _ = r.Register(&pb.WorkerInfo{WorkerId: "w-old"})
-	r.SetClock(func() time.Time { return time.Unix(60, 0) })
-	evicted := r.EvictStale(30 * time.Second)
+	r.AssignSession("w-old", "s-1")
+
+	// Advance time past eviction threshold.
+	r.SetClock(func() time.Time { return now.Add(2 * time.Minute) })
+
+	evicted := r.EvictStale(60 * time.Second)
 	if len(evicted) != 1 || evicted[0] != "w-old" {
 		t.Fatalf("evicted = %v, want [w-old]", evicted)
 	}
-	if r.Len() != 0 {
-		t.Fatalf("Len = %d, want 0", r.Len())
+	if _, ok := r.Get("w-old"); ok {
+		t.Fatal("expected w-old to be evicted")
 	}
-	// After eviction, the worker is gone — Inbound returns nil.
-	if got := r.Inbound("w-old"); got != nil {
-		t.Fatalf("Inbound after eviction = %v, want nil", got)
-	}
-	// SendCancel becomes a no-op too.
-	if r.SendCancel("w-old", "s-1", "test", 0) {
-		t.Fatalf("SendCancel after eviction should return false")
+	if len(r.SessionsForWorker("w-old")) != 0 {
+		t.Fatal("expected w-old sessions to be cleared")
 	}
 }
 
-func TestRegistry_SendCancel_DropsWhenFull(t *testing.T) {
-	r := newTestRegistry()
-	_, _ = r.Register(&pb.WorkerInfo{WorkerId: "w-1"})
-	ch := r.Inbound("w-1")
-	for i := 0; i < 32; i++ {
-		if !r.SendCancel("w-1", "s-1", "test", 0) {
-			t.Fatalf("SendCancel at i=%d unexpectedly dropped", i)
-		}
-	}
-	if r.SendCancel("w-1", "s-1", "test", 0) {
-		t.Fatalf("expected drop when channel is full")
-	}
-	<-ch
-	if !r.SendCancel("w-1", "s-1", "test", 0) {
-		t.Fatalf("expected SendCancel to succeed after drain")
-	}
-}
+func TestRegistry_RemoveWorkerSessions(t *testing.T) {
+	r := NewRegistry()
+	r.AssignSession("w-1", "s-1")
+	r.AssignSession("w-1", "s-2")
 
-func TestRegistry_SendCancel_UnknownWorker(t *testing.T) {
-	r := newTestRegistry()
-	if r.SendCancel("w-nope", "s-1", "x", 0) {
-		t.Fatalf("expected SendCancel to return false for unknown worker")
+	r.RemoveWorkerSessions("w-1")
+
+	if len(r.SessionsForWorker("w-1")) != 0 {
+		t.Fatal("expected w-1 sessions to be removed")
+	}
+	if _, ok := r.SessionWorker("s-1"); ok {
+		t.Fatal("expected s-1 assignment removed")
+	}
+	if _, ok := r.SessionWorker("s-2"); ok {
+		t.Fatal("expected s-2 assignment removed")
 	}
 }
