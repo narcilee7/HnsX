@@ -887,21 +887,113 @@ def _sanitize_mcp_result(result: dict[str, Any], max_bytes: int) -> dict[str, An
 
 
 def build_mcp_server_map(spec: dict[str, Any]) -> dict[str, McpServerConfig]:
-    """Build a name -> McpServerConfig map from the DomainSpec harness block."""
+    """Build a name -> McpServerConfig map from the DomainSpec harness block.
+
+    Accepts both the legacy ``harness.mcp_servers`` list and the v2 spec
+    ``harness.mcp.servers`` list. The latter is normalized through
+    :func:`mcp_server_from_spec_v2` before parsing.
+    """
     harness = spec.get("harness") or {}
     servers = harness.get("mcp_servers") or []
+    if not servers:
+        mcp_block = harness.get("mcp") or {}
+        servers = mcp_block.get("servers") or []
+
     out: dict[str, McpServerConfig] = {}
     for entry in servers:
         if not isinstance(entry, dict):
-            log.warning("ignoring non-dict mcp_servers entry: %r", entry)
+            log.warning("ignoring non-dict mcp server entry: %r", entry)
             continue
         try:
-            cfg = McpServerConfig.from_spec(entry)
+            # v2 spec uses a string command + args list; worker-native uses a
+            # command list. Prefer v2 normalization whenever the entry follows
+            # the v2 shape so both formats are accepted.
+            if isinstance(entry.get("command"), str):
+                cfg = mcp_server_from_spec_v2(entry)
+            else:
+                cfg = McpServerConfig.from_spec(entry)
         except ValueError as e:
-            log.warning("invalid mcp_servers entry: %s", e)
+            log.warning("invalid mcp server entry: %s", e)
             continue
         name = cfg.name or str(uuid.uuid4())[:8]
         out[name] = cfg
+    return out
+
+
+def mcp_server_from_spec_v2(raw: Mapping[str, Any]) -> McpServerConfig:
+    """Convert a v2 DomainSpec ``mcp.servers[]`` entry into ``McpServerConfig``.
+
+    v2 fields:
+      - name, transport, command, args, url, headers, timeout_seconds,
+        max_response_bytes
+
+    Worker native fields:
+      - name, transport, command (list[str]), url, env, timeout_seconds,
+        max_response_bytes
+    """
+    if not isinstance(raw, dict):
+        raise ValueError("mcp server config must be a dict")
+
+    transport = str(raw.get("transport", "stdio")).lower()
+    if transport not in {"stdio", "sse"}:
+        raise ValueError(f"mcp server: transport {transport!r} not supported")
+
+    command: list[str] = []
+    if transport == "stdio":
+        cmd = raw.get("command")
+        if cmd is not None:
+            command = [str(cmd)]
+        args = raw.get("args")
+        if isinstance(args, list):
+            command.extend(str(a) for a in args)
+        if not command:
+            raise ValueError("mcp server (stdio): command or args required")
+
+    url = str(raw.get("url", ""))
+    if transport == "sse" and not url:
+        raise ValueError("mcp server (sse): url is required")
+
+    env = {str(k): str(v) for k, v in (raw.get("env") or {}).items()}
+    headers = raw.get("headers") or {}
+    if isinstance(headers, dict):
+        for k, v in headers.items():
+            env[f"HNSX_MCP_HEADER_{str(k).upper().replace('-', '_')}"] = str(v)
+
+    timeout = float(raw.get("timeout_seconds", _DEFAULT_TIMEOUT_SECONDS))
+    if timeout <= 0:
+        raise ValueError("mcp server: timeout_seconds must be > 0")
+
+    max_bytes = int(raw.get("max_response_bytes", _DEFAULT_MAX_RESPONSE_BYTES))
+    if max_bytes < 0:
+        raise ValueError("mcp server: max_response_bytes must be >= 0")
+
+    return McpServerConfig(
+        name=str(raw.get("name", "")),
+        transport=transport,
+        command=command,
+        url=url,
+        env=env,
+        timeout_seconds=timeout,
+        max_response_bytes=max_bytes,
+    )
+
+
+def mcp_server_to_spec_v2(cfg: McpServerConfig) -> dict[str, Any]:
+    """Convert ``McpServerConfig`` back to a v2 ``mcp.servers[]`` entry."""
+    out: dict[str, Any] = {
+        "name": cfg.name,
+        "transport": cfg.transport,
+        "timeout_seconds": cfg.timeout_seconds,
+        "max_response_bytes": cfg.max_response_bytes,
+    }
+    if cfg.transport == "stdio":
+        if cfg.command:
+            out["command"] = cfg.command[0]
+            out["args"] = cfg.command[1:]
+    else:
+        out["url"] = cfg.url
+    if cfg.env:
+        out["env"] = dict(cfg.env)
     return out
 
 
@@ -933,5 +1025,7 @@ __all__ = [
     "McpServerConfig",
     "McpToolConfig",
     "build_mcp_server_map",
+    "mcp_server_from_spec_v2",
+    "mcp_server_to_spec_v2",
     "discover_mcp_tools",
 ]

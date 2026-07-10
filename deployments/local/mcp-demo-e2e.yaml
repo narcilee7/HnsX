@@ -1,0 +1,58 @@
+id: mcp-demo-e2e
+version: 0.1.0
+description: |
+  E2E variant of mcp-demo. Uses the echo adapter with an environment-driven
+  tool-call fixture so it runs without external LLM keys, and points the MCP
+  stdio server at the file mounted into the worker container at
+  /app/mcp_server.py.
+harness:
+  mcp:
+    servers:
+      - name: demo_filesystem
+        transport: stdio
+        command: python
+        args:
+          - /app/mcp_server.py
+
+  agents:
+    demo_agent:
+      id: demo_agent
+      provider: echo
+      adapter:
+        kind: echo
+        echo_tool_call:
+          tool_call_id: mcp-call-1
+          name: list_directory
+          input:
+            path: /tmp
+          text: ""
+      system_prompt: default
+      tools:
+        - list_directory
+
+  tools:
+    list_directory:
+      kind: mcp_client
+      name: list_directory
+      description: List files in a directory via MCP
+      config:
+        server: demo_filesystem
+        tool: list_directory
+
+  prompts:
+    default:
+      type: system
+      template: |
+        You are a read-only filesystem assistant.
+
+  policy:
+    budget:
+      max_turns: 1
+    permissions:
+      allowed_tools:
+        - list_directory
+
+  session:
+    mode: multi-turn
+    agent: demo_agent
+    max_turns: 1

@@ -975,6 +975,30 @@ def _build_tool_registry(
     copy).
     """
     raw_tools = list(agent.get("tools") or [])
+    harness_tools = (spec.get("harness") or {}).get("tools") or {}
+    resolved_tools: list[dict[str, Any]] = []
+    failures: list[str] = []
+    for entry in raw_tools:
+        if isinstance(entry, dict):
+            resolved_tools.append(entry)
+        elif isinstance(entry, str):
+            cfg = harness_tools.get(entry)
+            if not isinstance(cfg, dict):
+                failures.append(f"tool reference {entry!r} not found in harness.tools")
+                continue
+            resolved = {
+                "name": cfg.get("name") or cfg.get("kind") or entry,
+                "type": cfg.get("kind"),
+                "description": cfg.get("description", ""),
+                "config": cfg.get("config") or {},
+            }
+            if not resolved["type"]:
+                failures.append(f"tool {entry!r} has no kind")
+                continue
+            resolved_tools.append(resolved)
+        else:
+            failures.append(f"invalid tool entry: {entry!r}")
+    raw_tools = resolved_tools
     if extra_tool_specs:
         # Skill tools come last; existing agent.tools entries with the
         # same name take precedence in tool_schemas_for_adapter /
@@ -985,7 +1009,6 @@ def _build_tool_registry(
     # Discover remote tool schemas for any referenced MCP servers so the
     # LLM-facing schema is accurate and we don't reconnect per tool.
     mcp_schemas: dict[str, dict[str, Any]] = {}
-    failures: list[str] = []
     referenced_servers: set[str] = set()
     for entry in raw_tools:
         if not isinstance(entry, dict):

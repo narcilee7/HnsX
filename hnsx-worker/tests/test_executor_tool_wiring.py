@@ -200,7 +200,7 @@ def test_build_registry_surfaces_failures() -> None:
     assert any("teleportation" in f for f in failures)
 
 
-def test_build_registry_rejects_non_dict_entries() -> None:
+def test_build_registry_rejects_unresolvable_string_refs() -> None:
     agent = {"tools": [{"name": "good", "type": "python"}, "bad-entry"]}
     registry, failures = _build_tool_registry(
         spec={},
@@ -210,7 +210,34 @@ def test_build_registry_rejects_non_dict_entries() -> None:
         emit=lambda o: None,
     )
     assert "good" in registry
-    assert any("non-dict" in f for f in failures)
+    assert any("not found in harness.tools" in f for f in failures)
+
+
+def test_build_registry_resolves_string_refs_from_harness_tools() -> None:
+    spec = {
+        "harness": {
+            "tools": {
+                "fetch": {
+                    "kind": "http",
+                    "name": "fetch",
+                    "description": "fetch things",
+                    "config": {"url": "https://x/{id}"},
+                }
+            }
+        }
+    }
+    agent = {"tools": ["fetch"]}
+    registry, failures = _build_tool_registry(
+        spec=spec,
+        agent=agent,
+        session_id="s",
+        domain_id="d",
+        emit=lambda o: None,
+    )
+    assert failures == []
+    assert "fetch" in registry
+    assert agent["tools"][0]["name"] == "fetch"
+    assert "path_params" in agent["tools"][0]["input_schema"]["properties"]
 
 
 def test_build_registry_handles_missing_tools_key() -> None:
