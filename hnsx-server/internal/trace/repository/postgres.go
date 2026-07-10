@@ -121,6 +121,50 @@ func (r *PostgresRepository) Aggregate(sessionIDs []string) (model.Aggregate, er
 	return agg, nil
 }
 
+// AggregateBySession implements Repository.
+func (r *PostgresRepository) AggregateBySession(sessionIDs []string) (map[string]model.Aggregate, error) {
+	out := make(map[string]model.Aggregate)
+	if r.db == nil {
+		return out, nil
+	}
+
+	var rows []struct {
+		SessionID        string
+		CostUSD          float64
+		PromptTokens     int
+		CompletionTokens int
+		AgentInvocations int64
+		ToolInvocations  int64
+	}
+
+	query := r.db.Model(&ObservationRecord{}).
+		Select(`session_id,
+			COALESCE(SUM(cost_usd), 0) AS cost_usd,
+			COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+			COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+			COUNT(*) FILTER (WHERE kind = ?) AS agent_invocations,
+			COUNT(*) FILTER (WHERE kind = ?) AS tool_invocations`,
+			"agent_invoke", "tool_call").
+		Group("session_id")
+	if len(sessionIDs) > 0 {
+		query = query.Where("session_id IN ?", sessionIDs)
+	}
+	if err := query.Scan(&rows).Error; err != nil {
+		return out, err
+	}
+
+	for _, row := range rows {
+		out[row.SessionID] = model.Aggregate{
+			TotalCostUSD:          row.CostUSD,
+			TotalPromptTokens:     row.PromptTokens,
+			TotalCompletionTokens: row.CompletionTokens,
+			AgentInvocations:      int(row.AgentInvocations),
+			ToolInvocations:       int(row.ToolInvocations),
+		}
+	}
+	return out, nil
+}
+
 func (r *PostgresRepository) toModels(records []ObservationRecord) []model.ObservationRecord {
 	out := make([]model.ObservationRecord, 0, len(records))
 	for _, rec := range records {
