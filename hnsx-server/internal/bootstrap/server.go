@@ -89,6 +89,10 @@ func NewServerFromArgs(args []string) (*Server, error) {
 				if obs.GetPayload() != "" {
 					_ = json.Unmarshal([]byte(obs.GetPayload()), &payload)
 				}
+				metadata := map[string]any{}
+				if obs.GetMetadata() != "" {
+					_ = json.Unmarshal([]byte(obs.GetMetadata()), &metadata)
+				}
 				ro := runtime.Observation{
 					Kind:      obs.GetKind(),
 					SessionID: obs.GetSessionId(),
@@ -98,6 +102,7 @@ func NewServerFromArgs(args []string) (*Server, error) {
 					ParentID:  obs.GetParentId(),
 					TraceID:   obs.GetTraceId(),
 					Payload:   payload,
+					Metadata:  metadata,
 					Timestamp: time.UnixMilli(obs.GetCreatedAtMs()),
 				}
 				apiServer.PublishObservation(sessionID, ro)

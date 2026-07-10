@@ -19,6 +19,7 @@ type ObservationRecord struct {
 	AgentID          string
 	Kind             string
 	Payload          map[string]any
+	Metadata         map[string]any
 	CostUSD          float64
 	PromptTokens     int
 	CompletionTokens int
@@ -36,10 +37,14 @@ func FromRuntime(obs runtime.Observation) ObservationRecord {
 		AgentID:   obs.AgentID,
 		Kind:      obs.Kind,
 		Payload:   obs.Payload,
+		Metadata:  obs.Metadata,
 		CreatedAt: obs.Timestamp,
 	}
 	if r.Payload == nil {
 		r.Payload = map[string]any{}
+	}
+	if r.Metadata == nil {
+		r.Metadata = map[string]any{}
 	}
 	if r.CreatedAt.IsZero() {
 		r.CreatedAt = time.Now().UTC()

@@ -5,6 +5,10 @@ package hnsx.v1;
 option go_package = "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1";
 
 // Observation is the atomic unit of observable agent behavior.
+//
+// `payload` and `metadata` are JSON-encoded strings on the wire. Empty or
+// absent values MUST be serialized as the string "{}". Consumers decode them
+// into objects/maps at the application layer.
 message Observation {
   string observation_id = 1;
   string trace_id = 2;
