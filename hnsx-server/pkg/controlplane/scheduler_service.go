@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	iworker "github.com/hnsx-io/hnsx/server/internal/worker"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
@@ -35,11 +36,11 @@ type SchedulerServiceServer struct {
 
 	// OnObservation is called for every observation batch received from a
 	// worker. The API layer uses it to fan observations out to SSE clients.
-	OnObservation func(sessionID string, obs *pb.Observation)
+	OnObservation func(tenantID tenant.ID, sessionID string, obs *pb.Observation)
 
 	// OnSessionStatus is called for every status update received from a
 	// worker. The API layer uses it to update the in-memory session state.
-	OnSessionStatus func(sessionID, state string)
+	OnSessionStatus func(tenantID tenant.ID, sessionID, state string)
 
 	mu     sync.Mutex
 	active map[string]*activeSession // session_id -> bookkeeping
@@ -48,6 +49,7 @@ type SchedulerServiceServer struct {
 
 type activeSession struct {
 	workerID  string
+	tenantID  tenant.ID
 	startedAt time.Time
 }
 
@@ -98,8 +100,13 @@ func (s *SchedulerServiceServer) PullSession(ctx context.Context, req *pb.PullSe
 		return &pb.PullSessionResponse{}, nil
 	}
 
+	tid := tenant.DefaultID
+	if snap, ok := s.Registry.Get(req.GetWorkerId()); ok && snap.Info != nil && snap.Info.GetTenantId() != "" {
+		tid = tenant.ID(snap.Info.GetTenantId())
+	}
+
 	s.mu.Lock()
-	s.active[got.SessionID] = &activeSession{workerID: req.GetWorkerId(), startedAt: time.Now()}
+	s.active[got.SessionID] = &activeSession{workerID: req.GetWorkerId(), tenantID: tid, startedAt: time.Now()}
 	s.mu.Unlock()
 
 	if s.Registry != nil {
@@ -233,7 +240,8 @@ func (s *SchedulerServiceServer) handleWorkerEvent(req *pb.StreamChannelRequest)
 		if p.Observations != nil {
 			for _, obs := range p.Observations.GetObservations() {
 				if s.OnObservation != nil {
-					s.OnObservation(obs.GetSessionId(), obs)
+					tid := s.tenantForSession(obs.GetSessionId())
+					s.OnObservation(tid, obs.GetSessionId(), obs)
 				}
 			}
 		}
@@ -244,8 +252,10 @@ func (s *SchedulerServiceServer) handleWorkerEvent(req *pb.StreamChannelRequest)
 		s.logf("controlplane: worker=%s observations=%d", req.GetWorkerId(), count)
 	case *pb.StreamChannelRequest_Status:
 		s.mu.Lock()
+		var tid tenant.ID
 		if st := p.Status; st != nil {
-			if _, ok := s.active[st.GetSessionId()]; ok {
+			if act, ok := s.active[st.GetSessionId()]; ok {
+				tid = act.tenantID
 				// Update bookkeeping; future PRs persist to DB.
 			}
 			if st.GetState() == "completed" || st.GetState() == "failed" || st.GetState() == "cancelled" {
@@ -257,7 +267,7 @@ func (s *SchedulerServiceServer) handleWorkerEvent(req *pb.StreamChannelRequest)
 		}
 		s.mu.Unlock()
 		if s.OnSessionStatus != nil && p.Status != nil {
-			s.OnSessionStatus(p.Status.GetSessionId(), p.Status.GetState())
+			s.OnSessionStatus(tid, p.Status.GetSessionId(), p.Status.GetState())
 		}
 		s.logf("controlplane: worker=%s status session=%s state=%s", req.GetWorkerId(), p.Status.GetSessionId(), p.Status.GetState())
 	case *pb.StreamChannelRequest_Result:
@@ -265,6 +275,15 @@ func (s *SchedulerServiceServer) handleWorkerEvent(req *pb.StreamChannelRequest)
 	default:
 		s.logf("controlplane: worker=%s unknown event", req.GetWorkerId())
 	}
+}
+
+func (s *SchedulerServiceServer) tenantForSession(sessionID string) tenant.ID {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if act, ok := s.active[sessionID]; ok {
+		return act.tenantID
+	}
+	return tenant.DefaultID
 }
 
 // ActiveSessions returns a copy of the in-memory session bookkeeping for

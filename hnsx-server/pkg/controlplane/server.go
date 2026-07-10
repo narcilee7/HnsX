@@ -16,6 +16,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
@@ -59,7 +60,10 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	s.listener = l
-	s.gs = grpc.NewServer()
+	s.gs = grpc.NewServer(
+		grpc.UnaryInterceptor(tenant.UnaryServerInterceptor),
+		grpc.StreamInterceptor(tenant.StreamServerInterceptor),
+	)
 	if s.Worker != nil {
 		pb.RegisterWorkerServiceServer(s.gs, s.Worker)
 	}

@@ -5,6 +5,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 )
 
 // newRouter mounts the full API surface onto a chi router. Routes follow the
@@ -17,6 +19,7 @@ func newRouter(s *Server) http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(corsMiddleware)
+	r.Use(tenant.Middleware)
 	r.Use(metricsMiddleware)
 
 	// Health (no /api/v1 prefix per convention).

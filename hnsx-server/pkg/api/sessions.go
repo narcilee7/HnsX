@@ -15,6 +15,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	"github.com/hnsx-io/hnsx/server/internal/session/broadcaster"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
@@ -22,7 +23,7 @@ import (
 
 // ListSessions handles GET /api/v1/sessions.
 func (s *Server) ListSessions(w http.ResponseWriter, r *http.Request) {
-	items := queries.ListSessions(s.AppState)
+	items := queries.ListSessions(s.AppState, tenant.FromContext(r.Context()))
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].StartedAt.After(items[j].StartedAt)
 	})
@@ -62,7 +63,7 @@ func (s *Server) ListSessions(w http.ResponseWriter, r *http.Request) {
 // GetSession handles GET /api/v1/sessions/{id}.
 func (s *Server) GetSession(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	sess, ok := queries.GetSession(s.AppState, id)
+	sess, ok := queries.GetSession(s.AppState, tenant.FromContext(r.Context()), id)
 	if !ok {
 		writeError(w, r, NewSessionNotFound(id))
 		return
@@ -81,11 +82,11 @@ func (s *Server) TriggerSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, NewValidation(err))
 		return
 	}
-	s.triggerSession(w, r, body.DomainID, body.Trigger)
+	s.triggerSession(w, r, tenant.FromContext(r.Context()), body.DomainID, body.Trigger)
 }
 
 // triggerSession is the shared backend for /sessions and /domains/{id}/run.
-func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, domainID string, trigger map[string]any) {
+func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, tenantID tenant.ID, domainID string, trigger map[string]any) {
 	if domainID == "" {
 		writeError(w, r, &APIError{
 			Code:    "INVALID_REQUEST",
@@ -93,13 +94,13 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, domainID
 		})
 		return
 	}
-	_, d, ok := queries.GetDomain(s.AppState, domainID)
+	_, d, ok := queries.GetDomain(s.AppState, tenantID, domainID)
 	if !ok {
 		writeError(w, r, NewDomainNotFound(domainID))
 		return
 	}
 
-	sess, err := commands.TriggerSession(s.AppState, d, trigger, runtime.NewSessionID)
+	sess, err := commands.TriggerSession(s.AppState, tenantID, d, trigger, runtime.NewSessionID)
 	if err != nil {
 		writeError(w, r, NewInternal(err))
 		return
@@ -108,7 +109,7 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, domainID
 	bc := s.AppState.AttachBroadcaster(sess.ID)
 
 	if s.SessionQueue != nil {
-		if err := s.enqueueForWorker(sess, d, trigger); err != nil {
+		if err := s.enqueueForWorker(tenantID, sess, d, trigger); err != nil {
 			writeError(w, r, NewInternal(err))
 			return
 		}
@@ -125,7 +126,7 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, domainID
 		return
 	}
 
-	go s.runInBackground(sess, d, bc, trigger)
+	go s.runInBackground(tenantID, sess, d, bc, trigger)
 
 	w.Header().Set("Location", commands.BuildSessionLocation(sess.ID))
 	writeJSON(w, http.StatusAccepted, map[string]any{
@@ -137,7 +138,7 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, domainID
 // enqueueForWorker serializes the domain spec + trigger and puts the session
 // on the worker queue. The worker will PullSession, run it, and stream
 // observations back via the gRPC StreamChannel.
-func (s *Server) enqueueForWorker(sess *app.RegisteredSession, d *app.RegisteredDomain, trigger map[string]any) error {
+func (s *Server) enqueueForWorker(tenantID tenant.ID, sess *app.RegisteredSession, d *app.RegisteredDomain, trigger map[string]any) error {
 	specJSON, err := json.Marshal(d.Spec)
 	if err != nil {
 		return fmt.Errorf("marshal domain spec: %w", err)
@@ -172,23 +173,23 @@ func (s *Server) enqueueForWorker(sess *app.RegisteredSession, d *app.Registered
 }
 
 // runInBackground executes the registered session via the executor.
-func (s *Server) runInBackground(sess *app.RegisteredSession, d *app.RegisteredDomain, bc *broadcaster.Broadcaster, trigger map[string]any) {
-	s.AppState.UpdateSessionState(sess.ID, "running")
+func (s *Server) runInBackground(tenantID tenant.ID, sess *app.RegisteredSession, d *app.RegisteredDomain, bc *broadcaster.Broadcaster, trigger map[string]any) {
+	s.AppState.UpdateSessionState(tenantID, sess.ID, "running")
 	executor := s.Executor.WithBroadcaster(bc)
 
 	ctx := runtime.WithSessionID(context.Background(), sess.ID)
 
 	result, err := executor.Execute(ctx, d.Spec, trigger)
 	if result != nil {
-		s.AppState.SetSessionResult(sess.ID, result)
+		s.AppState.SetSessionResult(tenantID, sess.ID, result)
 	}
 	if err != nil {
-		s.AppState.UpdateSessionState(sess.ID, "failed")
+		s.AppState.UpdateSessionState(tenantID, sess.ID, "failed")
 	} else {
-		s.AppState.UpdateSessionState(sess.ID, "completed")
+		s.AppState.UpdateSessionState(tenantID, sess.ID, "completed")
 	}
 
-	state, _ := queries.GetSession(s.AppState, sess.ID)
+	state, _ := queries.GetSession(s.AppState, tenantID, sess.ID)
 	bc.Publish(ctx, runtime.Observation{
 		Kind:      "state",
 		SessionID: sess.ID,
@@ -200,7 +201,7 @@ func (s *Server) runInBackground(sess *app.RegisteredSession, d *app.RegisteredD
 // CancelSession handles POST /api/v1/sessions/{id}/cancel.
 func (s *Server) CancelSession(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	sess, err := commands.CancelSession(s.AppState, id)
+	sess, err := commands.CancelSession(s.AppState, tenant.FromContext(r.Context()), id)
 	if err != nil {
 		if errors.Is(err, commands.ErrSessionNotFound) {
 			writeError(w, r, NewSessionNotFound(id))
@@ -225,7 +226,7 @@ func (s *Server) CancelSession(w http.ResponseWriter, r *http.Request) {
 // RerunSession handles POST /api/v1/sessions/{id}/rerun.
 func (s *Server) RerunSession(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	_, err := commands.RerunSession(s.AppState, id, runtime.NewSessionID)
+	_, err := commands.RerunSession(s.AppState, tenant.FromContext(r.Context()), id, runtime.NewSessionID)
 	if err != nil {
 		if errors.Is(err, commands.ErrSessionNotFound) {
 			writeError(w, r, NewSessionNotFound(id))
@@ -235,7 +236,7 @@ func (s *Server) RerunSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Re-trigger uses the same backend as a fresh session.
-	s.triggerSession(w, r, id, nil)
+	s.triggerSession(w, r, tenant.FromContext(r.Context()), id, nil)
 }
 
 // GetSessionTrace handles GET /api/v1/sessions/{id}/trace.
@@ -244,7 +245,7 @@ func (s *Server) RerunSession(w http.ResponseWriter, r *http.Request) {
 // is not configured, falls back to the in-memory broadcaster replay buffer.
 func (s *Server) GetSessionTrace(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	sess, ok := queries.GetSession(s.AppState, id)
+	sess, ok := queries.GetSession(s.AppState, tenant.FromContext(r.Context()), id)
 	if !ok {
 		writeError(w, r, NewSessionNotFound(id))
 		return
@@ -291,7 +292,7 @@ func (s *Server) GetSessionTrace(w http.ResponseWriter, r *http.Request) {
 // client disconnects.
 func (s *Server) StreamSessionEvents(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if _, ok := queries.GetSession(s.AppState, id); !ok {
+	if _, ok := queries.GetSession(s.AppState, tenant.FromContext(r.Context()), id); !ok {
 		writeError(w, r, NewSessionNotFound(id))
 		return
 	}
