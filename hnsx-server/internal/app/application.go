@@ -29,6 +29,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/telemetry"
 	tracerepository "github.com/hnsx-io/hnsx/server/internal/trace/repository"
 	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
+	storeservice "github.com/hnsx-io/hnsx/server/internal/store/service"
 	"github.com/hnsx-io/hnsx/server/internal/worker"
 	workerrepository "github.com/hnsx-io/hnsx/server/internal/worker/repository"
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
@@ -53,6 +54,7 @@ type Application struct {
 	TraceService   *traceservice.Service
 	EvalService    *evalservice.Service
 	SecretService  *secretservice.Service
+	StoreService   *storeservice.Service
 
 	Executor *pkgexecutor.Executor
 
@@ -110,6 +112,7 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 	traceSvc := traceservice.NewService(traceRepo)
 	evalSvc := evalservice.NewService(evalRepo)
 	secretSvc := secretservice.NewService(secretRepo)
+	storeSvc := storeservice.NewService(store)
 
 	// Sinks.
 	sinks := []runtime.Sink{
@@ -167,6 +170,7 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 		TraceService:   traceSvc,
 		EvalService:    evalSvc,
 		SecretService:  secretSvc,
+		StoreService:   storeSvc,
 		Executor:       exec,
 		State:          appState,
 		redisClient:    rdb,
