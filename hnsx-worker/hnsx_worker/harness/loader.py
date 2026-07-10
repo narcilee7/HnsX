@@ -18,6 +18,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from hnsx_worker.skills import SkillRegistry, SkillResolutionError, SkillSpecError
+
 log = logging.getLogger("hnsx_worker.harness.loader")
 
 
@@ -41,6 +43,14 @@ class HarnessSpec:
         self.harness = spec.get("harness", {}) or {}
         self.agents: dict = self.harness.get("agents", {}) or {}
         self.prompts: dict = self.harness.get("prompts", {}) or {}
+        # W15: skills live in harness.skills[] — built once here, validated
+        # cross-references ``agent.skill_refs`` in ``_validate_skills`` below.
+        try:
+            self.skills: SkillRegistry = SkillRegistry.from_dict(
+                self.harness.get("skills") or {}
+            )
+        except SkillSpecError as exc:
+            raise HarnessValidationError(str(exc)) from exc
         self.session = self.harness.get("session", {}) or {}
         self.mode = str(self.session.get("mode", ""))
         self.supervisor_cfg = self.session.get("supervisor") or {}
@@ -65,6 +75,9 @@ class HarnessSpec:
             self._validate_supervisor_mode()
 
         self._validate_orchestration()
+
+        # W15: validate skill refs cross-reference regardless of mode.
+        self._validate_skills()
 
     def _validate_orchestration(self) -> None:
         """Validate the W12 ``orchestration`` block.
@@ -163,6 +176,30 @@ class HarnessSpec:
             raise HarnessValidationError(
                 "session.mode=hierarchical requires at least one specialist transition"
             )
+
+    def _validate_skills(self) -> None:
+        """Ensure every agent.skill_refs id resolves in self.skills.
+
+        Mirrors the loader's other cross-reference checks: validation
+        happens at load time so the runtime can't accidentally dispatch on
+        a missing skill.
+        """
+        for agent_name, agent in self.agents.items():
+            refs = agent.get("skill_refs")
+            if refs is None or refs == []:
+                continue
+            if not isinstance(refs, list):
+                raise HarnessValidationError(
+                    f"agent {agent_name!r}: skill_refs must be a list of strings"
+                )
+            agent_id = str(agent.get("id") or agent_name)
+            for ref in refs:
+                ref_id = str(ref)
+                if ref_id not in self.skills:
+                    raise HarnessValidationError(
+                        f"agent {agent_id!r} references unknown skill {ref_id!r} "
+                        f"(available: {sorted(self.skills)})"
+                    )
 
     def get_agent(self, name: str) -> dict:
         """Return the agent dict by id/name, raising if missing."""

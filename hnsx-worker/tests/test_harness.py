@@ -318,3 +318,93 @@ def test_parse_routing_decision_falls_back_to_text() -> None:
 
     result = _parse_routing_decision("just a reason")
     assert result == {"to": "", "reason": "just a reason", "confidence": None}
+
+
+
+# ---------------------------------------------------------------------------
+# W15: harness loader — skill validation
+# ---------------------------------------------------------------------------
+
+
+def _loader_spec_with_skills() -> dict:
+    return {
+        "id": "skill-loader-demo",
+        "version": "0.1.0",
+        "harness": {
+            "agents": {
+                "triage": {
+                    "id": "triage",
+                    "provider": "noop",
+                    "model": "noop-1",
+                    "adapter": {"kind": "noop"},
+                    "system_prompt": "triage-prompt",
+                    "skill_refs": ["web-search"],
+                }
+            },
+            "prompts": {"triage-prompt": {"type": "system", "template": "x"}},
+            "skills": {
+                "web-search": {
+                    "id": "web-search",
+                    "description": "fetch URLs",
+                    "tools": [{"name": "fetch", "type": "http"}],
+                }
+            },
+            "session": {"mode": "single"},
+        },
+    }
+
+
+def test_load_populates_skill_registry() -> None:
+    spec = _loader_spec_with_skills()
+    harness = load(spec)
+    assert "web-search" in harness.skills
+    assert harness.skills["web-search"].id == "web-search"
+
+
+def test_load_passes_when_all_skill_refs_resolve() -> None:
+    # No exception means the validation passed.
+    load(_loader_spec_with_skills())
+
+
+def test_load_rejects_unknown_skill_ref() -> None:
+    spec = _loader_spec_with_skills()
+    spec["harness"]["agents"]["triage"]["skill_refs"] = ["does-not-exist"]
+    with pytest.raises(HarnessValidationError) as exc:
+        load(spec)
+    msg = str(exc.value)
+    assert "does-not-exist" in msg
+    assert "unknown skill" in msg
+
+
+def test_load_rejects_non_list_skill_refs() -> None:
+    spec = _loader_spec_with_skills()
+    spec["harness"]["agents"]["triage"]["skill_refs"] = "web-search"  # type: ignore[list-item]
+    with pytest.raises(HarnessValidationError):
+        load(spec)
+
+
+def test_load_rejects_duplicate_skill_ids() -> None:
+    spec = _loader_spec_with_skills()
+    spec["harness"]["skills"] = [
+        {"id": "web-search", "tools": [{"name": "fetch"}]},
+        {"id": "web-search", "tools": [{"name": "fetch2"}]},
+    ]
+    with pytest.raises(HarnessValidationError):
+        load(spec)
+
+
+def test_load_rejects_skill_with_no_content() -> None:
+    spec = _loader_spec_with_skills()
+    spec["harness"]["skills"] = {
+        "empty": {"id": "empty", "description": "nothing useful"}
+    }
+    spec["harness"]["agents"]["triage"]["skill_refs"] = ["empty"]
+    with pytest.raises(HarnessValidationError) as exc:
+        load(spec)
+    assert "no prompts/tools/mcp_refs/examples" in str(exc.value)
+
+
+def test_load_succeeds_when_agent_has_no_skill_refs() -> None:
+    spec = _loader_spec_with_skills()
+    spec["harness"]["agents"]["triage"].pop("skill_refs", None)
+    load(spec)  # no exception
