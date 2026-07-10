@@ -67,7 +67,14 @@ def check_proto() -> None:
     default="anthropic,openai,claudecode,codex,ollama,noop,echo",
     help="Comma-separated provider kinds this worker supports.",
 )
-@click.option("--models", default="", help="Comma-separated model names this worker supports.")
+@click.option(
+    "--models", default="", help="Comma-separated model names this worker supports."
+)
+@click.option(
+    "--sandbox-runtimes",
+    default="none",
+    help="Comma-separated sandbox runtimes this worker supports.",
+)
 @click.option("--heartbeat-interval", default=5, type=int, help="Heartbeat cadence in seconds.")
 @click.option("-v", "--verbose", is_flag=True, help="Enable debug logging.")
 def run(
@@ -77,6 +84,7 @@ def run(
     max_concurrent_sessions: int,
     providers: str,
     models: str,
+    sandbox_runtimes: str,
     heartbeat_interval: int,
     verbose: bool,
 ) -> None:
@@ -92,6 +100,7 @@ def run(
         max_concurrent_sessions=max_concurrent_sessions,
         providers=providers,
         models=models,
+        sandbox_runtimes=sandbox_runtimes,
         heartbeat_interval=heartbeat_interval,
     )
     WorkerService(config).run()

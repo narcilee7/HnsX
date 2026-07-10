@@ -169,17 +169,17 @@ Refs：`docs/server-design/api-design.md §6`
 
 > 阻塞 T1。
 
-- [ ] **console** `mappers.ts:187/197/224` 与新 trace_id 语义对齐
-- [ ] **console** `SessionDetailPage` `/traces/:id` Link、`TracesPage/TraceDetailPage` 渲染
-- [ ] **验收**：T1 改完后 console 不出现 stale `traceId`，全部走真 trace_id
+- [x] **console** `mappers.ts:187/197/224` 与新 trace_id 语义对齐
+- [x] **console** `SessionDetailPage` `/traces/:id` Link、`TracesPage/TraceDetailPage` 渲染
+- [x] **验收**：T1 改完后 console 不出现 stale `traceId`，全部走真 trace_id
 
 #### T8 — e2e：docker compose 跑通 customer-service 真实域（infra + 验证）
 
 > 阻塞 T1–T7。
 
-- [ ] **deploy** `deployments/local/docker-compose.yml` 默认起 server + postgres + worker + tempo + grafana，OTel exporter 默认 OTLP
-- [ ] **e2e 脚本** `scripts/e2e/customer-service.sh`：validate → POST domain → POST session → SSE consume → 落 trace → console 反查
-- [ ] **验收**：执行后输出 trace_id + obs 序列 + 一张 console 截图占位（mvp 不要图）
+- [x] **deploy** `deployments/local/docker-compose.yml` 默认起 server + postgres + worker + tempo + grafana，OTel exporter 默认 OTLP
+- [x] **e2e 脚本** `scripts/e2e/customer-service.sh`：validate → POST domain → POST session → SSE consume → 落 trace → console 反查
+- [x] **验收**：执行后输出 trace_id + obs 序列 + 一张 console 截图占位（mvp 不要图）
 
 ---
 
