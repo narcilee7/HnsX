@@ -7,10 +7,12 @@ Public API:
   - :class:`ToolResult` — return type with ``ok`` / ``error`` / ``output``.
   - :class:`ToolDecision` — policy hook return value (W6 wires a real engine here).
   - :class:`ToolRegistry` — name → Tool map with optional policy gating.
+  - :func:`build_delegate_tool` — W12 helper that wires ``delegate_to``.
 
 W3.1: this module + ``registry.py`` provide the foundation.
 W3.2: ``http.py`` adds the first real tool (HTTP with secret injection).
 W3.3: ``session_executor._run_multi_turn`` calls through ``ToolRegistry``.
+W12: ``delegate`` tool type + ``build_delegate_tool`` for multi-agent strategies.
 """
 
 from .base import (
@@ -21,10 +23,13 @@ from .base import (
     ToolDecision,
     ToolResult,
 )
-from .factory import build_tool, tool_schemas_for_adapter
+from .delegate import DelegateTool, DelegateToolConfig
+from .factory import build_delegate_tool, build_tool, tool_schemas_for_adapter
 from .registry import ToolRegistry
 
 __all__ = [
+    "DelegateTool",
+    "DelegateToolConfig",
     "EmitFn",
     "PolicyHook",
     "Tool",
@@ -32,6 +37,7 @@ __all__ = [
     "ToolDecision",
     "ToolRegistry",
     "ToolResult",
+    "build_delegate_tool",
     "build_tool",
     "tool_schemas_for_adapter",
 ]

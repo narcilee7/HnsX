@@ -1,18 +1,11 @@
 id: financial-analysis
-version: 0.2.0
+version: 0.3.0
 description: |
-  Pulls a stock quote via an http tool, then writes a short analysis.
-  Demonstrates the v2 harness shape with a configured tool.
+  W12 Plan-and-Solve demonstration: the primary analyst agent first
+  drafts a plan (fetch quote, gather news, synthesize), then executes
+  each step with optional reflection between steps.
 harness:
   agents:
-    quoter:
-      id: quoter
-      provider: ollama
-      model: llama3.1
-      adapter:
-        kind: ollama
-        timeout_seconds: 15
-      system_prompt: quoter-prompt
     analyst:
       id: analyst
       provider: openai
@@ -22,20 +15,15 @@ harness:
         timeout_seconds: 60
       system_prompt: analyst-prompt
   prompts:
-    quoter-prompt:
-      type: system
-      template: |
-        You are the quoter. Use the `yahoo_quote` http tool to fetch the
-        latest price for the requested ticker from Yahoo Finance and return
-        it as JSON.
     analyst-prompt:
       type: system
       template: |
-        You are the analyst. Given the quote and news, write a 4-sentence
-        analysis with a clear directional view.
+        You are a financial analyst. You have an http tool to fetch market
+        data. Plan your work, execute step by step, and produce a clear,
+        directional 4-sentence analysis at the end.
   tools:
     yahoo_quote:
-      kind: http
+      type: http
       name: yahoo_quote
       description: Fetch a stock quote from the Yahoo Finance v8 API.
       config:
@@ -60,16 +48,11 @@ harness:
       max_cost_usd: 0.50
       max_turns: 10
   session:
-    mode: workflow
-    workflow:
-      entry: fetch_quote
-      steps:
-        - id: fetch_quote
-          agent: quoter
-          next: analyze
-          output: quote
-        - id: analyze
-          agent: analyst
-          input:
-            quote: "${quote}"
-          output: analysis
+    mode: multi-turn
+    agent: analyst
+  orchestration:
+    strategy: plan_and_solve
+    plan_and_solve:
+      max_replans: 2
+      replan_after_step: true
+      reflection: true

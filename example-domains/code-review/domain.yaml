@@ -1,8 +1,9 @@
 id: code-review
-version: 0.2.0
+version: 0.3.0
 description: |
-  Reviews a git diff and reports issues with file:line citations,
-  then summarizes the findings for a PR comment.
+  W12 Multi-Agent demonstration: a primary reviewer agent decides when to
+  delegate to a summarizer peer. The peer returns its summary as the
+  delegate_to tool result.
 harness:
   agents:
     reviewer:
@@ -27,21 +28,18 @@ harness:
       template: |
         Review the following diff and reply with a JSON array of findings.
         Each finding is { "file": string, "line": number, "severity": "info"|"warn"|"error", "message": string }.
+        After you have the findings, call the `delegate_to` tool to hand
+        them off to the summarizer agent for the final PR comment.
     summarizer-prompt:
       type: system
       template: |
-        Summarize the review findings into 3 bullets for a PR comment.
+        Summarize review findings into 3 bullets for a PR comment.
   session:
-    mode: workflow
-    workflow:
-      entry: review
-      steps:
-        - id: review
-          agent: reviewer
-          next: summarize
-          output: findings
-        - id: summarize
-          agent: summarizer
-          input:
-            findings: "${findings}"
-          output: summary
+    mode: multi-turn
+    agent: reviewer
+  orchestration:
+    strategy: multi_agent
+    multi_agent:
+      allowed_agents:
+        - summarizer
+      tool_name: delegate_to
