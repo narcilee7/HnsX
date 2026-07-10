@@ -16,6 +16,7 @@ import (
 	auditrepository "github.com/hnsx-io/hnsx/server/internal/audit/repository"
 	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
 	"github.com/hnsx-io/hnsx/server/internal/config"
+	secretcrypto "github.com/hnsx-io/hnsx/server/internal/secret/crypto"
 	domainrepository "github.com/hnsx-io/hnsx/server/internal/domain/repository"
 	domainservice "github.com/hnsx-io/hnsx/server/internal/domain/service"
 	evalrepository "github.com/hnsx-io/hnsx/server/internal/evaluation/repository"
@@ -111,7 +112,15 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 	auditSvc := auditservice.NewService(auditRepo)
 	traceSvc := traceservice.NewService(traceRepo)
 	evalSvc := evalservice.NewService(evalRepo)
-	secretSvc := secretservice.NewService(secretRepo)
+	// Secret encryption at rest is fail-fast: HNSX_SECRET_KEY must be set
+	// before the control plane boots. Server refuses to start without it
+	// rather than silently downgrading to plaintext.
+	secretCipher, err := secretcrypto.New()
+	if err != nil {
+		return nil, fmt.Errorf("secret cipher: %w (set HNSX_SECRET_KEY, min 16 chars)", err)
+	}
+	log.Info("secret store: encryption enabled", zap.String("alg", "AES-256-GCM"))
+	secretSvc := secretservice.NewService(secretRepo, secretCipher)
 	storeSvc := storeservice.NewService(store)
 
 	// Sinks.

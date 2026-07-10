@@ -16,6 +16,7 @@ import (
 	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
 	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
 	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
+	secretservice "github.com/hnsx-io/hnsx/server/internal/secret/service"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
@@ -57,6 +58,11 @@ type Server struct {
 	// EvalService manages eval sets and runs.
 	EvalService *evalservice.Service
 
+	// SecretService resolves ${secret:name} placeholders and persists
+	// AES-GCM encrypted values; nil means the operator did not configure
+	// HNSX_SECRET_KEY and the control plane refused to start.
+	SecretService *secretservice.Service
+
 	// WorkerService manages worker registration, scheduling, and session queueing.
 	WorkerService *workerservice.Service
 
@@ -95,6 +101,7 @@ func NewServer(build BuildInfo, application *app.Application) *Server {
 		AuditService:    application.AuditService,
 		TraceService:    application.TraceService,
 		EvalService:     application.EvalService,
+		SecretService:   application.SecretService,
 		WorkerService:   application.WorkerService,
 		DomainCommands:  commands.NewDomainCommands(application.DomainService),
 		SessionCommands: commands.NewSessionCommands(application.SessionService, application.DomainService, application.WorkerService, application.Executor, application.State),

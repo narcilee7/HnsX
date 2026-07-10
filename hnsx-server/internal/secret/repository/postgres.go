@@ -87,4 +87,39 @@ func (r *PostgresRepository) Delete(name string) error {
 		Delete(&SecretRecord{}).Error
 }
 
+// List implements Repository. It returns metadata only (no Value);
+// callers who need the plaintext must go through Service.Resolve so the
+// access is audit-attributed.
+func (r *PostgresRepository) List() ([]model.ListItem, error) {
+	out := []model.ListItem{}
+	if r.db == nil {
+		return out, nil
+	}
+	var rows []SecretRecord
+	if err := r.db.Where("tenant_id = ?", secretDefaultTenantUUID).
+		Order("secret_id ASC").
+		Find(&rows).Error; err != nil {
+		return out, err
+	}
+	for _, row := range rows {
+		// Compute fingerprint from the stored envelope so it matches what
+		// an operator sees on the wire against what came back in.
+		fingerprint := ""
+		if row.Value != "" {
+			if n := len(row.Value); n > 4 {
+				fingerprint = "****" + row.Value[n-4:]
+			}
+		}
+		out = append(out, model.ListItem{
+			Name:        row.SecretID,
+			Description: row.Description,
+			Kind:        row.Kind,
+			Fingerprint: fingerprint,
+			CreatedAt:   row.CreatedAt,
+			UpdatedAt:   row.UpdatedAt,
+		})
+	}
+	return out, nil
+}
+
 var _ Repository = (*PostgresRepository)(nil)

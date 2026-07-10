@@ -2,32 +2,40 @@ import { get, post, put, del } from './client'
 
 // ---------- Secrets ----------
 
+/**
+ * Secret metadata returned by /api/v1/secrets. The plaintext value is
+ * never carried on the wire — operators verify a typed value against
+ * the last-4 fingerprint instead. The CLI / SDK calls a separate
+ * resolve path that the audit log can attribute.
+ */
 export interface Secret {
-  id: string
-  name?: string
-  /** Provider — e.g. 'env' / 'vault' / 'aws-sm' — never the value itself */
-  provider?: string
-  scope?: string
+  name: string
+  description?: string
+  kind?: string
+  fingerprint: string
   created_at?: string
   updated_at?: string
-  /** last 4 chars for verification only, value never returned */
-  fingerprint?: string
 }
 
 export function listSecrets(): Promise<{ items: Secret[]; total: number }> {
   return get<{ items: Secret[]; total: number }>('/secrets')
 }
 
-export function createSecret(body: { id: string; value: string; provider?: string; scope?: string }): Promise<void> {
+export function createSecret(body: {
+  name: string
+  value: string
+  description?: string
+  kind?: string
+}): Promise<void> {
   return post('/secrets', body)
 }
 
-export function updateSecret(id: string, body: { value: string; provider?: string }): Promise<void> {
-  return put(`/secrets/${id}`, body)
+export function updateSecret(name: string, body: { value: string; description?: string; kind?: string }): Promise<void> {
+  return put(`/secrets/${name}`, body)
 }
 
-export function deleteSecret(id: string): Promise<void> {
-  return del(`/secrets/${id}`)
+export function deleteSecret(name: string): Promise<void> {
+  return del(`/secrets/${name}`)
 }
 
 // ---------- Policies ----------

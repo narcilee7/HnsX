@@ -84,6 +84,8 @@ func HTTPStatusFor(code string) int {
 		return http.StatusConflict
 	case "ADAPTER_NOT_IMPLEMENTED", "MODE_NOT_IMPLEMENTED":
 		return http.StatusUnprocessableEntity
+	case "SECRETS_UNAVAILABLE":
+		return http.StatusServiceUnavailable
 	default:
 		return http.StatusInternalServerError
 	}
