@@ -321,19 +321,51 @@ function RuntimesTab() {
               <thead className="bg-muted/50 text-xs text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Runtime ID</th>
-                  <th className="px-3 py-2 text-left font-medium">Version</th>
+                  <th className="px-3 py-2 text-left font-medium">Host</th>
                   <th className="px-3 py-2 text-left font-medium">Region</th>
+                  <th className="px-3 py-2 text-left font-medium">Capabilities</th>
                   <th className="px-3 py-2 text-left font-medium">Status</th>
-                  <th className="px-3 py-2 text-right font-medium">Active</th>
+                  <th className="px-3 py-2 text-right font-medium">Slots</th>
                   <th className="px-3 py-2 text-right font-medium">Last Heartbeat</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {data.items.map((rt) => (
                   <tr key={rt.runtime_id} className="hover:bg-muted/30">
-                    <td className="px-3 py-2 font-mono text-xs">{rt.runtime_id}</td>
-                    <td className="px-3 py-2 text-xs">{rt.version ?? '—'}</td>
+                    <td className="px-3 py-2">
+                      <div className="font-mono text-xs">{rt.runtime_id}</div>
+                      {rt.version ? (
+                        <div className="text-[10px] text-muted-foreground">v{rt.version}</div>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      {rt.hostname ?? '—'}
+                      {rt.pid ? (
+                        <span className="ml-1 text-muted-foreground">pid {rt.pid}</span>
+                      ) : null}
+                    </td>
                     <td className="px-3 py-2 text-xs">{rt.region ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {rt.capabilities?.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {rt.capabilities.slice(0, 4).map((c) => (
+                            <span
+                              key={c}
+                              className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium"
+                            >
+                              {c}
+                            </span>
+                          ))}
+                          {rt.capabilities.length > 4 ? (
+                            <span className="text-[10px] text-muted-foreground">
+                              +{rt.capabilities.length - 4}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       <StatusBadge status={rt.status ?? 'unknown'} />
                     </td>

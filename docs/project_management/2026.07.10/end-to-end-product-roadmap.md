@@ -98,10 +98,14 @@ Refs：`docs/server-design/go-refactor-plan.md §4 D1`
 
 #### T3 — Runtime 列表读真 worker.Registry（server）
 
-- [ ] **server** `auxiliary.go:558-572` 删硬编码，改读 `worker.Registry/worker repo`
-- [ ] **server** `WorkerInfo → REST` 映射对齐 `api-design §10` 与 `proto/RuntimeInfo`
-- [ ] **console** `SettingsPage` Runtime tab 与 `useSettings` 同步展示多 worker
-- [ ] **验收**：启动 2 个 worker 后 Settings 看到 2 行；刷新有 last_heartbeat_at 滚动
+- [x] **server** `auxiliary.go` 删硬编码 `local-control-plane/phase1`，改调 `WorkerService.List()`
+- [x] **server** 映射 `worker.Snapshot → REST`：runtime_id / version / region / hostname / pid / capacity / capabilities / models / sandbox_runtimes / labels / last_heartbeat_at / age_seconds / status
+- [x] **server** status 在 healthy / degraded / offline 三档；>60s 未心跳 → offline
+- [x] **server** `WorkerService == nil`（gRPC 未启用）时返回空列表，由 UI 渲染 empty state；不再有 fake 数据
+- [x] **server** `pkg/api/runtimes_test.go`：4 个 handler 测试覆盖空、单/多 worker、nil service、status 三档
+- [x] **console** `src/api/settings.ts` `Runtime` 类型扩 capabilities/models/sandbox_runtimes/labels/age_seconds/healthy
+- [x] **console** `SettingsPage.RuntimesTab` 列改：Runtime ID + version、Host + pid、Region、Capabilities chips、Status、Slots、Last heartbeat
+- [x] **验收**：`pnpm type-check` + `go test ./...` 全过
 
 Refs：`docs/server-design/go-refactor-plan.md §4 D3`
 

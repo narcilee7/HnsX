@@ -52,16 +52,29 @@ export function listPolicies(): Promise<{ items: Policy[]; total: number }> {
 
 // ---------- Runtimes ----------
 
+/**
+ * Runtime worker snapshot. Server reads live worker.Registry.List() — the
+ * worker only appears here once it has called Register() and at least one
+ * Heartbeat() has landed.
+ */
 export interface Runtime {
   runtime_id: string
   version?: string
   region?: string
-  /** 'active' | 'draining' | 'offline' */
+  hostname?: string
+  pid?: string
+  /** 'healthy' | 'degraded' | 'offline' — derived from heart-beat freshness */
   status?: string
   last_heartbeat_at?: string
-  /** 可选元数据 */
+  age_seconds?: number
+  healthy?: boolean
+  /** advertised by the worker on Register via ResourceCapacity */
   capacity?: number
   active_sessions?: number
+  capabilities?: string[]
+  models?: string[]
+  sandbox_runtimes?: string[]
+  labels?: Record<string, string>
 }
 
 export function listRuntimes(): Promise<{ items: Runtime[]; total: number }> {
