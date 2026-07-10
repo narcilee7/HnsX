@@ -15,14 +15,11 @@ import sys
 import click
 
 from hnsx_worker import __version__
+from hnsx_worker.logging import configure_logging
 
 
 def _setup_logging(verbose: bool) -> None:
-    logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.INFO,
-        format="%(asctime)s %(levelname)-5s %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    configure_logging(level=logging.DEBUG if verbose else logging.INFO)
 
 
 @click.group()
@@ -59,7 +56,12 @@ def check_proto() -> None:
 @click.option("--server", default="127.0.0.1:50061", help="hnsx-server gRPC address (host:port).")
 @click.option("--worker-id", default="", help="Stable worker id (empty = server-assigned).")
 @click.option("--region", default="local", help="Free-form region tag.")
-@click.option("--max-concurrent-sessions", default=4, type=int, help="Max subprocesses this worker runs in parallel.")
+@click.option(
+    "--max-concurrent-sessions",
+    default=4,
+    type=int,
+    help="Max subprocesses this worker runs in parallel.",
+)
 @click.option(
     "--providers",
     default="anthropic,openai,claudecode,codex,ollama,noop,echo",
