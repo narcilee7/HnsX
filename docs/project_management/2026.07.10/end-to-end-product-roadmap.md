@@ -186,8 +186,8 @@ Refs：`docs/server-design/api-design.md §6`
 ### P1 — 契约对齐（P0 e2e 跑通后启动）
 
 - [x] **T9** 补齐 `api-design.md` 缺失路由（`PUT /domains/:id`、`/evals` 嵌套路径等）
-- [ ] **T10** `Observation.{payload,metadata}` 序列化约定写进 proto / Python loader / TS mappers
-- [ ] **T11** `MCPConfig` ↔ Worker `mcp_servers` 字段映射 + 双向转换函数
+- [x] **T10** `Observation.{payload,metadata}` 序列化约定写进 proto / Python loader / TS mappers
+- [x] **T11** `MCPConfig` ↔ Worker `mcp_servers` 字段映射 + 双向转换函数
 - [ ] **T12** `WorkflowSession.mode` Python runner 至少跑通一个 example（`workflow-demo`）
 
 ### P2 — 兑现承诺（独立迭代排期）
