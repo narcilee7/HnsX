@@ -262,14 +262,15 @@ function PoliciesTab() {
       <CardHeader>
         <CardTitle className="text-base">Policy Registry</CardTitle>
         <p className="mt-1 text-xs text-muted-foreground">
-          Budget / Permission / Guardrail 规则。Phase 1 只读，规则通过 DomainSpec YAML 注入。
+          Named Budget / Permission / Guardrail bundles that can be bound to a Domain via the
+          Domain detail page.
         </p>
       </CardHeader>
       <CardContent>
         {isLoading ? (
           <Loading />
         ) : !data?.items.length ? (
-          <Empty description="目前没有 Policy。规则随 DomainSpec 注入，每个 Domain 独立管理。" />
+          <Empty description="还没有 Policy。在 example-domains 里随 YAML 自动注入，或通过 Settings 手动加。" />
         ) : (
           <div className="divide-y">
             {data.items.map((p) => (
@@ -277,33 +278,42 @@ function PoliciesTab() {
                 <div className="min-w-0 space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-sm font-medium">{p.id}</span>
-                    {p.scope && (
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
-                        {p.scope}
+                    {p.name ? (
+                      <span className="text-xs text-muted-foreground">/ {p.name}</span>
+                    ) : null}
+                    {p.bound_domain ? (
+                      <span className="rounded bg-[var(--success-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--success-text)]">
+                        bound → {p.bound_domain}
                       </span>
-                    )}
-                    {p.effect && (
-                      <span
-                        className={
-                          p.effect === 'deny'
-                            ? 'rounded bg-[var(--danger-soft)] px-1.5 py-0.5 text-[10px] text-[var(--danger-text)]'
-                            : p.effect === 'allow'
-                              ? 'rounded bg-[var(--success-soft)] px-1.5 py-0.5 text-[10px] text-[var(--success-text)]'
-                              : 'rounded bg-[var(--warning-soft)] px-1.5 py-0.5 text-[10px] text-[var(--warning-text)]'
-                        }
-                      >
-                        {p.effect}
+                    ) : (
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        unbound
                       </span>
                     )}
                   </div>
                   {p.description && (
                     <p className="text-xs text-muted-foreground">{p.description}</p>
                   )}
-                  {p.rule && (
-                    <pre className="mt-1 max-w-2xl overflow-x-auto rounded bg-muted px-2 py-1 text-[11px]">
-                      {p.rule}
-                    </pre>
-                  )}
+                  {(p.budget || p.permissions) ? (
+                    <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                      {p.budget?.max_cost_usd != null ? (
+                        <span>budget ${p.budget.max_cost_usd.toFixed(2)}</span>
+                      ) : null}
+                      {p.budget?.max_turns ? (
+                        <span>/ {p.budget.max_turns} turns</span>
+                      ) : null}
+                      {p.permissions?.allow_shell === false ? (
+                        <span className="rounded bg-[var(--danger-soft)] px-1 text-[var(--danger-text)]">
+                          shell denied
+                        </span>
+                      ) : null}
+                      {p.permissions?.allow_network === false ? (
+                        <span className="rounded bg-[var(--warning-soft)] px-1 text-[var(--warning-text)]">
+                          network denied
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}

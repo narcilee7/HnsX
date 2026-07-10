@@ -40,22 +40,77 @@ export function deleteSecret(name: string): Promise<void> {
 
 // ---------- Policies ----------
 
+export interface PolicyBudget {
+  max_cost_usd?: number
+  max_turns?: number
+  max_tokens?: number
+}
+
+export interface PolicyPermissions {
+  allow_file_write?: boolean
+  allow_file_delete?: boolean
+  allow_network?: boolean
+  allow_shell?: boolean
+}
+
+export interface PolicyGuardrail {
+  id?: string
+  type?: string
+  on?: string
+  action?: string
+  schema?: string
+  message?: string
+  config?: unknown
+}
+
+/**
+ * Named policy returned by /api/v1/policies. A policy is a NAMED bundle
+ * (Budget + Permissions + Guardrails) that can be bound to a domain
+ * via POST /api/v1/domains/:id/policies.
+ */
 export interface Policy {
   id: string
   name?: string
-  /** rule body — 通常是 YAML/JSON 字符串 */
-  rule?: string
-  /** scope — 例如 'global' / 'domain:customer-service' */
-  scope?: string
-  /** effect — 'allow' / 'deny' / 'require_approval' */
-  effect?: string
   description?: string
+  bound_domain?: string
+  budget?: PolicyBudget
+  permissions?: PolicyPermissions
+  guardrails?: PolicyGuardrail[]
   created_at?: string
   updated_at?: string
 }
 
+export interface PolicyWriteBody {
+  id?: string
+  name?: string
+  description?: string
+  budget?: PolicyBudget
+  permissions?: PolicyPermissions
+  guardrails?: PolicyGuardrail[]
+}
+
 export function listPolicies(): Promise<{ items: Policy[]; total: number }> {
   return get<{ items: Policy[]; total: number }>('/policies')
+}
+
+export function createPolicy(body: PolicyWriteBody): Promise<Policy> {
+  return post<Policy>('/policies', body)
+}
+
+export function updatePolicy(id: string, body: PolicyWriteBody): Promise<Policy> {
+  return put<Policy>(`/policies/${id}`, body)
+}
+
+export function deletePolicy(id: string): Promise<void> {
+  return del(`/policies/${id}`)
+}
+
+export interface BindPolicyBody {
+  policy_id: string
+}
+
+export function bindPolicy(domainID: string, body: BindPolicyBody): Promise<void> {
+  return post(`/domains/${domainID}/policies`, body)
 }
 
 // ---------- Runtimes ----------

@@ -12,6 +12,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
 	evalrunner "github.com/hnsx-io/hnsx/server/internal/evaluation/runner"
+	policymodel "github.com/hnsx-io/hnsx/server/internal/policy/model"
 	secmodel "github.com/hnsx-io/hnsx/server/internal/secret/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	tracemodel "github.com/hnsx-io/hnsx/server/internal/trace/model"
@@ -782,10 +783,211 @@ func (s *Server) DeleteSecret(c *gin.Context) {
 
 // ListPolicies handles GET /api/v1/policies.
 func (s *Server) ListPolicies(c *gin.Context) {
+	if s.PolicyService == nil {
+		writeError(c, &APIError{
+			Code:    "POLICY_UNAVAILABLE",
+			Message: "policy service is not configured on this server",
+		})
+		return
+	}
+	items, err := s.PolicyService.List()
+	if err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, it := range items {
+		out = append(out, policyItemToJSON(it))
+	}
 	writeJSON(c, http.StatusOK, map[string]any{
-		"items": []map[string]any{},
-		"total": 0,
+		"items": out,
+		"total": len(out),
 	})
+}
+
+// CreatePolicy handles POST /api/v1/policies. Body shape:
+//
+//	{ "id": "no-shell",
+//	  "name": "Deny Shell",
+//	  "description": "...",
+//	  "budget": { "max_cost_usd": 10, ... },
+//	  "permissions": { ... },
+//	  "guardrails": [ ... ] }
+//
+// id is required; the rest default to safe zero values. BoundDomain is
+// intentionally NOT accepted here — bindings go through
+// /domains/:id/policies so the dedicated route owns that relationship.
+func (s *Server) CreatePolicy(c *gin.Context) {
+	if s.PolicyService == nil {
+		writeError(c, &APIError{
+			Code:    "POLICY_UNAVAILABLE",
+			Message: "policy service is not configured on this server",
+		})
+		return
+	}
+	var body policyWriteBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		writeError(c, NewInvalidRequest("invalid request body"))
+		return
+	}
+	if body.ID == "" {
+		writeError(c, NewInvalidRequest("id is required"))
+		return
+	}
+	if body.Name == "" {
+		body.Name = body.ID
+	}
+	policy := &policymodel.Policy{
+		ID:          body.ID,
+		Name:        body.Name,
+		Description: body.Description,
+		Budget:      body.Budget,
+		Permissions: body.Permissions,
+		Guardrails:  body.Guardrails,
+	}
+	if err := s.PolicyService.CreateOrUpdate(policy); err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+	writeJSON(c, http.StatusCreated, policyToJSON(policy))
+}
+
+// UpdatePolicy handles PUT /api/v1/policies/:id. Same body as Create.
+func (s *Server) UpdatePolicy(c *gin.Context) {
+	if s.PolicyService == nil {
+		writeError(c, &APIError{
+			Code:    "POLICY_UNAVAILABLE",
+			Message: "policy service is not configured on this server",
+		})
+		return
+	}
+	id := c.Param("id")
+	var body policyWriteBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		writeError(c, NewInvalidRequest("invalid request body"))
+		return
+	}
+	if body.ID != "" && body.ID != id {
+		writeError(c, NewInvalidRequest("id in body must match id in url"))
+		return
+	}
+	policy := &policymodel.Policy{
+		ID:          id,
+		Name:        body.Name,
+		Description: body.Description,
+		Budget:      body.Budget,
+		Permissions: body.Permissions,
+		Guardrails:  body.Guardrails,
+	}
+	if policy.Name == "" {
+		policy.Name = id
+	}
+	if err := s.PolicyService.CreateOrUpdate(policy); err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+	writeJSON(c, http.StatusOK, policyToJSON(policy))
+}
+
+// DeletePolicy handles DELETE /api/v1/policies/:id.
+func (s *Server) DeletePolicy(c *gin.Context) {
+	if s.PolicyService == nil {
+		writeError(c, &APIError{
+			Code:    "POLICY_UNAVAILABLE",
+			Message: "policy service is not configured on this server",
+		})
+		return
+	}
+	if err := s.PolicyService.Delete(c.Param("id")); err != nil {
+		if errors.Is(err, policymodel.ErrPolicyNotFound) {
+			writeError(c, &APIError{
+				Code:    "POLICY_NOT_FOUND",
+				Message: err.Error(),
+			})
+			return
+		}
+		writeError(c, NewInternal(err))
+		return
+	}
+	c.AbortWithStatus(http.StatusNoContent)
+}
+
+// BindPolicy handles POST /api/v1/domains/:id/policies — associates
+// the named policy with the domain. Body: { "policy_id": "no-shell" }.
+// If the domain already had a different policy bound, that binding is
+// replaced (so the 1:1 invariant holds).
+func (s *Server) BindPolicy(c *gin.Context) {
+	if s.PolicyService == nil {
+		writeError(c, &APIError{
+			Code:    "POLICY_UNAVAILABLE",
+			Message: "policy service is not configured on this server",
+		})
+		return
+	}
+	domainID := c.Param("id")
+	var body struct {
+		PolicyID string `json:"policy_id"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		writeError(c, NewInvalidRequest("invalid request body"))
+		return
+	}
+	if body.PolicyID == "" {
+		writeError(c, NewInvalidRequest("policy_id is required"))
+		return
+	}
+	if err := s.PolicyService.BindDomain(body.PolicyID, domainID); err != nil {
+		if errors.Is(err, policymodel.ErrPolicyNotFound) {
+			writeError(c, &APIError{
+				Code:    "POLICY_NOT_FOUND",
+				Message: err.Error(),
+			})
+			return
+		}
+		writeError(c, NewInternal(err))
+		return
+	}
+	writeJSON(c, http.StatusOK, map[string]any{
+		"domain_id": domainID,
+		"policy_id": body.PolicyID,
+	})
+}
+
+type policyWriteBody struct {
+	ID          string                 `json:"id"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Budget      policymodel.Budget     `json:"budget"`
+	Permissions policymodel.Permissions `json:"permissions"`
+	Guardrails  []policymodel.Guardrail `json:"guardrails"`
+}
+
+func policyItemToJSON(it policymodel.ListItem) map[string]any {
+	return map[string]any{
+		"id":           it.ID,
+		"name":         it.Name,
+		"description":  it.Description,
+		"bound_domain": it.BoundDomain,
+		"budget":       it.Budget,
+		"permissions":  it.Permissions,
+		"guardrails":   it.Guardrails,
+		"created_at":   it.CreatedAt,
+		"updated_at":   it.UpdatedAt,
+	}
+}
+
+func policyToJSON(p *policymodel.Policy) map[string]any {
+	return map[string]any{
+		"id":           p.ID,
+		"name":         p.Name,
+		"description":  p.Description,
+		"bound_domain": p.BoundDomain,
+		"budget":       p.Budget,
+		"permissions":  p.Permissions,
+		"guardrails":   p.Guardrails,
+		"created_at":   p.CreatedAt,
+		"updated_at":   p.UpdatedAt,
+	}
 }
 
 // ----------------------------------------------------------------------------
