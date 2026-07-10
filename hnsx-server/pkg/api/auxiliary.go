@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	approvalmodel "github.com/hnsx-io/hnsx/server/internal/approval/model"
@@ -20,7 +21,6 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	tracemodel "github.com/hnsx-io/hnsx/server/internal/trace/model"
 	workerpkg "github.com/hnsx-io/hnsx/server/internal/worker"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
 
 // ListTraces handles GET /api/v1/traces — page of TraceSummary records
@@ -679,7 +679,7 @@ func (s *Server) RunEval(c *gin.Context) {
 	}
 
 	run := &evalmodel.EvalRun{
-		ID:            runtime.NewSessionID(set.ID),
+		ID:            uuid.NewString(),
 		EvalSetID:     set.ID,
 		DomainID:      set.DomainID,
 		DomainVersion: domain.Version,
