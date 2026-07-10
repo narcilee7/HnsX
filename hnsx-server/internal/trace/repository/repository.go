@@ -22,6 +22,14 @@ type Repository interface {
 	// Sessions with no observations are omitted from the map. Passing an empty
 	// slice returns an empty map.
 	AggregateBySession(sessionIDs []string) (map[string]model.Aggregate, error)
+	// ListSummaries returns a page of trace summaries that match filter. The
+	// filter is the single source of truth for List; zero-valued times/strings
+	// are no-ops. The second return value is the total count of matching
+	// trace_ids, independent of the page size.
+	ListSummaries(filter model.TraceListFilter) (model.TraceSummaryWithCount, error)
+	// Detail returns the full trace, or (nil, model.ErrTraceNotFound) if no
+	// observation carries the supplied trace_id.
+	Detail(traceID string) (*model.TraceDetail, error)
 }
 
 // InMemoryRepository is a thread-safe in-memory implementation.
@@ -140,3 +148,148 @@ func (r *InMemoryRepository) AggregateBySession(sessionIDs []string) (map[string
 }
 
 var _ Repository = (*InMemoryRepository)(nil)
+
+// ListSummaries implements Repository.
+func (r *InMemoryRepository) ListSummaries(filter model.TraceListFilter) (model.TraceSummaryWithCount, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	byTrace := make(map[string]*model.TraceSummary)
+	for _, rec := range r.records {
+		if rec.TraceID == "" {
+			continue
+		}
+		if filter.DomainID != "" && rec.DomainID != filter.DomainID {
+			continue
+		}
+		if filter.SessionID != "" && rec.SessionID != filter.SessionID {
+			continue
+		}
+		if filter.AgentID != "" && rec.AgentID != filter.AgentID {
+			continue
+		}
+		if !filter.From.IsZero() && rec.CreatedAt.Before(filter.From) {
+			continue
+		}
+		if !filter.To.IsZero() && rec.CreatedAt.After(filter.To) {
+			continue
+		}
+		sum, ok := byTrace[rec.TraceID]
+		if !ok {
+			sum = &model.TraceSummary{
+				TraceID:       rec.TraceID,
+				SessionID:     rec.SessionID,
+				DomainID:      rec.DomainID,
+				DomainVersion: rec.DomainVersion,
+				Status:        "running",
+			}
+			byTrace[rec.TraceID] = sum
+		}
+		if rec.CreatedAt.Before(sum.StartedAt) || sum.StartedAt.IsZero() {
+			sum.StartedAt = rec.CreatedAt
+		}
+		if rec.CreatedAt.After(sum.CompletedAt) {
+			sum.CompletedAt = rec.CreatedAt
+		}
+		sum.ObservationCount++
+		sum.TotalCostUSD += rec.CostUSD
+		sum.TotalPromptTokens += rec.PromptTokens
+		sum.TotalCompletionTokens += rec.CompletionTokens
+		switch rec.Kind {
+		case "agent_invoke":
+			sum.AgentInvocations++
+		case "tool_call":
+			sum.ToolInvocations++
+		}
+		if rec.Kind == "session_end" {
+			// Last session_end wins; the loop processes records in insertion order,
+			// but CompletedAt already tracks the latest observation so status
+			// collapses to "completed" once any final observation is seen.
+			sum.Status = "completed"
+		}
+	}
+
+	summaries := make([]model.TraceSummary, 0, len(byTrace))
+	for _, sum := range byTrace {
+		if !sum.CompletedAt.IsZero() && !sum.StartedAt.IsZero() {
+			sum.DurationMs = sum.CompletedAt.Sub(sum.StartedAt).Milliseconds()
+		}
+		summaries = append(summaries, *sum)
+	}
+	// Stable ordering: most recent traces first.
+	sort.Slice(summaries, func(i, j int) bool {
+		return summaries[i].StartedAt.After(summaries[j].StartedAt)
+	})
+
+	total := len(summaries)
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return model.TraceSummaryWithCount{
+		Summaries: summaries[offset:end],
+		Total:     total,
+	}, nil
+}
+
+// Detail implements Repository.
+func (r *InMemoryRepository) Detail(traceID string) (*model.TraceDetail, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	matched := make([]model.ObservationRecord, 0)
+	for _, rec := range r.records {
+		if rec.TraceID == traceID {
+			matched = append(matched, rec)
+		}
+	}
+	if len(matched) == 0 {
+		return nil, model.ErrTraceNotFound
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		return matched[i].CreatedAt.Before(matched[j].CreatedAt)
+	})
+
+	sum := model.TraceSummary{
+		TraceID:       traceID,
+		SessionID:     matched[0].SessionID,
+		DomainID:      matched[0].DomainID,
+		DomainVersion: matched[0].DomainVersion,
+		Status:        "running",
+		StartedAt:     matched[0].CreatedAt,
+		CompletedAt:   matched[len(matched)-1].CreatedAt,
+	}
+	for _, rec := range matched {
+		sum.ObservationCount++
+		sum.TotalCostUSD += rec.CostUSD
+		sum.TotalPromptTokens += rec.PromptTokens
+		sum.TotalCompletionTokens += rec.CompletionTokens
+		switch rec.Kind {
+		case "agent_invoke":
+			sum.AgentInvocations++
+		case "tool_call":
+			sum.ToolInvocations++
+		}
+		if rec.Kind == "session_end" {
+			sum.Status = "completed"
+		}
+	}
+	if !sum.CompletedAt.IsZero() && !sum.StartedAt.IsZero() {
+		sum.DurationMs = sum.CompletedAt.Sub(sum.StartedAt).Milliseconds()
+	}
+	return &model.TraceDetail{
+		TraceSummary: sum,
+		Observations: matched,
+	}, nil
+}

@@ -77,12 +77,12 @@
 
 #### T1 — Trace API 归位（server + console）
 
-- [ ] **server** `pkg/api/auxiliary.go:24-152` 改调 `internal/trace/service.ListTraces/GetTrace`，删除 `trace_id == session_id` 假象
-- [ ] **server** `internal/trace/service` 暴露 `ListTraces(tenant, filter)` + `GetTrace(tenant, traceID)`；如缺失则补
-- [ ] **server** handler 测试：trace_id 不存在返 404 `TRACE_NOT_FOUND`；列出分页正确
-- [ ] **migration** 视情况加 `observations(domain_id, created_at)` 复合索引
-- [ ] **console** `src/api/mappers.ts:187/197/224` 与 `useTraces/SessionDetailPage/TraceDetailPage` 链路同步
-- [ ] **验收**：`GET /api/v1/traces?domain=x&from=&to=&limit=` 返回真实聚合；`GET /api/v1/traces/:id` 返回 observations[]；console TracesPage 端到端走通
+- [x] **server** `pkg/api/auxiliary.go:24-152` 改调 `internal/trace/service.ListTraces/GetTrace`，删除 `trace_id == session_id` 假象
+- [x] **server** `internal/trace/service` 暴露 `ListTraces(tenant, filter)` + `GetTrace(tenant, traceID)`；如缺失则补
+- [x] **server** handler 测试：trace_id 不存在返 404 `TRACE_NOT_FOUND`；列出分页正确
+- [x] **migration** 视情况加 `observations(domain_id, created_at)` 复合索引 (`go/migrations/000005_trace_list_indexes.up.sql`)
+- [x] **console** `src/api/mappers.ts` + `TracesPage` + `api/traces.ts` 同步切换 `TraceSummaryViewModel`；`mappers.ts:187/197/224` 的 traceId 字段在 wire 上仍是 `trace_id`，无需改动
+- [x] **验收**：`GET /api/v1/traces?domain=x&from=&to=&limit=` 返回真实聚合；`GET /api/v1/traces/:id` 返回 observations[]；console TracesPage `pnpm type-check` + `pnpm build` 全过
 
 Refs：`docs/server-design/go-refactor-plan.md §2 Track A`
 

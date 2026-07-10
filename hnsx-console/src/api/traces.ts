@@ -1,6 +1,6 @@
 import { get } from './client'
-import { mapTraceRecord } from './mappers'
-import type { TraceViewModel } from './mappers'
+import { mapTraceRecord, mapTraceSummaryFromJson } from './mappers'
+import type { TraceSummaryViewModel, TraceViewModel } from './mappers'
 import type { JsonValue } from '@bufbuild/protobuf'
 import { fromJson, TraceRecordSchema } from '@hnsx/sdk-node'
 
@@ -15,7 +15,7 @@ export interface TraceListParams {
 }
 
 export function listTraces(params: TraceListParams = {}): Promise<{
-  items: TraceViewModel[]
+  items: TraceSummaryViewModel[]
   total: number
 }> {
   const search = new URLSearchParams()
@@ -29,7 +29,7 @@ export function listTraces(params: TraceListParams = {}): Promise<{
   return get<unknown>(`/traces?${search.toString()}`).then((res) => {
     const data = res as { items: unknown[]; total: number }
     return {
-      items: data.items.map((item) => mapTraceRecord(fromJson(TraceRecordSchema, item as JsonValue))),
+      items: data.items.map((item) => mapTraceSummaryFromJson(item as Record<string, unknown>)),
       total: data.total,
     }
   })
