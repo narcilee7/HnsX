@@ -19,6 +19,8 @@ type Repository interface {
 	SaveRun(run *model.EvalRun) error
 	RunByID(id string) (*model.EvalRun, error)
 	RunsBySet(setID string) ([]model.EvalRun, error)
+	// SaveResults persists the per-case results for a run.
+	SaveResults(runID string, results []model.EvalResult) error
 }
 
 // InMemoryRepository is a thread-safe in-memory implementation.
@@ -123,6 +125,18 @@ func (r *InMemoryRepository) RunsBySet(setID string) ([]model.EvalRun, error) {
 		}
 	}
 	return out, nil
+}
+
+// SaveResults implements Repository.
+func (r *InMemoryRepository) SaveResults(runID string, results []model.EvalResult) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	run, ok := r.runs[runID]
+	if !ok {
+		return model.ErrEvalRunNotFound
+	}
+	run.Results = results
+	return nil
 }
 
 var _ Repository = (*InMemoryRepository)(nil)

@@ -67,11 +67,21 @@ func (s *Service) RunsBySet(setID string) ([]model.EvalRun, error) {
 
 // FinishRun marks a run as completed with aggregates.
 func (s *Service) FinishRun(runID string, score float64, passed, total int, durationMs int64, costUSD float64) error {
+	return s.finalizeRun(runID, "completed", score, passed, total, durationMs, costUSD)
+}
+
+// FailRun marks a run as failed while still recording whatever aggregates were
+// accumulated (e.g. when a budget guard trips mid-run).
+func (s *Service) FailRun(runID string, score float64, passed, total int, durationMs int64, costUSD float64) error {
+	return s.finalizeRun(runID, "failed", score, passed, total, durationMs, costUSD)
+}
+
+func (s *Service) finalizeRun(runID, state string, score float64, passed, total int, durationMs int64, costUSD float64) error {
 	run, err := s.repo.RunByID(runID)
 	if err != nil {
 		return err
 	}
-	run.State = "completed"
+	run.State = state
 	run.Score = score
 	run.PassedCases = passed
 	run.TotalCases = total
@@ -80,4 +90,9 @@ func (s *Service) FinishRun(runID string, score float64, passed, total int, dura
 	now := time.Now().UTC()
 	run.CompletedAt = &now
 	return s.repo.SaveRun(run)
+}
+
+// RecordResults persists the per-case results for a run.
+func (s *Service) RecordResults(runID string, results []model.EvalResult) error {
+	return s.repo.SaveResults(runID, results)
 }
