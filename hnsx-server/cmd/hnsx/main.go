@@ -11,10 +11,12 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/client"
 	"github.com/hnsx-io/hnsx/server/pkg/local"
@@ -55,6 +57,9 @@ Usage:
   hnsx remote  sessions list
   hnsx remote  sessions get <id>
   hnsx remote  sessions trigger --domain <id> [--trigger <json>]
+  hnsx remote  sessions cancel <id>
+  hnsx remote  sessions rerun <id>
+  hnsx remote  sessions events <id>
   hnsx version
 
 Examples:
@@ -199,6 +204,9 @@ Usage:
   hnsx remote sessions list
   hnsx remote sessions get <id>
   hnsx remote sessions trigger --domain <id> [--trigger <json>]
+  hnsx remote sessions cancel <id>
+  hnsx remote sessions rerun <id>
+  hnsx remote sessions events <id>
 
 Environment:
   HNSX_SERVER_URL   Server base URL (default http://127.0.0.1:50051)
@@ -215,7 +223,7 @@ func cmdRemoteDomains(args []string) int {
 	case "list":
 		items, err := c.ListDomains()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "list domains: %v\n", err)
+			printRemoteError("list domains", err)
 			return 1
 		}
 		printJSON(items)
@@ -226,7 +234,7 @@ func cmdRemoteDomains(args []string) int {
 		}
 		d, err := c.GetDomain(args[1])
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "get domain: %v\n", err)
+			printRemoteError("get domain", err)
 			return 1
 		}
 		printJSON(d)
@@ -246,7 +254,7 @@ func cmdRemoteDomains(args []string) int {
 		defer f.Close()
 		d, err := c.RegisterDomain(f, "application/x-yaml")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "register domain: %v\n", err)
+			printRemoteError("register domain", err)
 			return 1
 		}
 		printJSON(d)
@@ -267,7 +275,7 @@ func cmdRemoteSessions(args []string) int {
 	case "list":
 		items, err := c.ListSessions()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "list sessions: %v\n", err)
+			printRemoteError("list sessions", err)
 			return 1
 		}
 		printJSON(items)
@@ -278,7 +286,7 @@ func cmdRemoteSessions(args []string) int {
 		}
 		s, err := c.GetSession(args[1])
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "get session: %v\n", err)
+			printRemoteError("get session", err)
 			return 1
 		}
 		printJSON(s)
@@ -298,10 +306,38 @@ func cmdRemoteSessions(args []string) int {
 		}
 		s, err := c.TriggerSession(*domainID, payload)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "trigger session: %v\n", err)
+			printRemoteError("trigger session", err)
 			return 1
 		}
 		printJSON(s)
+	case "cancel":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "session id required")
+			return 1
+		}
+		s, err := c.CancelSession(args[1])
+		if err != nil {
+			printRemoteError("cancel session", err)
+			return 1
+		}
+		printJSON(s)
+	case "rerun":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "session id required")
+			return 1
+		}
+		s, err := c.RerunSession(args[1])
+		if err != nil {
+			printRemoteError("rerun session", err)
+			return 1
+		}
+		printJSON(s)
+	case "events":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "session id required")
+			return 1
+		}
+		return cmdRemoteSessionEvents(c, args[1])
 	default:
 		printRemoteUsage()
 		return 1
@@ -309,9 +345,44 @@ func cmdRemoteSessions(args []string) int {
 	return 0
 }
 
+func cmdRemoteSessionEvents(c *client.Client, id string) int {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	events, errCh, err := c.SessionEvents(ctx, id)
+	if err != nil {
+		printRemoteError("session events", err)
+		return 1
+	}
+
+	for {
+		select {
+		case evt, ok := <-events:
+			if !ok {
+				return 0
+			}
+			fmt.Printf("event: %s\ndata: %s\n\n", evt.Name, string(evt.Payload))
+		case err := <-errCh:
+			if err != nil {
+				printRemoteError("session events", err)
+				return 1
+			}
+			return 0
+		}
+	}
+}
+
 func printJSON(v any) {
 	b, _ := json.MarshalIndent(v, "", "  ")
 	fmt.Println(string(b))
+}
+
+func printRemoteError(action string, err error) {
+	if apiErr, ok := err.(*client.APIError); ok {
+		fmt.Fprintf(os.Stderr, "%s: %s: %s\n", action, apiErr.Code, apiErr.Message)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "%s: %v\n", action, err)
 }
 
 // Ensure spec package is referenced; silences unused-import lints when
