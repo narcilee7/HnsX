@@ -71,7 +71,7 @@ services:
       dockerfile: ../deployments/local/Dockerfile.worker
     environment:
       HNSX_SERVER: "server:50061"
-      HNSX_ECHO_TOOL_CALL: '{"tool_call_id":"mcp-call-1","name":"list_directory","input":{"path":"/tmp"},"text":""}'
+      HNSX_ECHO_TOOL_CALL: "${HNSX_ECHO_TOOL_CALL:-}"
     depends_on:
       server:
         condition: service_healthy
