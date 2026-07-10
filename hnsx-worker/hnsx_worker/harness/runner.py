@@ -259,6 +259,9 @@ def _run_agent(
 ) -> str:
     """Run one agent and return its final text."""
     prompt = _resolve_prompt(harness, agent)
+    skill_ctx = _resolve_skill_context(harness, agent)
+    if skill_ctx:
+        prompt = (prompt + "\n" + skill_ctx) if prompt else skill_ctx
     text_parts: list[str] = []
 
     base_emit = {
@@ -375,6 +378,55 @@ def _resolve_prompt(harness: HarnessSpec, agent: dict) -> str:
     if sp in harness.prompts:
         return harness.prompts[sp].get("template", "")
     return sp
+
+
+def _resolve_skill_context(harness: HarnessSpec, agent: dict) -> str:
+    """Build a system-prompt fragment from the agent's skill refs.
+
+    The supervisor-mode orchestrator doesn't dispatch tool calls
+    itself (specialists do, via session_executor), but the agent still
+    needs to *know* what skills it carries. We prepend a short
+    inventory — skill ids + descriptions + a compressed view of each
+    skill's prompts/examples — so the routing decision can reason
+    about the capability surface.
+
+    Skills with no prompts/examples contribute only their description
+    line; tools are deliberately omitted (their schemas live in the
+    specialist's tool registry, not the orchestrator's prompt).
+    """
+    refs = agent.get("skill_refs") or []
+    if not refs:
+        return ""
+    skills = getattr(harness, "skills", None)
+    if skills is None:
+        return ""
+    lines: list[str] = []
+    seen: set[str] = set()
+    for ref in refs:
+        ref_id = str(ref)
+        if ref_id in seen or ref_id not in skills:
+            continue
+        seen.add(ref_id)
+        skill = skills[ref_id]
+        header = f"- {skill.id}: {skill.description or '(no description)'}"
+        lines.append(header)
+        for p in skill.prompts:
+            template = (p.get("template") or "").strip()
+            if template:
+                lines.append(f"  prompt {p.get('id', '?')!r}: " + template.splitlines()[0][:120])
+        for ex in skill.examples[:3]:
+            lines.append(
+                f"  example {ex.get('id', '?')!r}: "
+                f"{str(ex.get('input', ''))[:60]} -> "
+                f"{str(ex.get('output', ''))[:60]}"
+            )
+    if not lines:
+        return ""
+    return (
+        "Available skills (from skill_refs):\n"
+        + "\n".join(lines)
+        + "\n"
+    )
 
 
 __all__ = ["run", "OrchestrationError"]
