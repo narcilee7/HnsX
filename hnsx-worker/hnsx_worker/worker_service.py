@@ -37,6 +37,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from hnsx_worker.config import WorkerConfig
+from hnsx_worker.logging import worker_id_var
 from hnsx_worker.proto_client import (
     AckRequest,
     ControlPlaneClient,
@@ -85,6 +86,7 @@ class WorkerService:
 
     def run(self) -> None:
         """Block until the worker is asked to stop."""
+        worker_id_var.set(self.worker_id)
         self._install_signal_handlers()
         self._register()
 
@@ -431,11 +433,13 @@ class WorkerService:
         observation = Observation(
             session_id=handle.session_id,
             domain_id=obs.get("domain_id", ""),
+            domain_version=obs.get("domain_version", ""),
             step_id=obs.get("step_id", ""),
             agent_id=obs.get("agent_id", ""),
             kind=obs.get("kind", ""),
             payload=dict(obs.get("payload", {}) or {}),
             created_at_ms=int(obs.get("created_at_ms") or time.time() * 1000),
+            trace_id=obs.get("trace_id", ""),
         )
         self._obs_queue.put(
             OutboundMessage(kind="observations", observations=[observation])
@@ -451,6 +455,12 @@ class WorkerService:
                         result=SessionFinalResult(
                             session_id=handle.session_id,
                             result=result_dict,
+                            total_cost_usd=float(result_dict.get("cost_usd", 0.0)),
+                            total_prompt_tokens=int(result_dict.get("prompt_tokens", 0)),
+                            total_completion_tokens=int(
+                                result_dict.get("completion_tokens", 0)
+                            ),
+                            duration_ms=int(result_dict.get("duration_ms", 0)),
                         ),
                     )
                 )

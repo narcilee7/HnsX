@@ -28,11 +28,17 @@ import threading
 import time
 from typing import Any
 
+from hnsx_worker.logging import (
+    correlation_id_var,
+    session_id_var,
+    trace_id_var,
+)
 from hnsx_worker.session_executor import _Stopped, execute_session
 
 
 def emit(obs: dict[str, Any]) -> None:
     """Write one observation as a JSON line on stdout, flushed."""
+    obs.setdefault("trace_id", trace_id_var.get())
     obs.setdefault("created_at_ms", _now_ms())
     sys.stdout.write(json.dumps(obs, default=str) + "\n")
     sys.stdout.flush()
@@ -116,6 +122,9 @@ def main() -> int:
         pass
 
     session_id = config.get("session_id", "")
+    trace_id_var.set(config.get("trace_id", ""))
+    correlation_id_var.set(config.get("correlation_id", ""))
+    session_id_var.set(session_id)
     domain_id = ""
     spec: dict[str, Any] = {}
     try:
@@ -155,9 +164,11 @@ def main() -> int:
             timer.daemon = True
             timer.start()
 
+        start = time.monotonic()
         result = execute_session(spec, trigger, config, stop_event=stop_event, emit=emit)
         end_payload: dict[str, Any] = {}
         if isinstance(result, dict):
+            result["duration_ms"] = int((time.monotonic() - start) * 1000)
             end_payload["result"] = result
         emit(
             {
