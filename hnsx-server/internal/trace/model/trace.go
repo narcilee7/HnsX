@@ -40,6 +40,12 @@ func FromRuntime(obs runtime.Observation) ObservationRecord {
 		Metadata:  obs.Metadata,
 		CreatedAt: obs.Timestamp,
 	}
+	if r.TraceID == "" && r.SessionID != "" {
+		// Current convention: one trace per session. When the runtime omits
+		// trace_id (local executor, tests), fall back to session_id so the
+		// trace list API can group observations correctly.
+		r.TraceID = r.SessionID
+	}
 	if r.Payload == nil {
 		r.Payload = map[string]any{}
 	}
