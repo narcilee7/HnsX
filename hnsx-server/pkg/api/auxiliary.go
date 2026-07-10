@@ -14,60 +14,138 @@ import (
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
 
-// ListTraces handles GET /api/v1/traces — returns the per-domain trace index.
+// ListTraces handles GET /api/v1/traces — returns the per-session trace index
+// enriched with cost/token/invocation rollups from the observation store.
+//
+// In the current model a trace is 1:1 with a session, so trace_id == session_id.
 func (s *Server) ListTraces(c *gin.Context) {
 	domainFilter := c.Query("domain")
+	sessionFilter := c.Query("session")
 	limit := intQueryGin(c, "limit", 50)
 	offset := intQueryGin(c, "offset", 0)
+	if limit <= 0 {
+		limit = 50
+	}
+	from, hasFrom := parseTimeQuery(c.Query("from"))
+	to, hasTo := parseTimeQuery(c.Query("to"))
 
 	items := s.Queries.ListSessions(tenantFromGin(c))
-	out := make([]map[string]any, 0, len(items))
+	filtered := make([]queries.SessionListItem, 0, len(items))
 	for _, sess := range items {
 		if domainFilter != "" && sess.DomainID != domainFilter {
 			continue
 		}
-		out = append(out, map[string]any{
-			"trace_id":       sess.ID,
-			"session_id":     sess.ID,
-			"domain_id":      sess.DomainID,
-			"domain_version": sess.DomainVersion,
-			"status":         sess.State,
-			"started_at":     queries.FormatTimeValue(sess.StartedAt),
-			"duration_ms":    durationMs(sess),
-		})
+		if sessionFilter != "" && sess.ID != sessionFilter {
+			continue
+		}
+		if hasFrom && sess.StartedAt.Before(from) {
+			continue
+		}
+		if hasTo && sess.StartedAt.After(to) {
+			continue
+		}
+		filtered = append(filtered, sess)
 	}
-	// Apply offset/limit naively (full impl needs cursor).
-	if offset > len(out) {
-		offset = len(out)
+
+	total := len(filtered)
+	if offset > total {
+		offset = total
 	}
 	end := offset + limit
-	if end > len(out) {
-		end = len(out)
+	if end > total {
+		end = total
+	}
+	page := filtered[offset:end]
+
+	// Batch-aggregate the page in a single query to avoid N+1.
+	pageIDs := make([]string, 0, len(page))
+	for _, sess := range page {
+		pageIDs = append(pageIDs, sess.ID)
+	}
+	aggByID := map[string]tracemodel.Aggregate{}
+	if s.TraceService != nil && len(pageIDs) > 0 {
+		if m, err := s.TraceService.AggregateBySession(pageIDs); err == nil {
+			aggByID = m
+		}
+	}
+
+	out := make([]map[string]any, 0, len(page))
+	for _, sess := range page {
+		agg := aggByID[sess.ID]
+		out = append(out, map[string]any{
+			"trace_id":          sess.ID,
+			"session_id":        sess.ID,
+			"domain_id":         sess.DomainID,
+			"domain_version":    sess.DomainVersion,
+			"status":            sess.State,
+			"started_at":        queries.FormatTimeValue(sess.StartedAt),
+			"duration_ms":       durationMs(sess),
+			"total_cost_usd":    agg.TotalCostUSD,
+			"prompt_tokens":     agg.TotalPromptTokens,
+			"completion_tokens": agg.TotalCompletionTokens,
+			"agent_invocations": agg.AgentInvocations,
+			"tool_invocations":  agg.ToolInvocations,
+		})
 	}
 	writeJSON(c, http.StatusOK, map[string]any{
-		"items":  out[offset:end],
-		"total":  len(out),
+		"items":  out,
+		"total":  total,
 		"limit":  limit,
 		"offset": offset,
 	})
 }
 
-// GetTrace handles GET /api/v1/traces/:traceId.
+// GetTrace handles GET /api/v1/traces/:traceId — returns the trace envelope with
+// the full observation list and a rolled-up summary.
 func (s *Server) GetTrace(c *gin.Context) {
 	id := c.Param("traceId")
 	sess, ok := s.Queries.GetSession(tenantFromGin(c), id)
 	if !ok {
-		writeError(c, NewSessionNotFound(id))
+		writeError(c, &APIError{
+			Code:    "TRACE_NOT_FOUND",
+			Message: fmt.Sprintf("trace '%s' not found", id),
+		})
 		return
 	}
+
+	observations := []map[string]any{}
+	var agg tracemodel.Aggregate
+	if s.TraceService != nil {
+		records, err := s.TraceService.ByTrace(id)
+		if err != nil {
+			writeError(c, NewInternal(err))
+			return
+		}
+		if len(records) == 0 {
+			// trace_id == session_id in the current 1:1 model; fall back so a
+			// trace looked up by session id still resolves its observations.
+			records, _ = s.TraceService.BySession(id)
+		}
+		for _, rec := range records {
+			observations = append(observations, observationToMap(rec))
+		}
+		if a, err := s.TraceService.Aggregate([]string{id}); err == nil {
+			agg = a
+		}
+	}
+
+	summary := registeredSessionSummary(sess)
+	summary["total_cost_usd"] = agg.TotalCostUSD
+	summary["prompt_tokens"] = agg.TotalPromptTokens
+	summary["completion_tokens"] = agg.TotalCompletionTokens
+	summary["agent_invocations"] = agg.AgentInvocations
+	summary["tool_invocations"] = agg.ToolInvocations
+
 	writeJSON(c, http.StatusOK, map[string]any{
-		"trace_id":      sess.ID,
-		"session_id":    sess.ID,
+		"trace_id":      id,
+		"session_id":    id,
 		"domain_id":     sess.DomainID,
 		"orchestration": sess.Orchestration,
-		"state":         sess.State,
+		"status":        sess.State,
 		"started_at":    sess.StartedAt,
-		"duration_ms":   registeredSessionSummary(sess)["duration_ms"],
+		"completed_at":  sess.CompletedAt,
+		"summary":       summary,
+		"observations":  observations,
 	})
 }
 
@@ -522,4 +600,39 @@ func avgDurationMs(total uint64, n int) float64 {
 		return 0
 	}
 	return float64(total) / float64(n)
+}
+
+// parseTimeQuery parses an RFC3339 timestamp or a bare YYYY-MM-DD date. The
+// bool reports whether a usable value was parsed.
+func parseTimeQuery(v string) (time.Time, bool) {
+	if v == "" {
+		return time.Time{}, false
+	}
+	if t, err := time.Parse(time.RFC3339, v); err == nil {
+		return t, true
+	}
+	if t, err := time.Parse("2006-01-02", v); err == nil {
+		return t, true
+	}
+	return time.Time{}, false
+}
+
+// observationToMap renders a persisted observation record as the JSON shape used
+// by the trace endpoints.
+func observationToMap(rec tracemodel.ObservationRecord) map[string]any {
+	return map[string]any{
+		"kind":              rec.Kind,
+		"trace_id":          rec.TraceID,
+		"session_id":        rec.SessionID,
+		"domain_id":         rec.DomainID,
+		"domain_version":    rec.DomainVersion,
+		"step_id":           rec.StepID,
+		"agent_id":          rec.AgentID,
+		"payload":           rec.Payload,
+		"cost_usd":          rec.CostUSD,
+		"prompt_tokens":     rec.PromptTokens,
+		"completion_tokens": rec.CompletionTokens,
+		"latency_ms":        rec.LatencyMs,
+		"timestamp":         queries.FormatTimeValue(rec.CreatedAt),
+	}
 }
