@@ -42,6 +42,22 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
+def _load_secrets_from_env() -> dict[str, str]:
+    """Read secrets forwarded as ``HNSX_SECRET_*`` environment variables.
+
+    The key name is derived from the env var by stripping the prefix and
+    lower-casing: ``HNSX_SECRET_API_KEY`` → ``api_key``.
+    """
+    prefix = "HNSX_SECRET_"
+    out: dict[str, str] = {}
+    for key, value in os.environ.items():
+        if key.startswith(prefix):
+            name = key[len(prefix) :].lower()
+            if name:
+                out[name] = value
+    return out
+
+
 def _load_extra_adapters() -> None:
     """Import any modules listed in ``HNSX_ADAPTER_MODULES`` and let them register."""
     from hnsx_worker.adapters import AdapterRegistry
@@ -58,6 +74,26 @@ def _load_extra_adapters() -> None:
             register(AdapterRegistry)
 
 
+def _merge_secrets_into_config(config: dict[str, Any]) -> None:
+    """Merge env-var secrets into ``config['secrets']`` without overwriting."""
+    env_secrets = _load_secrets_from_env()
+    if not env_secrets:
+        return
+    existing = config.get("secrets") or {}
+    if isinstance(existing, dict):
+        merged = dict(env_secrets)
+        merged.update(existing)
+        config["secrets"] = merged
+    elif isinstance(existing, list):
+        # List-of-pairs form: append env secrets that aren't already present.
+        names = {str(item.get("name")) for item in existing if isinstance(item, dict)}
+        for name, value in env_secrets.items():
+            if name not in names:
+                existing.append({"name": name, "value": value})
+    else:
+        config["secrets"] = env_secrets
+
+
 def main() -> int:
     """Read config from stdin, run the session, return exit code."""
     _load_extra_adapters()
@@ -67,6 +103,7 @@ def main() -> int:
         return 2
     try:
         config = json.loads(raw)
+        _merge_secrets_into_config(config)
     except json.JSONDecodeError as e:
         sys.stderr.write(f"session_runtime: invalid JSON on stdin: {e}\n")
         return 2
@@ -100,7 +137,9 @@ def main() -> int:
             "kind": "session_start",
             "session_id": session_id,
             "domain_id": domain_id,
-            "payload": {"trigger_keys": sorted(trigger.keys()) if isinstance(trigger, dict) else []},
+            "payload": {
+                "trigger_keys": sorted(trigger.keys()) if isinstance(trigger, dict) else []
+            },
         }
     )
 

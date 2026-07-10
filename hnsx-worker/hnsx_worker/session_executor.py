@@ -44,6 +44,9 @@ from typing import Any
 from hnsx_worker.adapters import AdapterRegistry
 from hnsx_worker.adapters.base import Adapter
 from hnsx_worker.harness import run as run_orchestration
+from hnsx_worker.policy import PolicyEngine
+from hnsx_worker.sandbox import build_backend as build_sandbox_backend
+from hnsx_worker.store import build_backend as build_store_backend
 from hnsx_worker.tools import (
     ToolContext,
     ToolDecision,
@@ -215,28 +218,42 @@ def _run_multi_turn(
 
     _maybe_stop(stop_event, emit, config)
 
-    messages = _build_initial_messages(prompt, trigger)
     session_id = config.get("session_id", "")
     domain_id = spec.get("id", "")
+
+    # W6 runtime services: policy, sandbox, store.
+    policy = PolicyEngine(
+        spec,
+        session_id=session_id,
+        domain_id=domain_id,
+        agent_id=agent_name,
+        emit=emit,
+    )
+    # W6 runtime services: policy, sandbox, store. Sandbox is built but not
+    # yet wired into every tool — W6 exposes the backend; later work can pass
+    # it to tools that need process/container isolation.
+    _sandbox = build_sandbox_backend(harness.get("sandbox"))
+    store = build_store_backend(harness.get("store"))
+
+    # Restore prior messages from the store (no-op for in_memory on first turn).
+    messages: list[dict] = store.get(session_id, "messages") or []
+    if not messages:
+        messages = _build_initial_messages(prompt, trigger)
+
     final_text = ""
     stop_reason = "natural"
 
     # Build the ToolRegistry from the agent's ``tools`` spec entries.
-    # Each entry like ``{name: fetch, type: http, config: {...}}`` is
-    # routed through :func:`build_tool`. The LLM-facing tool schemas
-    # are also injected back onto the agent so adapters see the right
-    # definitions when calling the provider API.
     registry, schema_failures = _build_tool_registry(
         agent=agent,
         session_id=session_id,
         domain_id=domain_id,
         emit=emit,
+        policy_decision=policy.check_tool,
     )
     if schema_failures:
         for failure in schema_failures:
-            log.warning(
-                "tool spec dropped for agent %s: %s", agent_name, failure
-            )
+            log.warning("tool spec dropped for agent %s: %s", agent_name, failure)
         emit(
             {
                 "kind": "tool_spec_invalid",
@@ -247,10 +264,6 @@ def _run_multi_turn(
             }
         )
 
-    # Build a fresh per-session ToolContext. Secrets come from
-    # ``config['secrets']`` (Control Plane resolves ``{secret.X}``
-    # placeholders in the spec and forwards the values here). For W3
-    # the policy hook is an allow-all stub; W6 plugs in PolicyEngine.
     secrets = _read_secrets(config)
     tool_ctx_factory = _make_tool_context_factory(
         session_id=session_id,
@@ -259,12 +272,25 @@ def _run_multi_turn(
         secrets=secrets,
         emit=emit,
     )
-    policy_hook = _allow_all_policy_hook()
 
     for turn in range(1, max_turns + 1):
         if stop_event.is_set():
             stop_reason = "cancelled"
             break
+
+        # W6 budget check at the start of each turn.
+        budget_decision = policy.check_budget()
+        if not budget_decision.allow:
+            emit(
+                {
+                    "kind": "session_end",
+                    "session_id": session_id,
+                    "domain_id": domain_id,
+                    "state": "failed",
+                    "payload": {"reason": budget_decision.reason, "turn": turn},
+                }
+            )
+            return
 
         emit(
             {
@@ -301,6 +327,7 @@ def _run_multi_turn(
         final_text = text
 
         if cost is not None:
+            policy.add_cost(cost.cost_usd)
             emit(
                 {
                     "kind": "agent_cost",
@@ -316,6 +343,9 @@ def _run_multi_turn(
                     },
                 }
             )
+
+        # Persist messages after the assistant response so a restart can resume.
+        store.set(session_id, "messages", messages)
 
         # No tool calls: terminal assistant message; loop ends naturally.
         if not tool_calls:
@@ -339,8 +369,7 @@ def _run_multi_turn(
             )
             break
 
-        # Tool calls: emit terminal text (may be empty) and each tool_call,
-        # then synthesize tool results so the next turn has something to read.
+        # Tool calls: emit terminal text (may be empty) and each tool_call.
         emit(
             {
                 "kind": "agent_text",
@@ -376,22 +405,13 @@ def _run_multi_turn(
             }
         )
 
-        # Call each tool. API-agent tool_calls go through the ToolRegistry;
-        # CLI-agent tool_calls are already executed by the CLI internally, so
-        # we only audit them and synthesize a result so the multi-turn loop
-        # can continue.
+        # Call each tool. API-agent tool_calls go through the ToolRegistry
+        # with policy gating; CLI-agent tool_calls are delegated.
         for tc in tool_calls:
             ctx = tool_ctx_factory(turn=turn, tool_call_id=tc.id)
-            decision = policy_hook(tc.name, dict(tc.input), ctx)
-            if not decision.allow:
-                log.info(
-                    "policy hook blocked tool %s (decision=%s)",
-                    tc.name,
-                    decision.decision,
-                )
-
             if _is_cli_adapter(adapter):
-                result = _delegate_cli_tool_result(tc, decision=decision)
+                tool_decision = policy.check_tool(tc.name, ctx)
+                result = _delegate_cli_tool_result(tc, decision=tool_decision)
             else:
                 result = registry.call(tc.name, ctx, dict(tc.input))
             payload = {
@@ -410,11 +430,13 @@ def _run_multi_turn(
                     "payload": payload,
                 }
             )
-            # Serialize for the messages history: ok→output, !ok→error.
             serialized = result.output if result.ok else {"error": result.error}
             messages = _append_tool_result(
                 messages, tc, serialized, adapter_kind=adapter.name()
             )
+
+        # Persist messages after tool results so the next turn resumes cleanly.
+        store.set(session_id, "messages", messages)
 
         if turn >= max_turns:
             stop_reason = "max_turns"
@@ -704,6 +726,7 @@ def _build_tool_registry(
     session_id: str,
     domain_id: str,
     emit: EmitFn,
+    policy_decision: Any = None,
 ) -> tuple[ToolRegistry, list[str]]:
     """Build a ToolRegistry from ``agent.tools``.
 
@@ -713,7 +736,7 @@ def _build_tool_registry(
     can see what was dropped.
     """
     raw_tools = agent.get("tools") or []
-    registry = ToolRegistry()
+    registry = ToolRegistry(policy_decision=policy_decision)
     failures: list[str] = []
     for entry in raw_tools:
         if not isinstance(entry, dict):

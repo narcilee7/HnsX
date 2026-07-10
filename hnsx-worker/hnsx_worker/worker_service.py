@@ -188,6 +188,7 @@ class WorkerService:
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
+                env=self._build_subprocess_env(),
             )
         except OSError as e:
             log.error("failed to spawn subprocess: %s", e)
@@ -240,7 +241,20 @@ class WorkerService:
         except Exception as e:  # noqa: BLE001
             log.warning("ack failed for %s: %s", assignment.session_id, e)
 
-    def _pump_subprocess_stdout(self, handle: "_SessionHandle") -> None:
+    def _build_subprocess_env(self) -> dict[str, str]:
+        """Return the environment for the session subprocess.
+
+        Inherits the worker's environment and forwards any ``HNSX_SECRET_*``
+        variables so the session runtime can resolve ``{secret.X}`` placeholders
+        without the values passing through the gRPC payload.
+        """
+        env = dict(os.environ)
+        for key, value in os.environ.items():
+            if key.startswith("HNSX_SECRET_"):
+                env[key] = value
+        return env
+
+    def _pump_subprocess_stdout(self, handle: _SessionHandle) -> None:
         assert handle.proc.stdout is not None
         try:
             for line in handle.proc.stdout:
@@ -270,7 +284,7 @@ class WorkerService:
                 self._running.pop(handle.session_id, None)
             log.info("session %s exited rc=%d", handle.session_id, rc)
 
-    def _enqueue_observation(self, handle: "_SessionHandle", obs: dict[str, Any]) -> None:
+    def _enqueue_observation(self, handle: _SessionHandle, obs: dict[str, Any]) -> None:
         # All observations from the subprocess are batched through the
         # ``observations`` envelope. Session end events are special: they are
         # also forwarded as a status update so the scheduler can update its
@@ -409,7 +423,7 @@ class _SessionHandle:
 
 
 def _outbound_iter(
-    q: "queue.Queue[OutboundMessage]", stop_event: threading.Event
+    q: queue.Queue[OutboundMessage], stop_event: threading.Event
 ) -> Iterator[OutboundMessage]:
     """Bridge a queue.Queue into a generator for the bidi stream."""
     while not stop_event.is_set():
