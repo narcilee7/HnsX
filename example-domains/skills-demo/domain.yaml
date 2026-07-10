@@ -1,0 +1,72 @@
+id: skills-demo
+version: 0.1.0
+description: |
+  Demonstrates W15 Phase 6 — Skills capability. The single agent
+  (``triage``) declares zero inline tools; every tool it can call
+  comes from a referenced skill via ``harness.skills[]`` plus
+  ``agent.skill_refs[]``. Validates that the loader resolves skill
+  references and the runtime injects the skill-contributed tools
+  into the agent's ToolRegistry.
+
+  Two bundled skills:
+
+    - ``hello-world`` — exposes a ``greet(name)`` python tool.
+    - ``time-now``    — exposes a ``now()`` python tool.
+
+harness:
+  agents:
+    triage:
+      id: triage
+      provider: noop
+      model: noop-1
+      adapter:
+        kind: noop
+        timeout_seconds: 30
+      system_prompt: triage-prompt
+      # Zero inline tools — the skill_refs provide everything.
+      tools: []
+      skill_refs:
+        - hello-world
+        - time-now
+  prompts:
+    triage-prompt:
+      type: system
+      template: |
+        You are a helpful agent. Use the bundled skills (greet, now)
+        to assist with greetings and time queries.
+  skills:
+    hello-world:
+      id: hello-world
+      description: Friendly greeting helper.
+      prompts:
+        - id: greet-style
+          template: Always greet warmly. Return ``Hello, <name>!``.
+      tools:
+        - name: greet
+          type: python
+          config:
+            code: |
+              name = input.get("name", "world")
+              return {"greeting": f"Hello, {name}!"}
+            timeout_seconds: 2
+    time-now:
+      id: time-now
+      description: Current-time helper (UTC).
+      tools:
+        - name: now
+          type: python
+          config:
+            code: |
+              import time
+              return {"epoch_s": int(time.time()), "iso": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+            timeout_seconds: 2
+      examples:
+        - id: ex-now-1
+          input: "what time is it?"
+          output: "It is 2026-07-10T12:00:00Z."
+  session:
+    mode: multi-turn
+  policy:
+    budget:
+      max_cost_usd: 0.50
+      max_turns: 3
