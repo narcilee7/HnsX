@@ -15,6 +15,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/google/uuid"
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	domainmodel "github.com/hnsx-io/hnsx/server/internal/domain/model"
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
@@ -337,7 +338,7 @@ func (s *ConnectServer) RunEval(ctx context.Context, req *connect.Request[pb.Run
 		return nil, mapDomainError(err)
 	}
 	run := &evalmodel.EvalRun{
-		ID:            runtime.NewSessionID(set.ID),
+		ID:            uuid.NewString(),
 		EvalSetID:     set.ID,
 		DomainID:      domainID,
 		DomainVersion: req.Msg.GetDomainVersion(),
