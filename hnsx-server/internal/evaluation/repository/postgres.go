@@ -1,354 +1,388 @@
 package repository
 
 import (
-	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
-	"time"
 
+	"gorm.io/gorm"
+
+	"github.com/hnsx-io/hnsx/server/internal/domain/repository"
 	"github.com/hnsx-io/hnsx/server/internal/evaluation/model"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 )
 
-const evalDefaultTenantUUID = "00000000-0000-0000-0000-000000000000"
+const evaluationDefaultTenantUUID = "00000000-0000-0000-0000-000000000000"
 
-// PostgresRepository persists evaluation sets and runs to Postgres.
+// PostgresRepository persists evaluation sets and runs to Postgres using GORM.
 type PostgresRepository struct {
-	db *db.DB
+	db *gorm.DB
 }
 
 // NewPostgresRepository constructs a Postgres-backed evaluation repository.
 func NewPostgresRepository(database *db.DB) *PostgresRepository {
-	return &PostgresRepository{db: database}
+	if database == nil || database.GormDB == nil {
+		return &PostgresRepository{}
+	}
+	return &PostgresRepository{db: database.GormDB}
 }
 
 // SaveSet implements Repository.
 func (r *PostgresRepository) SaveSet(set *model.EvalSet) error {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return errors.New("evaluation/postgres: no database configured")
 	}
 	if set == nil || set.ID == "" || set.DomainID == "" {
 		return errors.New("evaluation: invalid set")
 	}
 
-	ctx := context.Background()
-	domainUUID, err := r.lookupDomainUUID(ctx, set.DomainID)
+	domainUUID, err := r.lookupDomainUUID(set.DomainID)
 	if err != nil {
 		return err
 	}
-
-	tx, err := r.db.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
 
 	casesJSON, err := json.Marshal(set.Cases)
 	if err != nil {
 		return err
 	}
 
-	var setUUID string
-	err = tx.QueryRow(ctx, `
-		INSERT INTO eval_sets (tenant_id, domain_uuid, set_id, description, cases, updated_at)
-		VALUES ($1::uuid, $2::uuid, $3, $4, $5::jsonb, $6)
-		ON CONFLICT (tenant_id, domain_uuid, set_id) DO UPDATE
-		SET description = EXCLUDED.description,
-		    cases = EXCLUDED.cases,
-		    updated_at = EXCLUDED.updated_at
-		RETURNING id
-	`, evalDefaultTenantUUID, domainUUID, set.ID, set.Description, string(casesJSON), set.UpdatedAt).Scan(&setUUID)
-	if err != nil {
-		return err
-	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var rec EvalSetRecord
+		err := tx.Where("tenant_id = ? AND set_id = ?", evaluationDefaultTenantUUID, set.ID).
+			Take(&rec).Error
+		isNew := errors.Is(err, gorm.ErrRecordNotFound)
 
-	for _, c := range set.Cases {
-		inputJSON, _ := json.Marshal(c.Input)
-		expectJSON, _ := json.Marshal(c.Expect)
-		scorerJSON, _ := json.Marshal(c.Scorer)
-		_, err = tx.Exec(ctx, `
-			INSERT INTO eval_cases (tenant_id, eval_set_uuid, case_id, name, input, expect, scorer, created_at)
-			VALUES ($1::uuid, $2::uuid, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, NOW())
-			ON CONFLICT (tenant_id, eval_set_uuid, case_id) DO UPDATE
-			SET name = EXCLUDED.name,
-			    input = EXCLUDED.input,
-			    expect = EXCLUDED.expect,
-			    scorer = EXCLUDED.scorer
-		`, evalDefaultTenantUUID, setUUID, c.ID, c.Name, string(inputJSON), string(expectJSON), string(scorerJSON))
-		if err != nil {
-			return err
+		rec.TenantID = evaluationDefaultTenantUUID
+		rec.DomainUUID = domainUUID
+		rec.SetID = set.ID
+		rec.Description = set.Description
+		rec.Cases = casesJSON
+
+		if isNew {
+			rec.CreatedAt = set.CreatedAt
+			rec.UpdatedAt = set.UpdatedAt
+			if err := tx.Create(&rec).Error; err != nil {
+				return err
+			}
+		} else {
+			rec.UpdatedAt = set.UpdatedAt
+			if err := tx.Save(&rec).Error; err != nil {
+				return err
+			}
 		}
-	}
 
-	return tx.Commit(ctx)
+		for _, c := range set.Cases {
+			inputJSON, err := json.Marshal(c.Input)
+			if err != nil {
+				return err
+			}
+			expectJSON, err := json.Marshal(c.Expect)
+			if err != nil {
+				return err
+			}
+			scorerJSON, err := json.Marshal(c.Scorer)
+			if err != nil {
+				return err
+			}
+
+			var caseRec EvalCaseRecord
+			caseErr := tx.Where("tenant_id = ? AND eval_set_uuid = ? AND case_id = ?",
+				evaluationDefaultTenantUUID, rec.ID, c.ID).
+				Take(&caseRec).Error
+			caseIsNew := errors.Is(caseErr, gorm.ErrRecordNotFound)
+
+			caseRec.TenantID = evaluationDefaultTenantUUID
+			caseRec.EvalSetUUID = rec.ID
+			caseRec.CaseID = c.ID
+			caseRec.Name = c.Name
+			caseRec.Input = inputJSON
+			caseRec.Expect = expectJSON
+			caseRec.Scorer = scorerJSON
+
+			if caseIsNew {
+				caseRec.CreatedAt = set.CreatedAt
+				if err := tx.Create(&caseRec).Error; err != nil {
+					return err
+				}
+			} else {
+				if err := tx.Save(&caseRec).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
 }
 
 // SetByID implements Repository.
 func (r *PostgresRepository) SetByID(id string) (*model.EvalSet, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, model.ErrEvalSetNotFound
 	}
 
-	ctx := context.Background()
-	row := r.db.Pool.QueryRow(ctx, `
-		SELECT es.id, d.domain_id, es.set_id, es.description, es.cases, es.created_at, es.updated_at
-		FROM eval_sets es
-		JOIN domains d ON d.id = es.domain_uuid
-		WHERE es.tenant_id = $1::uuid AND es.set_id = $2
-		LIMIT 1
-	`, evalDefaultTenantUUID, id)
+	var rec EvalSetRecord
+	if err := r.db.Where("tenant_id = ? AND set_id = ?", evaluationDefaultTenantUUID, id).
+		Take(&rec).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, model.ErrEvalSetNotFound
+		}
+		return nil, err
+	}
 
-	return r.scanSet(row)
+	return r.toEvalSet(rec)
 }
 
 // SetsByDomain implements Repository.
 func (r *PostgresRepository) SetsByDomain(domainID string) ([]model.EvalSet, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, nil
 	}
 
-	ctx := context.Background()
-	rows, err := r.db.Pool.Query(ctx, `
-		SELECT es.id, d.domain_id, es.set_id, es.description, es.cases, es.created_at, es.updated_at
-		FROM eval_sets es
-		JOIN domains d ON d.id = es.domain_uuid
-		WHERE es.tenant_id = $1::uuid AND d.domain_id = $2
-	`, evalDefaultTenantUUID, domainID)
+	domainUUID, err := r.lookupDomainUUID(domainID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var out []model.EvalSet
-	for rows.Next() {
-		set, err := r.scanSet(rows)
+	var records []EvalSetRecord
+	if err := r.db.Where("tenant_id = ? AND domain_uuid = ?", evaluationDefaultTenantUUID, domainUUID).
+		Find(&records).Error; err != nil {
+		return nil, err
+	}
+
+	out := make([]model.EvalSet, 0, len(records))
+	for _, rec := range records {
+		set, err := r.toEvalSet(rec)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, *set)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // ListSets implements Repository.
 func (r *PostgresRepository) ListSets(limit, offset int) ([]model.EvalSet, int, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, 0, nil
 	}
 
-	ctx := context.Background()
-	var total int
-	err := r.db.Pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM eval_sets WHERE tenant_id = $1::uuid
-	`, evalDefaultTenantUUID).Scan(&total)
-	if err != nil {
+	var total int64
+	if err := r.db.Model(&EvalSetRecord{}).
+		Where("tenant_id = ?", evaluationDefaultTenantUUID).
+		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	rows, err := r.db.Pool.Query(ctx, `
-		SELECT es.id, d.domain_id, es.set_id, es.description, es.cases, es.created_at, es.updated_at
-		FROM eval_sets es
-		JOIN domains d ON d.id = es.domain_uuid
-		WHERE es.tenant_id = $1::uuid
-		ORDER BY es.created_at DESC
-		LIMIT $2 OFFSET $3
-	`, evalDefaultTenantUUID, limit, offset)
-	if err != nil {
+	var records []EvalSetRecord
+	if err := r.db.Where("tenant_id = ?", evaluationDefaultTenantUUID).
+		Order("created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&records).Error; err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
 
-	var out []model.EvalSet
-	for rows.Next() {
-		set, err := r.scanSet(rows)
+	out := make([]model.EvalSet, 0, len(records))
+	for _, rec := range records {
+		set, err := r.toEvalSet(rec)
 		if err != nil {
 			return nil, 0, err
 		}
 		out = append(out, *set)
 	}
-	return out, total, rows.Err()
+	return out, int(total), nil
 }
 
 // SaveRun implements Repository.
 func (r *PostgresRepository) SaveRun(run *model.EvalRun) error {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return errors.New("evaluation/postgres: no database configured")
 	}
 	if run == nil || run.ID == "" || run.EvalSetID == "" || run.DomainID == "" {
 		return errors.New("evaluation: invalid run")
 	}
 
-	ctx := context.Background()
-	setUUID, err := r.lookupSetUUID(ctx, run.EvalSetID)
+	setUUID, err := r.lookupSetUUID(run.EvalSetID)
 	if err != nil {
 		return err
 	}
-	domainUUID, err := r.lookupDomainUUID(ctx, run.DomainID)
+	domainUUID, err := r.lookupDomainUUID(run.DomainID)
 	if err != nil {
 		return err
 	}
 
 	var baselineUUID *string
 	if run.BaselineRunID != "" {
-		// BaselineRunID currently stores a run ID string; look it up if needed.
-		// For Phase 2 we leave it NULL because the model stores string IDs.
+		// BaselineRunID currently stores a run ID string; leave NULL for Phase 2.
 	}
 
-	var completedAt *time.Time
-	if run.CompletedAt != nil {
-		completedAt = run.CompletedAt
+	rec := EvalRunRecord{
+		ID:              run.ID,
+		TenantID:        evaluationDefaultTenantUUID,
+		EvalSetUUID:     setUUID,
+		DomainUUID:      domainUUID,
+		DomainVersion:   run.DomainVersion,
+		Orchestration:   run.Orchestration,
+		State:           run.State,
+		Score:           run.Score,
+		TotalCases:      run.TotalCases,
+		PassedCases:     run.PassedCases,
+		TotalCostUSD:    run.TotalCostUSD,
+		DurationMs:      run.DurationMs,
+		BaselineRunUUID: baselineUUID,
+		CreatedAt:       run.CreatedAt,
+		CompletedAt:     run.CompletedAt,
 	}
 
-	_, err = r.db.Pool.Exec(ctx, `
-		INSERT INTO eval_runs (
-			tenant_id, eval_set_uuid, domain_uuid, domain_version, orchestration, state,
-			score, total_cases, passed_cases, total_cost_usd, duration_ms,
-			baseline_run_uuid, created_at, completed_at
-		)
-		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11, $12::uuid, $13, $14)
-		ON CONFLICT (id) DO UPDATE
-		SET state = EXCLUDED.state,
-		    score = EXCLUDED.score,
-		    total_cases = EXCLUDED.total_cases,
-		    passed_cases = EXCLUDED.passed_cases,
-		    total_cost_usd = EXCLUDED.total_cost_usd,
-		    duration_ms = EXCLUDED.duration_ms,
-		    completed_at = EXCLUDED.completed_at
-	`, evalDefaultTenantUUID, setUUID, domainUUID, run.DomainVersion, run.Orchestration, run.State,
-		run.Score, run.TotalCases, run.PassedCases, run.TotalCostUSD, run.DurationMs,
-		baselineUUID, run.CreatedAt, completedAt)
-	return err
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var existing EvalRunRecord
+		err := tx.Where("id = ?", run.ID).Take(&existing).Error
+		isNew := errors.Is(err, gorm.ErrRecordNotFound)
+
+		if isNew {
+			return tx.Create(&rec).Error
+		}
+
+		return tx.Model(&existing).Updates(map[string]any{
+			"state":          rec.State,
+			"score":          rec.Score,
+			"total_cases":    rec.TotalCases,
+			"passed_cases":   rec.PassedCases,
+			"total_cost_usd": rec.TotalCostUSD,
+			"duration_ms":    rec.DurationMs,
+			"completed_at":   rec.CompletedAt,
+		}).Error
+	})
 }
 
 // RunByID implements Repository.
 func (r *PostgresRepository) RunByID(id string) (*model.EvalRun, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, model.ErrEvalRunNotFound
 	}
 
-	ctx := context.Background()
-	row := r.db.Pool.QueryRow(ctx, `
-		SELECT er.id, d.domain_id, er.eval_set_uuid, es.set_id, er.domain_version, er.orchestration,
-		       er.state, er.score, er.total_cases, er.passed_cases, er.total_cost_usd,
-		       er.duration_ms, er.created_at, er.completed_at
-		FROM eval_runs er
-		JOIN domains d ON d.id = er.domain_uuid
-		JOIN eval_sets es ON es.id = er.eval_set_uuid
-		WHERE er.tenant_id = $1::uuid AND er.id = $2
-		LIMIT 1
-	`, evalDefaultTenantUUID, id)
+	var rec EvalRunRecord
+	if err := r.db.Where("tenant_id = ? AND id = ?", evaluationDefaultTenantUUID, id).
+		Take(&rec).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, model.ErrEvalRunNotFound
+		}
+		return nil, err
+	}
 
-	return r.scanRun(row)
+	return r.toEvalRun(rec)
 }
 
 // RunsBySet implements Repository.
 func (r *PostgresRepository) RunsBySet(setID string) ([]model.EvalRun, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, nil
 	}
 
-	ctx := context.Background()
-	rows, err := r.db.Pool.Query(ctx, `
-		SELECT er.id, d.domain_id, er.eval_set_uuid, es.set_id, er.domain_version, er.orchestration,
-		       er.state, er.score, er.total_cases, er.passed_cases, er.total_cost_usd,
-		       er.duration_ms, er.created_at, er.completed_at
-		FROM eval_runs er
-		JOIN domains d ON d.id = er.domain_uuid
-		JOIN eval_sets es ON es.id = er.eval_set_uuid
-		WHERE er.tenant_id = $1::uuid AND es.set_id = $2
-		ORDER BY er.created_at DESC
-	`, evalDefaultTenantUUID, setID)
+	setUUID, err := r.lookupSetUUID(setID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var out []model.EvalRun
-	for rows.Next() {
-		run, err := r.scanRun(rows)
+	var records []EvalRunRecord
+	if err := r.db.Where("tenant_id = ? AND eval_set_uuid = ?", evaluationDefaultTenantUUID, setUUID).
+		Order("created_at DESC").
+		Find(&records).Error; err != nil {
+		return nil, err
+	}
+
+	out := make([]model.EvalRun, 0, len(records))
+	for _, rec := range records {
+		run, err := r.toEvalRun(rec)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, *run)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
-func (r *PostgresRepository) scanSet(row interface {
-	Scan(dest ...any) error
-}) (*model.EvalSet, error) {
-	var set model.EvalSet
-	var setUUID, domainUUID string
-	var casesJSON []byte
-	err := row.Scan(&setUUID, &domainUUID, &set.ID, &set.Description, &casesJSON, &set.CreatedAt, &set.UpdatedAt)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, model.ErrEvalSetNotFound
-		}
+func (r *PostgresRepository) toEvalSet(rec EvalSetRecord) (*model.EvalSet, error) {
+	var domainRec repository.DomainRecord
+	if err := r.db.Select("domain_id").
+		Where("id = ?", rec.DomainUUID).
+		Take(&domainRec).Error; err != nil {
 		return nil, err
 	}
-	set.DomainID = domainUUID
-	set.SetID = set.ID
-	if len(casesJSON) > 0 {
-		_ = json.Unmarshal(casesJSON, &set.Cases)
+
+	var cases []model.EvalCase
+	if len(rec.Cases) > 0 {
+		if err := json.Unmarshal(rec.Cases, &cases); err != nil {
+			return nil, err
+		}
 	}
-	return &set, nil
+
+	return &model.EvalSet{
+		ID:          rec.SetID,
+		DomainID:    domainRec.DomainID,
+		SetID:       rec.SetID,
+		Description: rec.Description,
+		Cases:       cases,
+		CreatedAt:   rec.CreatedAt,
+		UpdatedAt:   rec.UpdatedAt,
+	}, nil
 }
 
-func (r *PostgresRepository) scanRun(row interface {
-	Scan(dest ...any) error
-}) (*model.EvalRun, error) {
-	var run model.EvalRun
-	var runUUID, domainUUID, setUUID, setID string
-	var completedAt *time.Time
-	err := row.Scan(
-		&runUUID, &domainUUID, &setUUID, &setID, &run.DomainVersion, &run.Orchestration,
-		&run.State, &run.Score, &run.TotalCases, &run.PassedCases, &run.TotalCostUSD,
-		&run.DurationMs, &run.CreatedAt, &completedAt)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, model.ErrEvalRunNotFound
-		}
+func (r *PostgresRepository) toEvalRun(rec EvalRunRecord) (*model.EvalRun, error) {
+	var domainRec repository.DomainRecord
+	if err := r.db.Select("domain_id").
+		Where("id = ?", rec.DomainUUID).
+		Take(&domainRec).Error; err != nil {
 		return nil, err
 	}
-	run.ID = runUUID
-	run.DomainID = domainUUID
-	run.EvalSetID = setID
-	run.CompletedAt = completedAt
-	return &run, nil
+
+	var setRec EvalSetRecord
+	if err := r.db.Select("set_id").
+		Where("id = ?", rec.EvalSetUUID).
+		Take(&setRec).Error; err != nil {
+		return nil, err
+	}
+
+	return &model.EvalRun{
+		ID:            rec.ID,
+		EvalSetID:     setRec.SetID,
+		DomainID:      domainRec.DomainID,
+		DomainVersion: rec.DomainVersion,
+		Orchestration: rec.Orchestration,
+		State:         rec.State,
+		Score:         rec.Score,
+		TotalCases:    rec.TotalCases,
+		PassedCases:   rec.PassedCases,
+		TotalCostUSD:  rec.TotalCostUSD,
+		DurationMs:    rec.DurationMs,
+		CreatedAt:     rec.CreatedAt,
+		CompletedAt:   rec.CompletedAt,
+	}, nil
 }
 
-func (r *PostgresRepository) lookupDomainUUID(ctx context.Context, domainID string) (string, error) {
-	var domainUUID string
-	err := r.db.Pool.QueryRow(ctx, `
-		SELECT id FROM domains
-		WHERE tenant_id = $1::uuid AND domain_id = $2
-		LIMIT 1
-	`, evalDefaultTenantUUID, domainID).Scan(&domainUUID)
+func (r *PostgresRepository) lookupDomainUUID(domainID string) (string, error) {
+	var rec repository.DomainRecord
+	err := r.db.Where("tenant_id = ? AND domain_id = ?", evaluationDefaultTenantUUID, domainID).
+		Take(&rec).Error
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", errors.New("evaluation/postgres: domain not found")
 		}
 		return "", err
 	}
-	return domainUUID, nil
+	return rec.ID, nil
 }
 
-func (r *PostgresRepository) lookupSetUUID(ctx context.Context, setID string) (string, error) {
-	var setUUID string
-	err := r.db.Pool.QueryRow(ctx, `
-		SELECT id FROM eval_sets
-		WHERE tenant_id = $1::uuid AND set_id = $2
-		LIMIT 1
-	`, evalDefaultTenantUUID, setID).Scan(&setUUID)
+func (r *PostgresRepository) lookupSetUUID(setID string) (string, error) {
+	var rec EvalSetRecord
+	err := r.db.Where("tenant_id = ? AND set_id = ?", evaluationDefaultTenantUUID, setID).
+		Take(&rec).Error
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", errors.New("evaluation/postgres: set not found")
 		}
 		return "", err
 	}
-	return setUUID, nil
+	return rec.ID, nil
 }
 
 var _ Repository = (*PostgresRepository)(nil)
