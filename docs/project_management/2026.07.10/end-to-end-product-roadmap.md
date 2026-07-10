@@ -193,7 +193,7 @@ Refs：`docs/server-design/api-design.md §6`
 ### P2 — 兑现承诺（独立迭代排期）
 
 - [x] **T13** Connect-RPC 收敛（v1connect 上线 + 5 个 control_plane service 实装 + CLI 改走 Connect）
-- [ ] **T14** `cmd/hnsx` 远程命令（`domains/sessions/eval` 通过 `internal/client`）
+- [x] **T14** `cmd/hnsx` 远程命令（`domains/sessions/eval` 通过 `internal/client`）
 - [ ] **T15** `sdk/go` / `sdk/python` 真出包（Go 用 `internal/client` 封装；Python 用 `hnsx_worker/proto_client` 拆 SDK）
 - [ ] **T16** OTLP 默认开启 + Tempo + 5 张 Grafana dashboard JSON
 - [ ] **T17** 多租户 `auth_token → tenant` + 行级 RLS 预留

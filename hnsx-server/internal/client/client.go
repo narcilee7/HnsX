@@ -432,3 +432,238 @@ func sessionFromProto(s *pb.SessionStatus) *Session {
 		Result:        result,
 	}
 }
+
+// EvalSet is a single evaluation set.
+type EvalSet struct {
+	ID          string     `json:"id"`
+	SetID       string     `json:"set_id"`
+	DomainID    string     `json:"domain_id"`
+	Description string     `json:"description"`
+	Cases       []EvalCase `json:"cases"`
+	CaseCount   int        `json:"case_count"`
+	CreatedAt   string     `json:"created_at"`
+	UpdatedAt   string     `json:"updated_at"`
+}
+
+// EvalCase is one test case inside an EvalSet.
+type EvalCase struct {
+	ID     string     `json:"id"`
+	Name   string     `json:"name"`
+	Input  map[string]any `json:"input"`
+	Expect map[string]any `json:"expect"`
+	Scorer EvalScorer   `json:"scorer"`
+}
+
+// EvalScorer defines how to score a case.
+type EvalScorer struct {
+	Type   string         `json:"type"`
+	Config map[string]any `json:"config"`
+}
+
+// EvalRun is a single execution of an EvalSet.
+type EvalRun struct {
+	ID            string           `json:"id"`
+	EvalSetID     string           `json:"eval_set_id"`
+	DomainID      string           `json:"domain_id"`
+	DomainVersion string           `json:"domain_version"`
+	Orchestration string           `json:"orchestration"`
+	State         string           `json:"state"`
+	Score         float64          `json:"score"`
+	TotalCases    int              `json:"total_cases"`
+	PassedCases   int              `json:"passed_cases"`
+	TotalCostUSD  float64          `json:"total_cost_usd"`
+	DurationMs    int64            `json:"duration_ms"`
+	BaselineRunID string           `json:"baseline_run_id,omitempty"`
+	Cases         []EvalCaseResult `json:"cases"`
+	CreatedAt     string           `json:"created_at"`
+	CompletedAt   string           `json:"completed_at"`
+}
+
+// EvalCaseResult is the outcome of one EvalCase within a run.
+type EvalCaseResult struct {
+	CaseID    string         `json:"case_id"`
+	SessionID string         `json:"session_id"`
+	Score     float64        `json:"score"`
+	Passed    bool           `json:"passed"`
+	Actual    map[string]any `json:"actual"`
+	Details   map[string]any `json:"details"`
+	DurationMs int64         `json:"duration_ms"`
+	CostUSD   float64        `json:"cost_usd"`
+}
+
+// ListEvalSets returns all eval sets.
+func (c *Client) ListEvalSets() ([]EvalSet, error) {
+	resp, err := c.get("/api/v1/evals")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if err := checkStatus(resp); err != nil {
+		return nil, err
+	}
+	var envelope struct {
+		Items []EvalSet `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+		return nil, err
+	}
+	return envelope.Items, nil
+}
+
+// CreateEvalSet creates a new eval set.
+func (c *Client) CreateEvalSet(setID, domainID, description string, cases []EvalCase) (*EvalSet, error) {
+	payload := map[string]any{
+		"set_id":      setID,
+		"domain_id":   domainID,
+		"description": description,
+		"cases":       cases,
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.post("/api/v1/evals", bytes.NewReader(b), "application/json")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if err := checkStatus(resp); err != nil {
+		return nil, err
+	}
+	var set EvalSet
+	if err := json.NewDecoder(resp.Body).Decode(&set); err != nil {
+		return nil, err
+	}
+	return &set, nil
+}
+
+// GetEvalSet returns an eval set by ID.
+func (c *Client) GetEvalSet(id string) (*EvalSet, error) {
+	resp, err := c.get("/api/v1/evals/" + id)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if err := checkStatus(resp); err != nil {
+		return nil, err
+	}
+	var set EvalSet
+	if err := json.NewDecoder(resp.Body).Decode(&set); err != nil {
+		return nil, err
+	}
+	return &set, nil
+}
+
+// UpdateEvalSet updates an eval set.
+func (c *Client) UpdateEvalSet(id, description string, cases []EvalCase) (*EvalSet, error) {
+	payload := map[string]any{
+		"description": description,
+		"cases":       cases,
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodPut, c.BaseURL+"/api/v1/evals/"+id, bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if err := checkStatus(resp); err != nil {
+		return nil, err
+	}
+	var set EvalSet
+	if err := json.NewDecoder(resp.Body).Decode(&set); err != nil {
+		return nil, err
+	}
+	return &set, nil
+}
+
+// DeleteEvalSet removes an eval set by ID.
+func (c *Client) DeleteEvalSet(id string) error {
+	req, err := http.NewRequest(http.MethodDelete, c.BaseURL+"/api/v1/evals/"+id, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return checkStatus(resp)
+}
+
+// RunEval starts a new eval run for the given set.
+func (c *Client) RunEval(setID string) (*EvalRun, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	resp, err := c.evalClient.RunEval(ctx, connect.NewRequest(&pb.RunEvalRequest{SetId: setID}))
+	if err != nil {
+		return nil, mapConnectError(err)
+	}
+	return c.GetEvalRun(setID, resp.Msg.GetEvalRunId())
+}
+
+// ListEvalRuns returns all runs for an eval set.
+func (c *Client) ListEvalRuns(setID string) ([]EvalRun, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	resp, err := c.evalClient.ListEvalRuns(ctx, connect.NewRequest(&pb.ListEvalRunsRequest{SetId: setID}))
+	if err != nil {
+		return nil, mapConnectError(err)
+	}
+	var out []EvalRun
+	for _, r := range resp.Msg.GetResults() {
+		out = append(out, *evalRunFromProto(r))
+	}
+	return out, nil
+}
+
+// GetEvalRun returns a single eval run.
+func (c *Client) GetEvalRun(setID, runID string) (*EvalRun, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	resp, err := c.evalClient.GetEvalRun(ctx, connect.NewRequest(&pb.GetEvalRunRequest{EvalRunId: runID}))
+	if err != nil {
+		return nil, mapConnectError(err)
+	}
+	return evalRunFromProto(resp.Msg.GetResult()), nil
+}
+
+func evalRunFromProto(r *pb.EvalRunResult) *EvalRun {
+	if r == nil {
+		return nil
+	}
+	cases := make([]EvalCaseResult, 0, len(r.GetCases()))
+	for _, c := range r.GetCases() {
+		var actual, details map[string]any
+		_ = json.Unmarshal([]byte(c.GetActual()), &actual)
+		_ = json.Unmarshal([]byte(c.GetDetails()), &details)
+		cases = append(cases, EvalCaseResult{
+			CaseID:    c.GetCaseId(),
+			SessionID: c.GetSessionId(),
+			Score:     c.GetScore(),
+			Passed:    c.GetPassed(),
+			Actual:    actual,
+			Details:   details,
+		})
+	}
+	return &EvalRun{
+		ID:            r.GetEvalRunId(),
+		EvalSetID:     r.GetSetId(),
+		DomainID:      r.GetDomainId(),
+		State:         r.GetState(),
+		Score:         r.GetScore(),
+		TotalCases:    int(r.GetTotal()),
+		PassedCases:   int(r.GetPassed()),
+		TotalCostUSD:  r.GetTotalCostUsd(),
+		DurationMs:    r.GetDurationMs(),
+		BaselineRunID: r.GetBaselineRunId(),
+		Cases:         cases,
+	}
+}
