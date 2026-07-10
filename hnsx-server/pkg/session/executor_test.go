@@ -188,6 +188,42 @@ func (s *collectingSink) Record(_ context.Context, obs runtime.Observation) erro
 func (s *collectingSink) Flush(context.Context) error { return nil }
 func (s *collectingSink) Close(context.Context) error { return nil }
 
+func TestExecutor_Execute_GuardrailBlocks(t *testing.T) {
+	provider := &staticPolicyProvider{
+		engine: policy.NewEngine(spec.PolicySpec{
+			Guardrails: []spec.GuardrailSpec{
+				{
+					ID:      "no-password",
+					Type:    "contains",
+					On:      "agent_text",
+					Action:  "block",
+					Config:  "password",
+					Message: "output contains a secret",
+				},
+			},
+		}),
+	}
+	exec := NewExecutor(adapter.NewEchoAdapter()).WithPolicyProvider(provider)
+
+	ds := &spec.DomainSpec{
+		ID: "d-guardrail",
+		Harness: spec.HarnessSpec{
+			Agents: map[string]spec.AgentSpec{
+				"a": {Provider: "echo", Adapter: spec.AdapterConfig{Kind: "echo"}},
+			},
+			Session: spec.SessionSpec{Mode: spec.Single, Agent: "a"},
+		},
+	}
+
+	_, err := exec.Execute(context.Background(), ds, map[string]any{"msg": "the password is secret"})
+	if err == nil {
+		t.Fatal("expected guardrail block error")
+	}
+	if !errors.Is(err, policy.ErrGuardrailBlocked) {
+		t.Fatalf("expected ErrGuardrailBlocked, got %v", err)
+	}
+}
+
 // Ensure staticPolicyProvider implements the interface.
 var _ PolicyEngineProvider = (*staticPolicyProvider)(nil)
 

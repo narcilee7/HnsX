@@ -283,6 +283,27 @@ func (a *policyAdapter) Invoke(ctx context.Context, agent spec.AgentSpec, prompt
 	a.engine.RecordTokens(0, completionTokens)
 	a.engine.RecordCost(estimateCostUSD(0, completionTokens))
 
+	// Content guardrails run on the adapter output.
+	decision := a.engine.EvaluateGuardrails(policy.GuardrailEvent{
+		Kind:    "agent_text",
+		AgentID: agent.ID,
+		Text:    out,
+	})
+	if decision.Matched {
+		a.recordAllow(ctx, "guardrail_hit", resource, map[string]any{
+			"guardrail_id": decision.GuardrailID,
+			"action":       decision.Action,
+			"message":      decision.Message,
+		})
+		switch decision.Action {
+		case "block":
+			a.recordDeny(ctx, "guardrail_block", resource, decision.Message)
+			return "", fmt.Errorf("%w: %s", policy.ErrGuardrailBlocked, decision.Message)
+		case "human_approval":
+			// Phase 1: human approval is not yet implemented; fall through to log.
+		}
+	}
+
 	if err != nil {
 		a.recordDeny(ctx, "adapter_invoke", resource, err.Error())
 		return out, err
