@@ -9,12 +9,15 @@ bidi ``StreamChannel``.
 from __future__ import annotations
 
 import logging
+import queue
 import threading
 
 import pytest
 
 from hnsx_worker import WorkerConfig, WorkerService
 from hnsx_worker.proto.gen.hnsx.v1 import worker_pb2
+from hnsx_worker.proto_client import Observation, OutboundMessage, SessionStatusUpdate
+from hnsx_worker.worker_service import _outbound_iter
 
 from .mock_server import MockHnsXServer, wait_for
 
@@ -111,3 +114,54 @@ def test_nack_when_no_free_slots(mock_server: MockHnsXServer) -> None:
     finally:
         svc.shutdown()
         t.join(timeout=5.0)
+
+
+def test_outbound_iter_batches_observations() -> None:
+    q: queue.Queue[OutboundMessage] = queue.Queue()
+    for _ in range(10):
+        q.put(
+            OutboundMessage(
+                kind="observations", observations=[Observation(kind="agent_text")]
+            )
+        )
+    q.put(
+        OutboundMessage(
+            kind="status",
+            status=SessionStatusUpdate(session_id="s-1", state="completed"),
+        )
+    )
+
+    stop = threading.Event()
+    stop.set()
+    items = list(
+        _outbound_iter(
+            q,
+            stop,
+            max_batch_size=4,
+            max_batch_delay=0.01,
+        )
+    )
+
+    obs_batches = [item for item in items if item.kind == "observations"]
+    assert sum(len(batch.observations) for batch in obs_batches) == 10
+    assert any(len(batch.observations) > 1 for batch in obs_batches)
+    assert items[-1].kind == "status"
+
+
+def test_outbound_iter_drains_queue_on_shutdown() -> None:
+    q: queue.Queue[OutboundMessage] = queue.Queue()
+    q.put(OutboundMessage(kind="observations", observations=[Observation(kind="x")]))
+    q.put(
+        OutboundMessage(
+            kind="result",
+            result=SessionStatusUpdate(session_id="s-2", state="completed"),
+        )
+    )
+
+    stop = threading.Event()
+    stop.set()
+    items = list(_outbound_iter(q, stop))
+
+    assert len(items) == 2
+    assert items[0].kind == "observations"
+    assert items[1].kind == "result"
