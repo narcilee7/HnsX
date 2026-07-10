@@ -259,20 +259,7 @@ func (s *Server) GetSessionTrace(c *gin.Context) {
 			return
 		}
 		for _, rec := range records {
-			observations = append(observations, map[string]any{
-				"kind":              rec.Kind,
-				"session_id":        rec.SessionID,
-				"domain_id":         rec.DomainID,
-				"domain_version":    rec.DomainVersion,
-				"step_id":           rec.StepID,
-				"agent_id":          rec.AgentID,
-				"payload":           rec.Payload,
-				"cost_usd":          rec.CostUSD,
-				"prompt_tokens":     rec.PromptTokens,
-				"completion_tokens": rec.CompletionTokens,
-				"latency_ms":        rec.LatencyMs,
-				"timestamp":         queries.FormatTimeValue(rec.CreatedAt),
-			})
+			observations = append(observations, observationToMap(rec))
 		}
 	}
 
