@@ -185,7 +185,7 @@ internal/app/
 | **Worker 自动发现** | K8s DaemonSet / Deployment，Worker 启动后自注册。 | ✅ K8s manifest + WorkerInfo labels 元数据 |
 | ** graceful shutdown** | Control Plane 停止前 draining 请求；Worker 停止前完成或移交手中 session。 | ✅ draining 已实现；worker 离线/断开时 session 重新入队 |
 | **Multi-tenant** | `tenant_id` 贯穿 domain / session / worker / audit。 | ✅ HTTP/gRPC tenant 传播 + app state 按租户隔离 |
-| **混沌测试** | 随机 kill worker / 网络分区，验证任务不丢、状态一致。 | 🔄 待做 | 🔄 待做 |
+| **混沌测试** | 随机 kill worker / 网络分区，验证任务不丢、状态一致。 | ✅ ChaosInjector + scheduler chaos integration test | 🔄 待做 |
 
 **验收标准**：
 - 两个 Control Plane 实例共用一个 Postgres queue，session 不重复分发。
@@ -200,7 +200,7 @@ internal/app/
    - ✅ Control Plane graceful shutdown + draining。
    - ✅ Multi-tenant：`tenant_id` 贯穿 domain/session/worker/audit。
    - ✅ Worker 自动发现（K8s）与优雅退出/故障恢复。
-   - 🔄 混沌测试。
+   - ✅ 混沌测试：随机 worker eviction/partition，session 不丢。
 2. **Store 领域深入**：把 `store` 从配置字段升级为 `internal/store` 领域，支持 in_memory/postgres 后端。
 3. **Cost 聚合**：从 observation 流汇总 session/domain/worker 维度的 cost、latency、token。
 4. **Guardrail 内容校验**：把 `policy.Engine` 从 budget/permission 扩展到输出内容 guardrail。
@@ -218,7 +218,8 @@ internal/app/
 | `eb2de4e` | chore：清理误提交的 python worker 文件 |
 | `9edd598` | Phase 7：Redis-backed SessionQueue |
 | `e418e0d` | Phase 7：Multi-tenant tenant context + state isolation |
-| `...` | Phase 7：Worker K8s auto-discovery + graceful requeue on disconnect |
+| `911f5c3` | Phase 7：Worker K8s auto-discovery + graceful requeue on disconnect |
+| `...` | Phase 7：Chaos test suite for worker eviction/partition |
 
 ---
 

@@ -44,7 +44,9 @@ type SchedulerServiceServer struct {
 
 	mu     sync.Mutex
 	active map[string]*activeSession // session_id -> bookkeeping
-	logf   func(format string, args ...any)
+	// partitioned workers the chaos injector has cut off from PullSession.
+	partitioned map[string]time.Time
+	logf        func(format string, args ...any)
 }
 
 type activeSession struct {
@@ -61,6 +63,7 @@ func NewSchedulerServiceServer(reg *worker.Registry, q worker.SessionQueue) *Sch
 		Queue:                 q,
 		DefaultMaxWaitSeconds: 30,
 		active:                map[string]*activeSession{},
+		partitioned:           map[string]time.Time{},
 		logf:                  log.Printf,
 	}
 }
@@ -75,6 +78,11 @@ func (s *SchedulerServiceServer) WithLogger(f func(string, ...any)) *SchedulerSe
 func (s *SchedulerServiceServer) PullSession(ctx context.Context, req *pb.PullSessionRequest) (*pb.PullSessionResponse, error) {
 	if s.Queue == nil {
 		return nil, errors.New("scheduler: queue not configured")
+	}
+	if s.isPartitioned(req.GetWorkerId()) {
+		// Chaos: simulate a network partition where the worker can reach the
+		// server but the server silently drops PullSession requests.
+		return &pb.PullSessionResponse{}, nil
 	}
 	maxWait := int64(req.GetMaxWaitSeconds())
 	if maxWait <= 0 {
@@ -334,4 +342,40 @@ func (s *SchedulerServiceServer) RequeueSessions(workerID string) []string {
 		delete(s.active, sid)
 	}
 	return requeued
+}
+
+// PartitionPull simulates a network partition for workerID: for the next d
+// the server will silently return empty PullSession responses. Used by the
+// chaos test suite to verify that sessions are not lost when a worker is
+// temporarily isolated but later recovers.
+func (s *SchedulerServiceServer) PartitionPull(workerID string, d time.Duration) {
+	if workerID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.partitioned == nil {
+		s.partitioned = map[string]time.Time{}
+	}
+	s.partitioned[workerID] = time.Now().Add(d)
+}
+
+func (s *SchedulerServiceServer) isPartitioned(workerID string) bool {
+	if workerID == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.partitioned == nil {
+		return false
+	}
+	until, ok := s.partitioned[workerID]
+	if !ok {
+		return false
+	}
+	if time.Now().After(until) {
+		delete(s.partitioned, workerID)
+		return false
+	}
+	return true
 }
