@@ -52,6 +52,7 @@ class SandboxBackend(ABC):
         env: dict[str, str] | None = None,
         timeout_seconds: float = 60.0,
         workdir: str = "",
+        input: str | bytes | None = None,  # noqa: A002 — matches subprocess.run signature
     ) -> SandboxResult:
         """Run ``command`` inside the sandbox and return the result."""
 
@@ -74,6 +75,7 @@ class NoneSandbox(SandboxBackend):
         env: dict[str, str] | None = None,
         timeout_seconds: float = 60.0,
         workdir: str = "",
+        input: str | bytes | None = None,  # noqa: A002
     ) -> SandboxResult:
         try:
             proc = subprocess.run(
@@ -83,6 +85,7 @@ class NoneSandbox(SandboxBackend):
                 env=env,
                 cwd=workdir or None,
                 timeout=timeout_seconds,
+                input=input,
             )
             return SandboxResult(
                 returncode=proc.returncode,
@@ -121,6 +124,7 @@ class ProcessSandbox(SandboxBackend):
         env: dict[str, str] | None = None,
         timeout_seconds: float = 60.0,
         workdir: str = "",
+        input: str | bytes | None = None,  # noqa: A002
     ) -> SandboxResult:
         # Future: prepend unshare / firejail when use_namespace=True.
         return NoneSandbox().run(
@@ -128,6 +132,7 @@ class ProcessSandbox(SandboxBackend):
             env=env,
             timeout_seconds=timeout_seconds,
             workdir=workdir,
+            input=input,
         )
 
 
@@ -174,6 +179,7 @@ class ContainerSandbox(SandboxBackend):
         env: dict[str, str] | None = None,
         timeout_seconds: float = 60.0,
         workdir: str = "",
+        input: str | bytes | None = None,  # noqa: A002
     ) -> SandboxResult:
         try:
             runtime = self._runtime_binary()
@@ -193,6 +199,7 @@ class ContainerSandbox(SandboxBackend):
             env=None,
             timeout_seconds=timeout_seconds,
             workdir="",
+            input=input,
         )
 
 

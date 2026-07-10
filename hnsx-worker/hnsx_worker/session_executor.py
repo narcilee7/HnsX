@@ -330,6 +330,7 @@ def _run_multi_turn(
         agent_id=agent_name,
         secrets=secrets,
         emit=emit,
+        sandbox=_sandbox,
     )
 
     for turn in range(1, max_turns + 1):
@@ -851,11 +852,12 @@ def _make_tool_context_factory(
     agent_id: str,
     secrets: dict[str, str],
     emit: EmitFn,
+    sandbox: Any = None,
 ) -> Callable[..., ToolContext]:
     """Return a callable that builds a per-call ToolContext.
 
     The factory closes over session-scoped fields (session_id / domain_id
-    / agent_id / secrets / emit) and accepts per-call fields (turn /
+    / agent_id / secrets / emit / sandbox) and accepts per-call fields (turn /
     tool_call_id). Using a factory keeps the per-turn loop body tidy.
     """
     def _factory(*, turn: int, tool_call_id: str) -> ToolContext:
@@ -867,6 +869,7 @@ def _make_tool_context_factory(
             tool_call_id=tool_call_id,
             secrets=dict(secrets),
             emit=emit,
+            sandbox=sandbox,
         )
 
     return _factory
