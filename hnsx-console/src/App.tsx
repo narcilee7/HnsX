@@ -33,14 +33,8 @@ function App() {
           <Route path="/traces" element={<TracesPage />} />
           <Route path="/traces/:id" element={<TraceDetailPage />} />
           <Route path="/evals" element={<EvalsPage />} />
-          <Route
-            path="/domains/:domainId/evals/:setId"
-            element={<EvalSetPage />}
-          />
-          <Route
-            path="/domains/:domainId/evals/:setId/runs/:runId"
-            element={<EvalRunPage />}
-          />
+          <Route path="/evals/:setId" element={<EvalSetPage />} />
+          <Route path="/evals/:setId/runs/:runId" element={<EvalRunPage />} />
           <Route path="/observability" element={<ObservabilityPage />} />
           <Route path="/audit" element={<AuditPage />} />
           <Route path="/approvals" element={<ApprovalsPage />} />
