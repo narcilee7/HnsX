@@ -16,8 +16,8 @@ import (
 
 	"google.golang.org/grpc"
 
+	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	"github.com/hnsx-io/hnsx/server/pkg/worker"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
@@ -38,13 +38,13 @@ type Server struct {
 // NewServer constructs a Server bound to addr.
 func NewServer(addr string) *Server { return &Server{addr: addr} }
 
-// WithWorkerServices wires the V1.1 worker + scheduler services into the
-// server. “reg“ and “q“ are shared with the API layer so REST session
-// creation can enqueue and REST cancel can publish to the worker's
+// WithWorkerService wires the V1.1 worker service into the gRPC server.
+// The service owns the registry and queue shared with the API layer so REST
+// session creation can enqueue and REST cancel can publish to the worker's
 // StreamChannel.
-func (s *Server) WithWorkerServices(reg *worker.Registry, q worker.SessionQueue) *Server {
-	s.Worker = &WorkerServiceServer{Registry: reg}
-	s.Sched = NewSchedulerServiceServer(reg, q)
+func (s *Server) WithWorkerService(svc *workerservice.Service) *Server {
+	s.Worker = NewWorkerServiceServer(svc)
+	s.Sched = NewSchedulerServiceServer(svc)
 	return s
 }
 

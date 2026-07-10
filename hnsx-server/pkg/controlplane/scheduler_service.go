@@ -10,6 +10,7 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	iworker "github.com/hnsx-io/hnsx/server/internal/worker"
+	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
@@ -27,8 +28,7 @@ import (
 //     cancel / drain / ping down.
 type SchedulerServiceServer struct {
 	pb.UnimplementedSchedulerServiceServer
-	Registry *worker.Registry
-	Queue    worker.SessionQueue
+	WorkerSvc *workerservice.Service
 
 	// DefaultMaxWaitSeconds caps the long-poll window when the worker
 	// doesn't specify one. Defaults to 30.
@@ -56,11 +56,10 @@ type activeSession struct {
 	req       *worker.SessionRequest
 }
 
-// NewSchedulerServiceServer wires the registry + queue into a server.
-func NewSchedulerServiceServer(reg *worker.Registry, q worker.SessionQueue) *SchedulerServiceServer {
+// NewSchedulerServiceServer wires the worker service into the scheduler.
+func NewSchedulerServiceServer(svc *workerservice.Service) *SchedulerServiceServer {
 	return &SchedulerServiceServer{
-		Registry:              reg,
-		Queue:                 q,
+		WorkerSvc:             svc,
 		DefaultMaxWaitSeconds: 30,
 		active:                map[string]*activeSession{},
 		partitioned:           map[string]time.Time{},
@@ -76,8 +75,8 @@ func (s *SchedulerServiceServer) WithLogger(f func(string, ...any)) *SchedulerSe
 
 // PullSession implements pb.SchedulerServiceServer.
 func (s *SchedulerServiceServer) PullSession(ctx context.Context, req *pb.PullSessionRequest) (*pb.PullSessionResponse, error) {
-	if s.Queue == nil {
-		return nil, errors.New("scheduler: queue not configured")
+	if s.WorkerSvc == nil {
+		return nil, errors.New("scheduler: worker service not configured")
 	}
 	if s.isPartitioned(req.GetWorkerId()) {
 		// Chaos: simulate a network partition where the worker can reach the
@@ -98,19 +97,19 @@ func (s *SchedulerServiceServer) PullSession(ctx context.Context, req *pb.PullSe
 	// back to any capabilities explicitly supplied in the request.
 	required := req.GetRequiredCapabilities()
 	if len(required) == 0 {
-		if snap, ok := s.Registry.Get(req.GetWorkerId()); ok {
+		if snap, ok := s.WorkerSvc.Get(req.GetWorkerId()); ok {
 			required = iworker.CapabilitiesFromInfo(snap.Info)
 		}
 	}
 
-	got, ok := s.Queue.Dequeue(pollCtx, required)
+	got, ok := s.WorkerSvc.DequeueSession(pollCtx, required)
 	if !ok {
 		// Empty result on timeout / cancel; the worker re-issues.
 		return &pb.PullSessionResponse{}, nil
 	}
 
 	tid := tenant.DefaultID
-	if snap, ok := s.Registry.Get(req.GetWorkerId()); ok && snap.Info != nil && snap.Info.GetTenantId() != "" {
+	if snap, ok := s.WorkerSvc.Get(req.GetWorkerId()); ok && snap.Info != nil && snap.Info.GetTenantId() != "" {
 		tid = tenant.ID(snap.Info.GetTenantId())
 	}
 
@@ -123,9 +122,7 @@ func (s *SchedulerServiceServer) PullSession(ctx context.Context, req *pb.PullSe
 	}
 	s.mu.Unlock()
 
-	if s.Registry != nil {
-		s.Registry.AssignSession(req.GetWorkerId(), got.SessionID)
-	}
+	s.WorkerSvc.AssignSession(req.GetWorkerId(), got.SessionID)
 
 	return &pb.PullSessionResponse{
 		SessionId:             got.SessionID,
@@ -155,9 +152,7 @@ func (s *SchedulerServiceServer) NackSession(ctx context.Context, req *pb.NackSe
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.active, req.GetSessionId())
-	if s.Registry != nil {
-		s.Registry.UnassignSession(req.GetSessionId())
-	}
+	s.WorkerSvc.UnassignSession(req.GetSessionId())
 	// requeue is a V1.1 placeholder; we don't yet have the original
 	// session spec to put back on the queue. The client can retry by
 	// re-scheduling the session via REST. V1.2 will requeue from here.
@@ -170,9 +165,9 @@ func (s *SchedulerServiceServer) NackSession(ctx context.Context, req *pb.NackSe
 //     stores the latest status per session in “active“ so the API can
 //     serve /sessions/{id} without DB.
 //   - Writes server-initiated events: per-session cancel commands, drain
-//     commands, periodic pings. The cancel is fed by
-//     “Registry.SendCancel“; we forward the Inbound channel events to
-//     the stream as long as the worker is sending.
+//     commands, periodic pings. The cancel is fed by the worker registry's
+//     inbound channel; we forward those events to the stream as long as the
+//     worker is sending.
 func (s *SchedulerServiceServer) StreamChannel(stream pb.SchedulerService_StreamChannelServer) error {
 	ctx := stream.Context()
 	workerID := ""
@@ -207,7 +202,10 @@ func (s *SchedulerServiceServer) StreamChannel(stream pb.SchedulerService_Stream
 				if workerID == "" {
 					continue
 				}
-				ch := s.Registry.Inbound(workerID)
+				if s.WorkerSvc == nil {
+					continue
+				}
+				ch := s.WorkerSvc.Registry().Inbound(workerID)
 				if ch != nil {
 					workerInbound = ch
 					return
@@ -282,9 +280,7 @@ func (s *SchedulerServiceServer) handleWorkerEvent(req *pb.StreamChannelRequest)
 			}
 			if st.GetState() == "completed" || st.GetState() == "failed" || st.GetState() == "cancelled" {
 				delete(s.active, st.GetSessionId())
-				if s.Registry != nil {
-					s.Registry.UnassignSession(st.GetSessionId())
-				}
+				s.WorkerSvc.UnassignSession(st.GetSessionId())
 			}
 		}
 		s.mu.Unlock()
@@ -324,7 +320,7 @@ func (s *SchedulerServiceServer) ActiveSessions() map[string]string {
 // the scheduling queue. This is called when a worker is evicted or its
 // StreamChannel ends unexpectedly. It returns the requeued session IDs.
 func (s *SchedulerServiceServer) RequeueSessions(workerID string) []string {
-	if s.Queue == nil || workerID == "" {
+	if s.WorkerSvc == nil || workerID == "" {
 		return nil
 	}
 	s.mu.Lock()
@@ -336,7 +332,7 @@ func (s *SchedulerServiceServer) RequeueSessions(workerID string) []string {
 			continue
 		}
 		if act.req != nil {
-			s.Queue.Enqueue(act.req)
+			s.WorkerSvc.EnqueueSession(act.req)
 			requeued = append(requeued, sid)
 		}
 		delete(s.active, sid)

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	workerrepository "github.com/hnsx-io/hnsx/server/internal/worker/repository"
+	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
@@ -18,7 +20,8 @@ import (
 func TestChaos_SessionsSurviveWorkerEvictionAndPartition(t *testing.T) {
 	reg := worker.NewRegistry()
 	q := worker.NewMemorySessionQueue()
-	sched := NewSchedulerServiceServer(reg, q)
+	svc := workerservice.NewServiceWithQueue(workerrepository.NewInMemoryRepository(), q).WithRegistry(reg)
+	sched := NewSchedulerServiceServer(svc)
 	chaos := &ChaosInjector{Registry: reg, Sched: sched}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
