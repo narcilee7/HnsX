@@ -107,12 +107,47 @@ func NewApplication(ctx context.Context, cfg *config.Config) (*Application, erro
 		sessionRepo = sessionrepository.NewInMemoryRepository()
 	}
 
-	workerRepo := workerrepository.NewInMemoryRepository()
-	auditRepo := auditrepository.NewInMemoryRepository()
-	traceRepo := tracerepository.NewInMemoryRepository()
-	evalRepo := evalrepository.NewInMemoryRepository()
-	policyRepo := policyrepository.NewInMemoryRepository()
-	secretRepo := secretrepository.NewInMemoryRepository()
+	var workerRepo workerrepository.Repository
+	if store != nil && !store.IsNoDB() {
+		workerRepo = workerrepository.NewPostgresRepository(store)
+	} else {
+		workerRepo = workerrepository.NewInMemoryRepository()
+	}
+
+	var auditRepo auditrepository.Repository
+	if store != nil && !store.IsNoDB() {
+		auditRepo = auditrepository.NewPostgresRepository(store)
+	} else {
+		auditRepo = auditrepository.NewInMemoryRepository()
+	}
+
+	var traceRepo tracerepository.Repository
+	if store != nil && !store.IsNoDB() {
+		traceRepo = tracerepository.NewPostgresRepository(store)
+	} else {
+		traceRepo = tracerepository.NewInMemoryRepository()
+	}
+
+	var evalRepo evalrepository.Repository
+	if store != nil && !store.IsNoDB() {
+		evalRepo = evalrepository.NewPostgresRepository(store)
+	} else {
+		evalRepo = evalrepository.NewInMemoryRepository()
+	}
+
+	var policyRepo policyrepository.Repository
+	if store != nil && !store.IsNoDB() {
+		policyRepo = policyrepository.NewPostgresRepository(store)
+	} else {
+		policyRepo = policyrepository.NewInMemoryRepository()
+	}
+
+	var secretRepo secretrepository.Repository
+	if store != nil && !store.IsNoDB() {
+		secretRepo = secretrepository.NewPostgresRepository(store)
+	} else {
+		secretRepo = secretrepository.NewInMemoryRepository()
+	}
 
 	// Services.
 	domainSvc := domainservice.NewService(domainRepo)
