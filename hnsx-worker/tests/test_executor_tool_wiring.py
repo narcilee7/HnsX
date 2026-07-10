@@ -465,3 +465,63 @@ def test_executor_injects_tool_schemas_for_adapter() -> None:
     assert tools[0]["name"] == "fetch"
     # The HTTP tool's path_params is now visible to the LLM.
     assert "path_params" in tools[0]["input_schema"]["properties"]
+
+
+def test_executor_delegates_cli_agent_tool_calls() -> None:
+    """CLI-agent adapters emit tool_call observations; the executor must not
+    try to invoke them through the ToolRegistry (which would fail with
+    'unknown tool'). Instead it emits a delegated tool_result."""
+
+    class _FakeCliAdapter(Adapter):
+        def name(self) -> str:
+            return "claudecode"
+
+        def invoke_stream(self, agent: dict, prompt: str, input: dict):
+            yield StreamChunk(text_delta="ok")
+            yield StreamChunk(
+                tool_call=ToolCall(
+                    id="tc-cli-1", name="bash", input={"command": "ls"}
+                )
+            )
+            yield StreamChunk(cost=Cost())
+
+        def invoke(self, agent: dict, prompt: str, input: dict) -> AdapterResult:
+            return AdapterResult(text="ok")
+
+    AdapterRegistry.register("claudecode", _FakeCliAdapter)
+    spec = {
+        "id": "cli-delegation",
+        "version": "0.1.0",
+        "harness": {
+            "agents": {
+                "primary": {
+                    "id": "primary",
+                    "adapter": {"kind": "claudecode"},
+                    "system_prompt": "x",
+                }
+            },
+            "session": {"mode": "multi-turn", "agent": "primary"},
+            "policy": {"budget": {"max_turns": 1}},
+        },
+    }
+    captured: list[dict] = []
+    try:
+        import threading
+
+        execute_session(
+            spec,
+            trigger={"q": "x"},
+            config={"session_id": "s-cli"},
+            stop_event=threading.Event(),
+            emit=captured.append,
+        )
+    finally:
+        AdapterRegistry._registry.pop("claudecode", None)
+        AdapterRegistry._singletons.pop("claudecode", None)
+
+    tool_results = [o for o in captured if o["kind"] == "tool_result"]
+    assert len(tool_results) == 1
+    payload = tool_results[0]["payload"]
+    assert payload["name"] == "bash"
+    assert payload["ok"] is True
+    assert payload["output"]["output"]["delegated_to_cli"] is True
