@@ -20,13 +20,16 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-// DB holds both pgxpool and stdlib connections against the same DSN.
+// DB holds pgxpool, stdlib, and gorm connections against the same DSN.
 type DB struct {
-	Pool *pgxpool.Pool
-	SQL  *sql.DB
-	DSN  string
+	Pool   *pgxpool.Pool
+	SQL    *sql.DB
+	GormDB *gorm.DB
+	DSN    string
 }
 
 // Open establishes a Postgres connection pool and stdlib *sql.DB. If dsn is
@@ -70,16 +73,26 @@ func Open(ctx context.Context, dsn string) (*DB, error) {
 	sqlDB.SetConnMaxLifetime(cfg.MaxConnLifetime)
 	sqlDB.SetConnMaxIdleTime(cfg.MaxConnIdleTime)
 
-	return &DB{Pool: pool, SQL: sqlDB, DSN: dsn}, nil
+	// GORM uses the same stdlib *sql.DB so we don't open a third physical pool.
+	gormDB, err := gorm.Open(postgres.New(postgres.Config{
+		Conn: sqlDB,
+	}), &gorm.Config{})
+	if err != nil {
+		pool.Close()
+		sqlDB.Close()
+		return nil, fmt.Errorf("db: open gorm: %w", err)
+	}
+
+	return &DB{Pool: pool, SQL: sqlDB, GormDB: gormDB, DSN: dsn}, nil
 }
 
 // NoDB returns a sentinel DB with no underlying connections.
 func NoDB() *DB { return &DB{} }
 
-// IsNoDB reports whether the receiver has no underlying pool/sql.DB.
-func (d *DB) IsNoDB() bool { return d == nil || d.Pool == nil || d.SQL == nil }
+// IsNoDB reports whether the receiver has no underlying pool/sql.DB/gormDB.
+func (d *DB) IsNoDB() bool { return d == nil || d.Pool == nil || d.SQL == nil || d.GormDB == nil }
 
-// Close releases both connections. Safe to call on NoDB.
+// Close releases all connections. Safe to call on NoDB.
 func (d *DB) Close() {
 	if d == nil {
 		return
