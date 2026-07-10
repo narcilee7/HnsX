@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/app"
+	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
 	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
 	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
+	sessionmodel "github.com/hnsx-io/hnsx/server/internal/session/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
@@ -61,6 +63,15 @@ type Server struct {
 	// EvalService manages eval sets and runs.
 	EvalService *evalservice.Service
 
+	// DomainCommands exposes domain lifecycle use cases.
+	DomainCommands *commands.DomainCommands
+
+	// SessionCommands exposes session lifecycle use cases.
+	SessionCommands *commands.SessionCommands
+
+	// Queries exposes read-only application queries.
+	Queries *queries.Queries
+
 	shutdownOnce   sync.Once
 	httpServer     *http.Server
 	activeRequests sync.WaitGroup
@@ -86,17 +97,20 @@ func NewServer(build BuildInfo, application *app.Application) *Server {
 // instead of executed locally.
 func NewServerWithWorkerPool(build BuildInfo, application *app.Application) *Server {
 	return &Server{
-		App:            application,
-		BuildInfo:      build,
-		DB:             application.DB,
-		Executor:       application.Executor,
-		AppState:       application.State,
-		WorkerRegistry: application.WorkerRegistry,
-		SessionQueue:   application.SessionQueue,
-		PolicyService:  application.PolicyService,
-		AuditService:   application.AuditService,
-		TraceService:   application.TraceService,
-		EvalService:    application.EvalService,
+		App:             application,
+		BuildInfo:       build,
+		DB:              application.DB,
+		Executor:        application.Executor,
+		AppState:        application.State,
+		WorkerRegistry:  application.WorkerRegistry,
+		SessionQueue:    application.SessionQueue,
+		PolicyService:   application.PolicyService,
+		AuditService:    application.AuditService,
+		TraceService:    application.TraceService,
+		EvalService:     application.EvalService,
+		DomainCommands:  commands.NewDomainCommands(application.DomainService),
+		SessionCommands: commands.NewSessionCommands(application.SessionService, application.DomainService, application.SessionQueue, application.Executor),
+		Queries:         queries.NewQueries(application.DomainService, application.SessionService),
 	}
 }
 
@@ -114,7 +128,7 @@ func (s *Server) LoadDomainPolicy(ctx context.Context, domainID string) error {
 	if s.PolicyService == nil {
 		return nil
 	}
-	_, d, ok := queries.GetDomain(s.AppState, tenant.FromContext(ctx), domainID)
+	_, d, ok := s.Queries.GetDomain(tenant.FromContext(ctx), domainID)
 	if !ok {
 		return ErrDomainNotFound
 	}
@@ -197,35 +211,28 @@ func (s *Server) PublishObservation(sessionID string, obs runtime.Observation) b
 	return s.AppState.PublishObservation(sessionID, obs)
 }
 
-// UpdateSessionState updates the in-memory session state. Called by the
-// scheduler when the worker reports a terminal status update.
+// UpdateSessionState updates the session state through the session service.
+// Called by the scheduler when the worker reports a status update.
 func (s *Server) UpdateSessionState(tenantID tenant.ID, sessionID, state string) {
-	if s.AppState == nil {
+	if s.App == nil || s.App.SessionService == nil {
 		return
 	}
-	s.AppState.UpdateSessionState(tenantID, sessionID, state)
+	_, _ = s.App.SessionService.UpdateState(sessionID, sessionmodel.State(state))
 }
 
 // RegisterBootstrapDomain inserts an already-validated *spec.DomainSpec
-// into the in-process registry. Intended for the `seed-from` path in main,
+// into the domain registry. Intended for the `seed-from` path in main,
 // not for the public API.
 func (s *Server) RegisterBootstrapDomain(tenantID tenant.ID, v any) {
-	if s.AppState == nil {
+	if s.App == nil || s.App.DomainService == nil {
 		return
 	}
 	ds, ok := v.(*spec.DomainSpec)
 	if !ok {
 		return
 	}
-	now := time.Now().UTC()
-	s.AppState.RegisterDomain(tenantID, &app.RegisteredDomain{
-		ID:          ds.ID,
-		Version:     ds.Version,
-		Description: ds.Description,
-		Spec:        ds,
-		Harness:     ds.Harness,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	})
+	if _, err := s.App.DomainService.Register(ds); err != nil {
+		return
+	}
 	_ = s.LoadDomainPolicy(tenant.NewContext(context.Background(), tenantID), ds.ID)
 }

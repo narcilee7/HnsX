@@ -21,6 +21,7 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/config"
+	sessionmodel "github.com/hnsx-io/hnsx/server/internal/session/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/api"
 	"github.com/hnsx-io/hnsx/server/pkg/controlplane"
@@ -134,7 +135,9 @@ func cmdServer(args []string) int {
 				})
 			}
 			grpcSrv.Sched.OnSessionStatus = func(tid tenant.ID, sessionID, state string) {
-				srv.UpdateSessionState(tid, sessionID, state)
+				if application.SessionService != nil {
+					_, _ = application.SessionService.UpdateState(sessionID, sessionmodel.State(state))
+				}
 			}
 		}
 	}
