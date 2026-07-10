@@ -69,7 +69,16 @@ class WorkerService:
         self._obs_queue: queue.Queue[OutboundMessage] = queue.Queue()
         self._running: dict[str, _SessionHandle] = {}
         self._stop_event = threading.Event()
+        self._drain_event = threading.Event()  # W7: set when server asks for drain
         self._lock = threading.Lock()
+
+        # W7: pre-fork pool of idle session_runtime processes.
+        self._pool_size = max(0, int(getattr(config, "pool_size", 0)))
+        self._pool: queue.Queue[subprocess.Popen] = queue.Queue()
+
+        # W7: domain spec cache, invalidated by server push.
+        self._domain_cache: dict[str, Any] = {}
+        self._domain_cache_lock = threading.Lock()
 
     # ------------------------------------------------------------------ public
 
@@ -77,6 +86,13 @@ class WorkerService:
         """Block until the worker is asked to stop."""
         self._install_signal_handlers()
         self._register()
+
+        # W7: pre-warm the subprocess pool in the background.
+        if self._pool_size > 0:
+            threading.Thread(
+                target=self._warm_pool, name="pool-warmer", daemon=True
+            ).start()
+
         threading.Thread(target=self._heartbeat_loop, name="heartbeat", daemon=True).start()
         threading.Thread(
             target=self._stream_producer_loop, name="stream-producer", daemon=True
@@ -104,6 +120,19 @@ class WorkerService:
             except subprocess.TimeoutExpired:
                 handle.proc.kill()
                 handle.proc.wait()
+
+        # W7: terminate any idle pooled processes.
+        while True:
+            try:
+                pooled = self._pool.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                pooled.terminate()
+                pooled.wait(timeout=1.0)
+            except Exception:  # noqa: BLE001
+                pass
+
         self.client.close()
 
     # ------------------------------------------------------------------ lifecycle
@@ -132,6 +161,7 @@ class WorkerService:
 
     def _heartbeat_loop(self) -> None:
         interval = self.config.heartbeat_interval_seconds
+        backoff = 2.0
         while not self._stop_event.is_set():
             try:
                 with self._lock:
@@ -151,23 +181,38 @@ class WorkerService:
                     health=WorkerHealth(status=WorkerHealthStatus.HEALTHY),
                 )
                 self.client.heartbeat(req)
+                backoff = 2.0
             except Exception as e:  # noqa: BLE001 — network blips shouldn't kill the loop
-                log.warning("heartbeat failed: %s", e)
+                log.warning("heartbeat failed: %s; retrying in %.1fs", e, backoff)
+                self._stop_event.wait(backoff)
+                backoff = min(backoff * 2, interval)
+                continue
             self._stop_event.wait(interval)
 
     # ------------------------------------------------------------------ pull
 
     def _pull_loop(self) -> None:
         max_wait = 30  # seconds; server may hold the call up to this long
+        backoff = 2.0
         while not self._stop_event.is_set():
+            # W7: stop accepting new work once drain is requested.
+            if self._drain_event.is_set():
+                log.info("worker draining; waiting for running sessions to finish")
+                self._drain_sessions()
+                return
+
             try:
                 assignment = self.client.pull_session(
                     worker_id=self.worker_id,
                     max_wait_seconds=max_wait,
                 )
+                backoff = 2.0
             except Exception as e:  # noqa: BLE001 — channel-level errors
-                log.warning("pull failed: %s; retrying", e)
-                self._stop_event.wait(2.0)
+                if self._stop_event.is_set():
+                    return
+                log.warning("pull failed: %s; retrying in %.1fs", e, backoff)
+                self._stop_event.wait(backoff)
+                backoff = min(backoff * 2, 30.0)
                 continue
             if assignment.is_empty():
                 continue  # empty result == no work; loop again
@@ -180,20 +225,28 @@ class WorkerService:
                 self._nack(assignment, reason="no_free_slots", requeue=True, error_code="CAPACITY")
                 return
         log.info("assigned session %s (domain=%s)", assignment.session_id, assignment.domain_id)
-        try:
-            proc = subprocess.Popen(
-                [sys.executable, "-m", "hnsx_worker.session_runtime"],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                env=self._build_subprocess_env(),
-            )
-        except OSError as e:
-            log.error("failed to spawn subprocess: %s", e)
-            self._nack(assignment, reason=f"spawn_failed: {e}", requeue=False, error_code="SPAWN")
-            return
+
+        proc = self._take_from_pool()
+        if proc is None:
+            try:
+                proc = subprocess.Popen(
+                    [sys.executable, "-m", "hnsx_worker.session_runtime"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    env=self._build_subprocess_env(),
+                )
+            except OSError as e:
+                log.error("failed to spawn subprocess: %s", e)
+                self._nack(
+                    assignment,
+                    reason=f"spawn_failed: {e}",
+                    requeue=False,
+                    error_code="SPAWN",
+                )
+                return
 
         payload = json.dumps(
             {
@@ -212,7 +265,14 @@ class WorkerService:
             proc.stdin.write(payload)
             proc.stdin.close()
         except BrokenPipeError:
-            pass
+            # W7: pooled process died before we could use it; spawn fresh.
+            log.warning("broken pipe to pooled process for %s; respawning", assignment.session_id)
+            try:
+                proc.kill()
+            except Exception:  # noqa: BLE001
+                pass
+            self._on_session(assignment)
+            return
 
         handle = _SessionHandle(
             proc=proc,
@@ -253,6 +313,84 @@ class WorkerService:
             if key.startswith("HNSX_SECRET_"):
                 env[key] = value
         return env
+
+    # ------------------------------------------------------------------ W7 pool
+
+    def _warm_pool(self) -> None:
+        """Keep ``pool_size`` idle session_runtime processes ready."""
+        while not self._stop_event.is_set():
+            needed = self._pool_size - self._pool.qsize()
+            if needed <= 0:
+                self._stop_event.wait(0.5)
+                continue
+            for _ in range(needed):
+                if self._stop_event.is_set():
+                    return
+                try:
+                    proc = subprocess.Popen(
+                        [sys.executable, "-m", "hnsx_worker.session_runtime"],
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        bufsize=1,
+                        env=self._build_subprocess_env(),
+                    )
+                    self._pool.put(proc)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("pool warm failed: %s", e)
+                    self._stop_event.wait(0.5)
+                    break
+            self._stop_event.wait(0.5)
+
+    def _take_from_pool(self) -> subprocess.Popen | None:
+        """Return an idle process or None if the pool is empty."""
+        if self._pool_size <= 0:
+            return None
+        try:
+            return self._pool.get_nowait()
+        except queue.Empty:
+            return None
+
+    def _drain_sessions(self) -> None:
+        """W7: wait for running sessions to finish, then return.
+
+        Called after the server requests drain. Uses the shutdown grace period
+        as the deadline.
+        """
+        deadline = time.monotonic() + _SHUTDOWN_GRACE_SECONDS
+        while True:
+            with self._lock:
+                remaining = list(self._running.keys())
+            if not remaining:
+                return
+            if time.monotonic() >= deadline:
+                log.warning("drain deadline reached; %s sessions still running", len(remaining))
+                return
+            time.sleep(0.2)
+
+    # ------------------------------------------------------------------ W7 domain cache
+
+    def _get_domain_spec(self, domain_id: str, domain_spec_json: str) -> dict[str, Any]:
+        """Return the parsed domain spec, using the local cache if available."""
+        with self._domain_cache_lock:
+            cached = self._domain_cache.get(domain_id)
+            if cached is not None:
+                return cached
+        try:
+            spec = json.loads(domain_spec_json)
+        except json.JSONDecodeError:
+            spec = {}
+        with self._domain_cache_lock:
+            self._domain_cache[domain_id] = spec
+        return spec
+
+    def _invalidate_domain(self, domain_id: str, version: str) -> None:
+        """W7: drop a domain from the local cache."""
+        with self._domain_cache_lock:
+            removed = self._domain_cache.pop(domain_id, None) is not None
+        if removed:
+            log.info("invalidated domain %s/%s from local cache", domain_id, version)
 
     def _pump_subprocess_stdout(self, handle: _SessionHandle) -> None:
         assert handle.proc.stdout is not None
@@ -375,13 +513,10 @@ class WorkerService:
                 event.drain.reason,
                 event.drain.deadline_seconds,
             )
-            # Full drain handling is #9.
+            self._drain_event.set()
         elif event.kind == "invalidate" and event.invalidate is not None:
-            log.info(
-                "server invalidated domain %s/%s",
-                event.invalidate.domain_id,
-                event.invalidate.version,
-            )
+            inv = event.invalidate
+            self._invalidate_domain(inv.domain_id, inv.version)
         elif event.kind == "ping":
             log.debug("server ping")
         else:

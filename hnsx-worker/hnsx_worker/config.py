@@ -31,6 +31,7 @@ class WorkerConfig:
     capacity: ResourceCapacity = field(default_factory=ResourceCapacity)
     heartbeat_interval_seconds: int = 5
     auth_token: str = ""
+    pool_size: int = 0  # W7: number of pre-forked session_runtime processes
 
     @classmethod
     def from_cli(
@@ -43,7 +44,7 @@ class WorkerConfig:
         providers: str,
         models: str,
         heartbeat_interval: int,
-    ) -> "WorkerConfig":
+    ) -> WorkerConfig:
         capacity = ResourceCapacity(
             max_concurrent_sessions=max_concurrent_sessions,
             providers=_split_csv(providers),

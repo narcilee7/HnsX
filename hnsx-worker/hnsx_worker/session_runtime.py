@@ -145,6 +145,16 @@ def main() -> int:
 
     rc = 0
     try:
+        # W7: schedule a self-termination if the server gave us a hard cap.
+        timeout_seconds = config.get("session_timeout_seconds")
+        timer: threading.Timer | None = None
+        if isinstance(timeout_seconds, (int, float)) and timeout_seconds > 0:
+            timer = threading.Timer(
+                float(timeout_seconds), _timeout_self, args=(session_id, stop_event)
+            )
+            timer.daemon = True
+            timer.start()
+
         execute_session(spec, trigger, config, stop_event=stop_event, emit=emit)
         emit(
             {
@@ -154,6 +164,8 @@ def main() -> int:
                 "state": "completed",
             }
         )
+        if timer is not None:
+            timer.cancel()
     except _Stopped:
         emit(
             {
@@ -176,6 +188,16 @@ def main() -> int:
         )
         rc = 1
     return rc
+
+
+def _timeout_self(session_id: str, stop_event: threading.Event) -> None:
+    """W7: ask the session to stop because it hit session_timeout_seconds."""
+    sys.stderr.write(f"session_runtime: session {session_id} timed out\n")
+    stop_event.set()
+    try:
+        os.kill(os.getpid(), signal.SIGTERM)
+    except OSError:
+        pass
 
 
 if __name__ == "__main__":
