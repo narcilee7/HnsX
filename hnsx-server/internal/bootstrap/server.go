@@ -68,7 +68,7 @@ func NewServerFromArgs(args []string) (*Server, error) {
 		Built:     version.Built,
 		GoVersion: stdruntime.Version(),
 	}
-	apiServer := api.NewServerWithWorkerPool(build, application)
+	apiServer := api.NewServer(build, application)
 
 	if *seedFrom != "" {
 		seedFromDir(log, apiServer, *seedFrom)
@@ -224,12 +224,12 @@ func seedFromDir(log *zap.Logger, s *api.Server, dir string) {
 			continue
 		}
 		path := fmt.Sprintf("%s/%s/domain.yaml", dir, e.Name())
-		spec, err := spec.LoadFile(path)
+		ds, err := spec.LoadFile(path)
 		if err != nil {
 			log.Warn("seed skip file", zap.String("path", path), zap.Error(err))
 			continue
 		}
-		s.RegisterBootstrapDomain(tenant.DefaultID, spec)
+		s.RegisterBootstrapDomain(tenant.DefaultID, ds)
 		registered++
 	}
 	if registered > 0 {

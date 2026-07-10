@@ -37,7 +37,7 @@ func TestRunner_SingleMode_HappyPath(t *testing.T) {
 			Agents: map[string]spec.AgentSpec{
 				"main": {ID: "main", Provider: "anthropic", Model: "m"},
 			},
-			Session: spec.SessionSpec{Mode: "single", Agent: "main"},
+			Session: spec.SessionSpec{Mode: spec.Single, Agent: "main"},
 		},
 	}
 
@@ -85,7 +85,7 @@ func TestRunner_WorkflowMode_WalksSteps(t *testing.T) {
 				"b": {ID: "b", Provider: "p", Model: "m"},
 			},
 			Session: spec.SessionSpec{
-				Mode: "workflow",
+				Mode: spec.Workflow,
 				Workflow: &spec.WorkflowSpec{
 					Entry: "s1",
 					Steps: []spec.StepSpec{
@@ -140,7 +140,7 @@ func TestRunner_SupervisorMode_NotImplemented(t *testing.T) {
 		ID: "x", Version: "0.1.0",
 		Harness: spec.HarnessSpec{
 			Agents:  map[string]spec.AgentSpec{"a": {ID: "a", Provider: "p", Model: "m"}},
-			Session: spec.SessionSpec{Mode: "supervisor"},
+			Session: spec.SessionSpec{Mode: spec.Supervisor},
 		},
 	}
 	_, err := NewRunner(&stubAdapter{}).Run(context.Background(), s, nil)

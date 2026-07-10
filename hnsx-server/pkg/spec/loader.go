@@ -60,8 +60,7 @@ func Validate(spec *DomainSpec) error {
 
 	// Session mode must be one of the supported orchestration modes.
 	switch spec.Harness.Session.Mode {
-	case "single-task", "single", "multi-turn", "supervisor",
-		"hierarchical", "autonomous", "workflow":
+	case SingleTask, Single, MultiTurn, Supervisor, Hierarchical, Autonomous, Workflow:
 		// ok
 	default:
 		return fmt.Errorf("unknown session mode: %q", spec.Harness.Session.Mode)
@@ -76,7 +75,7 @@ func Validate(spec *DomainSpec) error {
 	}
 
 	// Workflow mode requires a workflow definition with a valid entry.
-	if spec.Harness.Session.Mode == "workflow" {
+	if spec.Harness.Session.Mode == Workflow {
 		wf := spec.Harness.Session.Workflow
 		if wf == nil {
 			return errors.New("session.mode=workflow requires session.workflow")

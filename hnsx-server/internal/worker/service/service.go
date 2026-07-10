@@ -9,10 +9,10 @@ import (
 	"context"
 	"time"
 
-	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 	"github.com/hnsx-io/hnsx/server/internal/worker"
 	"github.com/hnsx-io/hnsx/server/internal/worker/model"
 	"github.com/hnsx-io/hnsx/server/internal/worker/repository"
+	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
 // Service implements the worker application use cases.
@@ -58,6 +58,32 @@ func (s *Service) Registry() *worker.Registry { return s.reg }
 
 // Queue returns the underlying session queue.
 func (s *Service) Queue() worker.SessionQueue { return s.queue }
+
+// InboundChannel returns the cancel/drain push channel for the named worker,
+// or nil if the worker_id is unknown.
+func (s *Service) InboundChannel(workerID string) <-chan *pb.StreamChannelResponse {
+	if s.reg == nil {
+		return nil
+	}
+	return s.reg.Inbound(workerID)
+}
+
+// SessionsForWorker returns the session IDs currently assigned to a worker.
+func (s *Service) SessionsForWorker(workerID string) []string {
+	if s.reg == nil {
+		return nil
+	}
+	return s.reg.SessionsForWorker(workerID)
+}
+
+// RemoveWorkerSessions drops all session assignments for a worker without
+// evicting the worker itself.
+func (s *Service) RemoveWorkerSessions(workerID string) {
+	if s.reg == nil {
+		return
+	}
+	s.reg.RemoveWorkerSessions(workerID)
+}
 
 // Register records a worker's WorkerInfo and returns a canonical worker_id.
 func (s *Service) Register(info *pb.WorkerInfo) (string, error) {
@@ -145,9 +171,9 @@ func (s *Service) DequeueSession(ctx context.Context, required []string) (*worke
 
 // ServiceStats is a point-in-time snapshot of the worker pool.
 type ServiceStats struct {
-	Workers          int
-	HealthyWorkers   int
-	QueueLen         int
+	Workers           int
+	HealthyWorkers    int
+	QueueLen          int
 	ActiveAssignments int
 }
 

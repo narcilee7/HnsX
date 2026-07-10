@@ -62,6 +62,11 @@ type Aggregate struct {
 	ToolInvocations       int
 }
 
+type AggregateWithSession struct {
+	Aggregate
+	SessionID string
+}
+
 // Common trace errors.
 var (
 	ErrTraceNotFound = errors.New("trace: not found")

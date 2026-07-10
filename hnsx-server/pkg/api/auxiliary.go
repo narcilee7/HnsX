@@ -351,7 +351,7 @@ func (s *Server) RunEval(c *gin.Context) {
 		EvalSetID:     set.ID,
 		DomainID:      set.DomainID,
 		DomainVersion: domain.Version,
-		Orchestration: domain.Spec.Harness.Session.Mode,
+		Orchestration: string(domain.Spec.Harness.Session.Mode),
 		State:         "running",
 		TotalCases:    len(set.Cases),
 	}

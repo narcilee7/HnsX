@@ -3,7 +3,7 @@ package controlplane
 import (
 	"time"
 
-	"github.com/hnsx-io/hnsx/server/pkg/worker"
+	"github.com/hnsx-io/hnsx/server/internal/worker"
 )
 
 // ChaosInjector provides fault-injection primitives for chaos testing the

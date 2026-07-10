@@ -42,7 +42,7 @@ func TestParse_OK(t *testing.T) {
 	if spec.ID != "customer-service" {
 		t.Errorf("ID = %q, want customer-service", spec.ID)
 	}
-	if got := spec.Harness.Session.Mode; got != "workflow" {
+	if got := spec.Harness.Session.Mode; got != Workflow {
 		t.Errorf("Mode = %q, want workflow", got)
 	}
 	if len(spec.Harness.Agents) != 1 {
@@ -125,7 +125,7 @@ func TestValidate_FieldChecks(t *testing.T) {
 			name: "missing id",
 			spec: &DomainSpec{Version: "0.1.0", Harness: HarnessSpec{
 				Agents:  map[string]AgentSpec{"a": {Provider: "anthropic", Model: "m"}},
-				Session: SessionSpec{Mode: "single"},
+				Session: SessionSpec{Mode: Single},
 			}},
 			want: "domain.id is required",
 		},
@@ -133,7 +133,7 @@ func TestValidate_FieldChecks(t *testing.T) {
 			name: "missing version",
 			spec: &DomainSpec{ID: "x", Harness: HarnessSpec{
 				Agents:  map[string]AgentSpec{"a": {Provider: "anthropic", Model: "m"}},
-				Session: SessionSpec{Mode: "single"},
+				Session: SessionSpec{Mode: Single},
 			}},
 			want: "domain.version is required",
 		},
