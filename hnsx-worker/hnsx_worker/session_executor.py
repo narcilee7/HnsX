@@ -55,6 +55,10 @@ from hnsx_worker.tools import (
     build_tool,
     tool_schemas_for_adapter,
 )
+from hnsx_worker.tools.mcp_client import (
+    build_mcp_server_map,
+    discover_mcp_tools,
+)
 
 log = logging.getLogger("hnsx_worker.session_executor")
 
@@ -320,6 +324,7 @@ def _run_multi_turn(
 
     # Build the ToolRegistry from the agent's ``tools`` spec entries.
     registry, schema_failures = _build_tool_registry(
+        spec=spec,
         agent=agent,
         session_id=session_id,
         domain_id=domain_id,
@@ -806,6 +811,7 @@ def _append_tool_result(
 
 def _build_tool_registry(
     *,
+    spec: dict[str, Any],
     agent: dict,
     session_id: str,
     domain_id: str,
@@ -820,8 +826,33 @@ def _build_tool_registry(
     can see what was dropped.
     """
     raw_tools = agent.get("tools") or []
-    registry = ToolRegistry(policy_decision=policy_decision)
+    mcp_server_map = build_mcp_server_map(spec)
+
+    # Discover remote tool schemas for any referenced MCP servers so the
+    # LLM-facing schema is accurate and we don't reconnect per tool.
+    mcp_schemas: dict[str, dict[str, Any]] = {}
     failures: list[str] = []
+    referenced_servers: set[str] = set()
+    for entry in raw_tools:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("type") != "mcp_client":
+            continue
+        cfg = entry.get("config") or {}
+        server_name = str(cfg.get("server", ""))
+        if server_name and server_name in mcp_server_map:
+            referenced_servers.add(server_name)
+
+    for server_name in sorted(referenced_servers):
+        try:
+            schemas = discover_mcp_tools(mcp_server_map[server_name])
+        except Exception as e:  # noqa: BLE001
+            failures.append(f"mcp server {server_name!r} discovery failed: {e!s}")
+            continue
+        for remote_name, schema in schemas.items():
+            mcp_schemas[f"{server_name}::{remote_name}"] = schema
+
+    registry = ToolRegistry(policy_decision=policy_decision)
     for entry in raw_tools:
         if not isinstance(entry, dict):
             failures.append(f"non-dict tool entry: {entry!r}")
@@ -830,14 +861,22 @@ def _build_tool_registry(
         if "type" not in entry:
             continue
         try:
-            tool = build_tool(entry)
+            tool = build_tool(
+                entry,
+                mcp_servers=mcp_server_map,
+                mcp_schemas=mcp_schemas,
+            )
         except ValueError as e:
             failures.append(str(e))
             continue
         registry.register(tool)
     # Inject the LLM-facing tool schemas so adapters see the right
     # definitions when they call the provider API.
-    agent["tools"] = tool_schemas_for_adapter({"tools": raw_tools})
+    agent["tools"] = tool_schemas_for_adapter(
+        {"tools": raw_tools},
+        mcp_servers=mcp_server_map,
+        mcp_schemas=mcp_schemas,
+    )
     return registry, failures
 
 

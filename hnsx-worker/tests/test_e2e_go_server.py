@@ -55,6 +55,8 @@ def _wait_healthz(addr: str, timeout: float = 10.0) -> None:
 def go_server():
     if not SERVER_BIN.exists():
         pytest.skip(f"hnsx-server binary not found at {SERVER_BIN}; run `make build` first")
+    if "HNSX_DATABASE_URL" not in os.environ:
+        pytest.skip("HNSX_DATABASE_URL not set; the Go server requires Postgres for e2e tests")
     grpc_port = _free_port()
     http_port = _free_port()
     env = os.environ.copy()
