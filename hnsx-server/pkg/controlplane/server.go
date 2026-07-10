@@ -12,7 +12,6 @@ import (
 	"context"
 	"net"
 	"sync"
-	"time"
 
 	"google.golang.org/grpc"
 
@@ -52,7 +51,8 @@ func (s *Server) WithWorkerService(svc *workerservice.Service) *Server {
 func (s *Server) Addr() string { return s.addr }
 
 // ListenAndServe opens the TCP listener and blocks until ctx is canceled
-// or the underlying gRPC server fails.
+// or the underlying gRPC server fails. Callers should use Shutdown for a
+// graceful stop rather than relying on ctx cancellation alone.
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	l, err := net.Listen("tcp", s.addr)
 	if err != nil {
@@ -79,23 +79,31 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		s.mu.Lock()
-		gs := s.gs
-		s.mu.Unlock()
-		if gs != nil {
-			done := make(chan struct{})
-			go func() {
-				gs.GracefulStop()
-				close(done)
-			}()
-			select {
-			case <-done:
-			case <-time.After(5 * time.Second):
-				gs.Stop()
-			}
-		}
 		return ctx.Err()
 	case err := <-serveErr:
 		return err
+	}
+}
+
+// Shutdown gracefully stops the gRPC server. If the graceful stop does not
+// finish within the context deadline, it falls back to an immediate stop.
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.mu.Lock()
+	gs := s.gs
+	s.mu.Unlock()
+	if gs == nil {
+		return nil
+	}
+	done := make(chan struct{})
+	go func() {
+		gs.GracefulStop()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		gs.Stop()
+		return ctx.Err()
 	}
 }
