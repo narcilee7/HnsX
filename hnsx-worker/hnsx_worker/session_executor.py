@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -251,6 +252,19 @@ def execute_session(
     return result
 
 
+def _resolve_adapter_kind(agent: dict[str, Any]) -> str:
+    """Return the adapter kind for an agent, allowing local-dev override.
+
+    Set ``HNSX_FORCE_ADAPTER_KIND`` to make all agents use the same offline
+    adapter (e.g. ``noop`` or ``echo``) regardless of what the DomainSpec
+    declares. This keeps docker-compose demos runnable without real API keys.
+    """
+    forced = os.environ.get("HNSX_FORCE_ADAPTER_KIND", "")
+    if forced:
+        return forced
+    return agent.get("adapter", {}).get("kind", "noop")
+
+
 # ---------------------------------------------------------------------------
 # mode runners
 # ---------------------------------------------------------------------------
@@ -276,7 +290,7 @@ def _run_single(
         raise KeyError(f"session.agent {agent_name!r} not in harness.agents")
     agent = agents[agent_name]
     prompt = _resolve_prompt(spec, agent)
-    adapter = AdapterRegistry.get(agent.get("adapter", {}).get("kind", "noop"))
+    adapter = AdapterRegistry.get(_resolve_adapter_kind(agent))
 
     _maybe_stop(stop_event, emit, config)
 
@@ -369,7 +383,7 @@ def _run_multi_turn(
         raise KeyError(f"session.agent {agent_name!r} not in harness.agents")
     agent = agents[agent_name]
     prompt = _resolve_prompt(spec, agent)
-    adapter = AdapterRegistry.get(agent.get("adapter", {}).get("kind", "noop"))
+    adapter = AdapterRegistry.get(_resolve_adapter_kind(agent))
     max_turns = int(
         (harness.get("policy", {}) or {}).get("budget", {}).get("max_turns")
         or session.get("max_turns")
@@ -677,7 +691,7 @@ def _run_workflow(
             raise KeyError(f"step {step['id']!r} references unknown agent {agent_name!r}")
         agent = agents[agent_name]
         prompt = _resolve_prompt_for_step(spec, agent, step)
-        adapter = AdapterRegistry.get(agent.get("adapter", {}).get("kind", "noop"))
+        adapter = AdapterRegistry.get(_resolve_adapter_kind(agent))
         step_input = _build_step_input(step.get("input"), vars_)
 
         emit(
