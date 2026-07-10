@@ -122,6 +122,22 @@ def execute_session(
     else:
         raise ValueError(f"unknown session.mode: {mode!r}")
 
+    # W9: output guardrails on the final assistant text (for modes that return
+    # a final text before session_end).
+    if mode not in ("supervisor", "hierarchical", "autonomous"):
+        policy_for_output = PolicyEngine(
+            spec,
+            session_id=config.get("session_id", ""),
+            domain_id=spec.get("id", ""),
+            emit=emit,
+        )
+        guard = policy_for_output.check_output(result.get("output", ""))
+        if not guard.allow:
+            result["guardrail_violation"] = {
+                "rule": guard.rule,
+                "reason": guard.reason,
+            }
+
     # W9: if an EvalSet was injected, run every case and produce a report.
     eval_set = config.get("eval_set")
     if eval_set:

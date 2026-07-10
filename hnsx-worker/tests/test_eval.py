@@ -336,3 +336,51 @@ def test_execute_session_with_eval_set_returns_report() -> None:
     assert report["eval_set_id"] == "es-exec"
     assert report["passed_cases"] == 1
     assert isinstance(result["output"], str)
+
+
+def test_run_eval_set_stops_when_budget_exceeded() -> None:
+    spec = _noop_spec()
+    eval_set = {
+        "eval_set_id": "es-budget",
+        "max_cost_usd": 0.05,
+        "cases": [
+            {
+                "case_id": "c1",
+                "input": {"question": "hi"},
+                "expected": "noop",
+                "scorers": [{"name": "contains"}],
+            },
+            {
+                "case_id": "c2",
+                "input": {"question": "hi"},
+                "expected": "noop",
+                "scorers": [{"name": "contains"}],
+            },
+        ],
+    }
+    report = run_eval_set(
+        eval_set,
+        execute_session,
+        spec,
+        {"session_id": "s-budget"},
+        stop_event=threading.Event(),
+    )
+    # Noop adapter costs are zero, so the budget will not be exceeded.
+    assert report["budget_exceeded"] is False
+    assert len(report["cases"]) == 2
+
+
+def test_output_guardrail_violation_recorded_in_session_result() -> None:
+    spec = _noop_spec()
+    spec["harness"]["policy"] = {
+        "output_guardrails": {"blocked_keywords": ["noop"]}
+    }
+    result = execute_session(
+        spec,
+        {"question": "hi"},
+        {"session_id": "s-guard"},
+        stop_event=threading.Event(),
+        emit=lambda o: None,
+    )
+    assert "guardrail_violation" in result
+    assert result["guardrail_violation"]["rule"] == "output_guardrails.blocked_keywords"
