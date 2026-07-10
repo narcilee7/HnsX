@@ -15,6 +15,9 @@ type Repository interface {
 	Save(record *model.ObservationRecord) error
 	BySession(sessionID string) ([]model.ObservationRecord, error)
 	ByTrace(traceID string) ([]model.ObservationRecord, error)
+	// Aggregate returns rolled-up cost/token/invocation counts for the given
+	// session IDs. Passing an empty slice returns zeroes.
+	Aggregate(sessionIDs []string) (model.Aggregate, error)
 }
 
 // InMemoryRepository is a thread-safe in-memory implementation.
@@ -72,6 +75,34 @@ func (r *InMemoryRepository) ByTrace(traceID string) ([]model.ObservationRecord,
 		return out[i].CreatedAt.Before(out[j].CreatedAt)
 	})
 	return out, nil
+}
+
+// Aggregate implements Repository.
+func (r *InMemoryRepository) Aggregate(sessionIDs []string) (model.Aggregate, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	want := make(map[string]struct{}, len(sessionIDs))
+	for _, id := range sessionIDs {
+		want[id] = struct{}{}
+	}
+	var agg model.Aggregate
+	for _, rec := range r.records {
+		if len(want) > 0 {
+			if _, ok := want[rec.SessionID]; !ok {
+				continue
+			}
+		}
+		agg.TotalCostUSD += rec.CostUSD
+		agg.TotalPromptTokens += rec.PromptTokens
+		agg.TotalCompletionTokens += rec.CompletionTokens
+		switch rec.Kind {
+		case "agent_invoke":
+			agg.AgentInvocations++
+		case "tool_call":
+			agg.ToolInvocations++
+		}
+	}
+	return agg, nil
 }
 
 var _ Repository = (*InMemoryRepository)(nil)

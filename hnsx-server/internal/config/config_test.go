@@ -17,6 +17,7 @@ func TestDefault(t *testing.T) {
 
 func TestValidate_OK(t *testing.T) {
 	c := Default()
+	c.DatabaseURL = "postgres://hnsx:hnsx@127.0.0.1:5432/hnsx?sslmode=disable"
 	c.OTel.Exporter = "stdout"
 	c.Log.Level = "info"
 	if err := c.Validate(); err != nil {
@@ -24,8 +25,17 @@ func TestValidate_OK(t *testing.T) {
 	}
 }
 
+func TestValidate_RequiresDatabaseURL(t *testing.T) {
+	c := Default()
+	c.DatabaseURL = ""
+	if err := c.Validate(); err == nil {
+		t.Fatal("expected database_url required")
+	}
+}
+
 func TestValidate_RejectsBadExporter(t *testing.T) {
 	c := Default()
+	c.DatabaseURL = "postgres://x"
 	c.OTel.Exporter = "ftp"
 	if err := c.Validate(); err == nil {
 		t.Fatal("expected exporter error")
@@ -34,6 +44,7 @@ func TestValidate_RejectsBadExporter(t *testing.T) {
 
 func TestValidate_RequiresOTLPEndpoint(t *testing.T) {
 	c := Default()
+	c.DatabaseURL = "postgres://x"
 	c.OTel.Exporter = "otlp"
 	c.OTel.OTLPEndpoint = ""
 	if err := c.Validate(); err == nil {
@@ -42,6 +53,7 @@ func TestValidate_RequiresOTLPEndpoint(t *testing.T) {
 }
 
 func TestLoad_DefaultsWhenNoFile(t *testing.T) {
+	t.Setenv("HNSX_DATABASE_URL", "postgres://hnsx:hnsx@127.0.0.1:5432/hnsx?sslmode=disable")
 	c, err := Load("/nonexistent.yaml")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -54,6 +66,7 @@ func TestLoad_DefaultsWhenNoFile(t *testing.T) {
 func TestLoad_EnvOverride(t *testing.T) {
 	t.Setenv("HNSX_HTTP_ADDR", "127.0.0.1:9999")
 	t.Setenv("HNSX_LOG_LEVEL", "debug")
+	t.Setenv("HNSX_DATABASE_URL", "postgres://hnsx:hnsx@127.0.0.1:5432/hnsx?sslmode=disable")
 	c, err := Load("")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -71,6 +84,7 @@ func TestLoad_YAMLOverride(t *testing.T) {
 	path := dir + "/c.yaml"
 	if err := os.WriteFile(path, []byte(`
 http_addr: "127.0.0.1:7777"
+database_url: "postgres://x"
 log:
   level: warn
 `), 0o600); err != nil {

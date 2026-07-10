@@ -10,6 +10,7 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
+	tracemodel "github.com/hnsx-io/hnsx/server/internal/trace/model"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
 
@@ -385,11 +386,12 @@ func (s *Server) ListAudit(c *gin.Context) {
 func (s *Server) GetMetrics(c *gin.Context) {
 	domainFilter := c.Query("domain")
 	sessions := s.Queries.ListSessions(tenantFromGin(c))
+
 	total := 0
 	completed := 0
 	failed := 0
-	var totalCost float64
 	var totalDurationMs uint64
+	var sessionIDs []string
 	for _, sess := range sessions {
 		if domainFilter != "" && sess.DomainID != domainFilter {
 			continue
@@ -402,19 +404,30 @@ func (s *Server) GetMetrics(c *gin.Context) {
 			failed++
 		}
 		totalDurationMs += durationMs(sess)
+		sessionIDs = append(sessionIDs, sess.ID)
 	}
-	if total > 0 {
-		totalCost = 0 // Cost is not yet populated by NoopAdapter; future PR.
+
+	var agg tracemodel.Aggregate
+	if s.TraceService != nil {
+		var err error
+		agg, err = s.TraceService.Aggregate(sessionIDs)
+		if err != nil {
+			writeError(c, NewInternal(err))
+			return
+		}
 	}
+
 	writeJSON(c, http.StatusOK, map[string]any{
 		"domain_id":          domainFilter,
 		"total_sessions":     total,
 		"completed_sessions": completed,
 		"failed_sessions":    failed,
-		"total_cost_usd":     totalCost,
+		"total_cost_usd":     agg.TotalCostUSD,
 		"avg_duration_ms":    avgDurationMs(totalDurationMs, total),
-		"agent_invocations":  0,
-		"tool_invocations":   0,
+		"agent_invocations":  agg.AgentInvocations,
+		"tool_invocations":   agg.ToolInvocations,
+		"prompt_tokens":      agg.TotalPromptTokens,
+		"completion_tokens":  agg.TotalCompletionTokens,
 	})
 }
 

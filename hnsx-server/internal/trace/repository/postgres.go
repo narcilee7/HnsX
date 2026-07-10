@@ -84,6 +84,43 @@ func (r *PostgresRepository) ByTrace(traceID string) ([]model.ObservationRecord,
 	return r.toModels(records), nil
 }
 
+// Aggregate implements Repository.
+func (r *PostgresRepository) Aggregate(sessionIDs []string) (model.Aggregate, error) {
+	var agg model.Aggregate
+	if r.db == nil {
+		return agg, nil
+	}
+
+	var result struct {
+		CostUSD          float64
+		PromptTokens     int
+		CompletionTokens int
+		AgentInvocations int64
+		ToolInvocations  int64
+	}
+
+	query := r.db.Model(&ObservationRecord{}).
+		Select(`COALESCE(SUM(cost_usd), 0) AS cost_usd,
+			COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+			COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+			COUNT(*) FILTER (WHERE kind = ?) AS agent_invocations,
+			COUNT(*) FILTER (WHERE kind = ?) AS tool_invocations`,
+			"agent_invoke", "tool_call")
+	if len(sessionIDs) > 0 {
+		query = query.Where("session_id IN ?", sessionIDs)
+	}
+	if err := query.Scan(&result).Error; err != nil {
+		return agg, err
+	}
+
+	agg.TotalCostUSD = result.CostUSD
+	agg.TotalPromptTokens = result.PromptTokens
+	agg.TotalCompletionTokens = result.CompletionTokens
+	agg.AgentInvocations = int(result.AgentInvocations)
+	agg.ToolInvocations = int(result.ToolInvocations)
+	return agg, nil
+}
+
 func (r *PostgresRepository) toModels(records []ObservationRecord) []model.ObservationRecord {
 	out := make([]model.ObservationRecord, 0, len(records))
 	for _, rec := range records {
