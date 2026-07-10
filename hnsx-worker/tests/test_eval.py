@@ -13,7 +13,9 @@ import sys
 import threading
 from typing import Any
 
-from hnsx_worker.eval import aggregate_scores, run_eval
+from hnsx_worker.adapters import AdapterRegistry
+from hnsx_worker.adapters.base import Adapter, AdapterResult
+from hnsx_worker.eval import aggregate_scores, compare_eval_reports, run_eval, run_eval_set
 from hnsx_worker.eval.scorers import Score, score
 from hnsx_worker.session_executor import execute_session
 
@@ -198,3 +200,139 @@ def test_session_runtime_includes_eval_scores_in_session_end() -> None:
     eval_scores = result.get("eval_scores", {})
     assert eval_scores.get("passed") == 1
     assert eval_scores.get("score") == 1.0
+
+
+# ---------------------------------------------------------------------------
+# W9: real LLM judge + EvalSet
+# ---------------------------------------------------------------------------
+
+
+class _FakeJudgeAdapter(Adapter):
+    """Stub judge that returns a JSON verdict based on prompt keywords."""
+
+    def name(self) -> str:
+        return "fake_judge"
+
+    def invoke(self, agent: dict, prompt: str, input: dict) -> AdapterResult:
+        verdict = "pass" if "good" in prompt.lower() else "fail"
+        score = 1.0 if verdict == "pass" else 0.0
+        return AdapterResult(
+            text=json.dumps(
+                {"verdict": verdict, "score": score, "reason": "fake judge reasoning"}
+            )
+        )
+
+
+def test_llm_judge_with_adapter_parses_verdict() -> None:
+    AdapterRegistry.register("fake_judge", _FakeJudgeAdapter)
+    try:
+        s = score(
+            "llm_judge",
+            "the output mentions good performance",
+            "good performance",
+            adapter="fake_judge",
+        )
+        assert s.passed is True
+        assert s.score == 1.0
+        assert s.details["verdict"] == "pass"
+
+        s2 = score(
+            "llm_judge",
+            "the output mentions bad performance",
+            "bad performance",
+            adapter="fake_judge",
+        )
+        assert s2.passed is False
+        assert s2.score == 0.0
+    finally:
+        AdapterRegistry._registry.pop("fake_judge", None)  # type: ignore[attr-defined]
+        AdapterRegistry._singletons.pop("fake_judge", None)  # type: ignore[attr-defined]
+
+
+def test_run_eval_set_runs_multiple_cases() -> None:
+    spec = _noop_spec()
+    eval_set = {
+        "eval_set_id": "es-1",
+        "cases": [
+            {
+                "case_id": "c1",
+                "input": {"question": "hi"},
+                "expected": "noop",
+                "scorers": [{"name": "contains"}],
+            },
+            {
+                "case_id": "c2",
+                "input": {"question": "hi"},
+                "expected": "missing",
+                "scorers": [{"name": "contains"}],
+            },
+        ],
+    }
+    report = run_eval_set(
+        eval_set,
+        execute_session,
+        spec,
+        {"session_id": "s-es"},
+        stop_event=threading.Event(),
+    )
+    assert report["eval_set_id"] == "es-1"
+    assert report["total_cases"] == 2
+    assert len(report["cases"]) == 2
+    assert report["passed_cases"] == 1
+    assert 0.0 < report["avg_score"] < 1.0
+
+
+def test_compare_eval_reports_detects_regression_and_improvement() -> None:
+    baseline = {
+        "eval_set_id": "base",
+        "cases": [
+            {"case_id": "a", "eval_scores": {"score": 1.0}},
+            {"case_id": "b", "eval_scores": {"score": 0.0}},
+        ],
+    }
+    current = {
+        "eval_set_id": "cur",
+        "cases": [
+            {"case_id": "a", "eval_scores": {"score": 0.0}},
+            {"case_id": "b", "eval_scores": {"score": 1.0}},
+            {"case_id": "c", "eval_scores": {"score": 0.5}},
+        ],
+    }
+    comparison = compare_eval_reports(current, baseline)
+    assert comparison["regressions"] == 1
+    assert comparison["improvements"] == 1
+    assert comparison["new"] == 1
+    assert comparison["unchanged"] == 0
+
+    a_change = [c for c in comparison["changes"] if c["case_id"] == "a"][0]
+    assert a_change["change"] == "regression"
+
+
+def test_execute_session_with_eval_set_returns_report() -> None:
+    spec = _noop_spec()
+    config: dict[str, Any] = {
+        "session_id": "s-es-exec",
+        "eval_set": {
+            "eval_set_id": "es-exec",
+            "cases": [
+                {
+                    "case_id": "only",
+                    "input": {"question": "hi"},
+                    "expected": "noop",
+                    "scorers": [{"name": "contains"}],
+                }
+            ],
+        },
+    }
+    result = execute_session(
+        spec,
+        {"question": "hi"},
+        config,
+        stop_event=threading.Event(),
+        emit=lambda o: None,
+    )
+    assert "eval_report" in result
+    report = result["eval_report"]
+    assert report["eval_set_id"] == "es-exec"
+    assert report["passed_cases"] == 1
+    assert isinstance(result["output"], str)

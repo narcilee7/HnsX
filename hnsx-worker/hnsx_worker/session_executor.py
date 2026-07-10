@@ -122,6 +122,24 @@ def execute_session(
     else:
         raise ValueError(f"unknown session.mode: {mode!r}")
 
+    # W9: if an EvalSet was injected, run every case and produce a report.
+    eval_set = config.get("eval_set")
+    if eval_set:
+        from hnsx_worker.eval import run_eval_set
+
+        report = run_eval_set(
+            eval_set,
+            execute_session,
+            spec,
+            config,
+            stop_event=stop_event,
+            emit=emit,
+            baseline_report=config.get("baseline_report"),
+        )
+        result["output"] = json.dumps(report, ensure_ascii=False, default=str)
+        result["eval_report"] = report
+        return result
+
     # W8: if an EvalCase was injected, run scorers against the final output.
     eval_case = config.get("eval_case")
     if eval_case:
