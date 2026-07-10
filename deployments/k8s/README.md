@@ -31,10 +31,12 @@ heartbeat.
 ## Deploy
 
 ```bash
+kubectl apply -f deployments/k8s/namespace.yaml
 kubectl apply -f deployments/k8s/worker-deployment.yaml
 ```
 
-Update `HNSX_CONTROL_PLANE_ADDR` to point at your Control Plane gRPC endpoint.
+Update `HNSX_CONTROL_PLANE_ADDR` in `worker-deployment.yaml` to point at your
+Control Plane gRPC endpoint.
 
 ## Graceful shutdown
 
