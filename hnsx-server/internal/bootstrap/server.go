@@ -70,6 +70,9 @@ func NewServerFromArgs(args []string) (*Server, error) {
 	}
 	apiServer := api.NewServer(build, application)
 
+	connectSrv := controlplane.NewConnectServer(application)
+	apiServer.WithConnectHandler(connectSrv.Handler())
+
 	if *seedFrom != "" {
 		seedFromDir(log, apiServer, *seedFrom)
 	}

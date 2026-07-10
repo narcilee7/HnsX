@@ -3,26 +3,47 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"connectrpc.com/connect"
+
+	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
+	"github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1/v1connect"
 )
 
-func TestAPIErrorParsing(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"code":    "SESSION_NOT_FOUND",
-			"message": "session x not found",
-		})
-	}))
+type fakeDomainServer struct {
+	v1connect.UnimplementedDomainRegistryServiceHandler
+}
+
+func (f *fakeDomainServer) GetDomain(ctx context.Context, req *connect.Request[pb.GetDomainRequest]) (*connect.Response[pb.GetDomainResponse], error) {
+	if req.Msg.GetDomain().GetId() == "missing" {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("domain missing not found"))
+	}
+	return connect.NewResponse(&pb.GetDomainResponse{
+		Spec: &pb.DomainSpec{
+			Id:      req.Msg.GetDomain().GetId(),
+			Version: "1.0.0",
+		},
+	}), nil
+}
+
+func TestConnectAPIErrorParsing(t *testing.T) {
+	_, h := v1connect.NewDomainRegistryServiceHandler(
+		&fakeDomainServer{},
+		connect.WithInterceptors(),
+	)
+	mux := http.NewServeMux()
+	mux.Handle("/hnsx.v1.DomainRegistryService/", h)
+	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
 	c := NewWithBaseURL(srv.URL)
-	_, err := c.GetSession("x")
+	_, err := c.GetDomain("missing")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -30,8 +51,28 @@ func TestAPIErrorParsing(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *APIError, got %T", err)
 	}
-	if apiErr.Code != "SESSION_NOT_FOUND" {
-		t.Fatalf("expected SESSION_NOT_FOUND, got %s", apiErr.Code)
+	if apiErr.Code != connect.CodeNotFound.String() {
+		t.Fatalf("expected %s, got %s", connect.CodeNotFound.String(), apiErr.Code)
+	}
+}
+
+func TestGetDomainConnect(t *testing.T) {
+	_, h := v1connect.NewDomainRegistryServiceHandler(
+		&fakeDomainServer{},
+		connect.WithInterceptors(),
+	)
+	mux := http.NewServeMux()
+	mux.Handle("/hnsx.v1.DomainRegistryService/", h)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := NewWithBaseURL(srv.URL)
+	d, err := c.GetDomain("cs")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d.ID != "cs" || d.Version != "1.0.0" {
+		t.Fatalf("unexpected domain: %+v", d)
 	}
 }
 

@@ -24,6 +24,19 @@ func newRouter(s *Server) *gin.Engine {
 	r.GET("/healthz", s.Health)
 	r.GET("/readyz", s.Readiness)
 
+	// Connect-RPC control plane (served before /api/v1 so it gets middleware).
+	if s.ConnectHandler != nil {
+		for _, svc := range []string{
+			"DomainRegistryService",
+			"SessionSchedulerService",
+			"RuntimeDiscoveryService",
+			"TelemetryService",
+			"EvalService",
+		} {
+			r.Any("/hnsx.v1."+svc+"/*path", gin.WrapH(s.ConnectHandler))
+		}
+	}
+
 	// Versioned API.
 	v1 := r.Group("/api/v1")
 	{
