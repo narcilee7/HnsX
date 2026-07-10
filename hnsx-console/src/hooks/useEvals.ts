@@ -1,12 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { create, EvalCaseSchema } from '@hnsx/sdk-node'
 import {
   listEvalSets,
   getEvalSet,
   createEvalSet,
+  updateEvalSet,
+  deleteEvalSet,
   runEval,
   getEvalRun,
+  listEvalRuns,
   type EvalSetListItem,
+  type EvalRunListItem,
 } from '@/api/evals'
 import type { EvalSetViewModel, EvalRunViewModel } from '@/api/mappers'
 
@@ -70,6 +75,49 @@ export function useCreateEvalSet() {
         ),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: evalKeys.lists() }),
+  })
+}
+
+export function useUpdateEvalSet(setId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { description?: string; cases: CreateEvalSetInput['cases'] }) =>
+      updateEvalSet(setId, {
+        description: input.description,
+        cases: input.cases.map((c) =>
+          create(EvalCaseSchema, {
+            id: c.id,
+            name: c.name ?? c.id,
+            input: JSON.stringify(c.input ?? {}),
+            expect: JSON.stringify(c.expect ?? {}),
+            scorer: c.scorer ? { scorers: [] } : undefined,
+          }),
+        ),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: evalKeys.detail(setId) })
+      qc.invalidateQueries({ queryKey: evalKeys.lists() })
+    },
+  })
+}
+
+export function useDeleteEvalSet() {
+  const qc = useQueryClient()
+  const navigate = useNavigate()
+  return useMutation({
+    mutationFn: (setId: string) => deleteEvalSet(setId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: evalKeys.lists() })
+      navigate('/evals')
+    },
+  })
+}
+
+export function useEvalRuns(setId: string | undefined) {
+  return useQuery<{ items: EvalRunListItem[]; total: number }>({
+    queryKey: [...evalKeys.detail(setId || ''), 'runs'],
+    queryFn: () => listEvalRuns(setId!),
+    enabled: !!setId,
   })
 }
 

@@ -500,6 +500,154 @@ func (s *Server) GetEvalSet(c *gin.Context) {
 	})
 }
 
+// UpdateEvalSet handles PUT /api/v1/evals/:setId.
+func (s *Server) UpdateEvalSet(c *gin.Context) {
+	id := c.Param("setId")
+	if s.EvalService == nil {
+		writeError(c, NewInternal(errors.New("eval service not configured")))
+		return
+	}
+
+	var body struct {
+		Description string               `json:"description,omitempty"`
+		Cases       []evalmodel.EvalCase `json:"cases"`
+	}
+	if err := decodeJSONBody(c, &body); err != nil {
+		writeError(c, NewValidation(err))
+		return
+	}
+
+	set, err := s.EvalService.GetSet(id)
+	if err != nil {
+		if errors.Is(err, evalmodel.ErrEvalSetNotFound) {
+			writeError(c, &APIError{
+				Code:    "EVAL_SET_NOT_FOUND",
+				Message: err.Error(),
+			})
+			return
+		}
+		writeError(c, NewInternal(err))
+		return
+	}
+
+	set.Description = body.Description
+	set.Cases = body.Cases
+	if err := s.EvalService.UpdateSet(set); err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+
+	writeJSON(c, http.StatusOK, map[string]any{
+		"id":          set.ID,
+		"set_id":      set.SetID,
+		"domain_id":   set.DomainID,
+		"description": set.Description,
+		"updated_at":  queries.FormatTimeValue(set.UpdatedAt),
+	})
+}
+
+// DeleteEvalSet handles DELETE /api/v1/evals/:setId.
+func (s *Server) DeleteEvalSet(c *gin.Context) {
+	id := c.Param("setId")
+	if s.EvalService == nil {
+		writeError(c, NewInternal(errors.New("eval service not configured")))
+		return
+	}
+
+	if _, err := s.EvalService.GetSet(id); err != nil {
+		if errors.Is(err, evalmodel.ErrEvalSetNotFound) {
+			writeError(c, &APIError{
+				Code:    "EVAL_SET_NOT_FOUND",
+				Message: err.Error(),
+			})
+			return
+		}
+		writeError(c, NewInternal(err))
+		return
+	}
+
+	if err := s.EvalService.DeleteSet(id); err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+
+	c.AbortWithStatus(http.StatusNoContent)
+}
+
+// ListEvalRuns handles GET /api/v1/evals/:setId/runs.
+func (s *Server) ListEvalRuns(c *gin.Context) {
+	id := c.Param("setId")
+	limit := intQueryGin(c, "limit", 50)
+	offset := intQueryGin(c, "offset", 0)
+	if limit <= 0 {
+		limit = 50
+	}
+
+	if s.EvalService == nil {
+		writeJSON(c, http.StatusOK, map[string]any{
+			"items":  []map[string]any{},
+			"total":  0,
+			"limit":  limit,
+			"offset": offset,
+		})
+		return
+	}
+
+	if _, err := s.EvalService.GetSet(id); err != nil {
+		if errors.Is(err, evalmodel.ErrEvalSetNotFound) {
+			writeError(c, &APIError{
+				Code:    "EVAL_SET_NOT_FOUND",
+				Message: err.Error(),
+			})
+			return
+		}
+		writeError(c, NewInternal(err))
+		return
+	}
+
+	runs, err := s.EvalService.RunsBySet(id)
+	if err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+
+	total := len(runs)
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	runs = runs[offset:end]
+
+	out := make([]map[string]any, 0, len(runs))
+	for _, r := range runs {
+		out = append(out, map[string]any{
+			"id":             r.ID,
+			"eval_set_id":    r.EvalSetID,
+			"domain_id":      r.DomainID,
+			"domain_version": r.DomainVersion,
+			"orchestration":  r.Orchestration,
+			"state":          r.State,
+			"score":          r.Score,
+			"total_cases":    r.TotalCases,
+			"passed_cases":   r.PassedCases,
+			"total_cost_usd": r.TotalCostUSD,
+			"duration_ms":    r.DurationMs,
+			"created_at":     queries.FormatTimeValue(r.CreatedAt),
+			"completed_at":   queries.FormatTime(r.CompletedAt),
+		})
+	}
+
+	writeJSON(c, http.StatusOK, map[string]any{
+		"items":  out,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
 // RunEval handles POST /api/v1/evals/:setId/run.
 func (s *Server) RunEval(c *gin.Context) {
 	id := c.Param("setId")
