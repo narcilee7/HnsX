@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 
@@ -72,81 +73,31 @@ func NewApplication(ctx context.Context, cfg *config.Config) (*Application, erro
 		return nil, fmt.Errorf("otel: %w", err)
 	}
 
-	var store *db.DB
-	if cfg.PostgresEnabled() {
-		store, err = db.Open(ctx, cfg.DatabaseURL)
-		if err != nil {
-			log.Printf("[hnsx-server] WARNING: database unavailable: %v", err)
-			store = db.NoDB()
-		} else {
-			if err := db.Migrate(ctx, store.SQL, cfg.MigrationsDir); err != nil {
-				return nil, fmt.Errorf("migrate: %w", err)
-			}
-			log.Printf("[hnsx-server] migrations applied from %s", cfg.MigrationsDir)
-		}
-	} else {
-		store = db.NoDB()
-		log.Printf("[hnsx-server] running in no-db mode (set HNSX_DATABASE_URL to enable)")
+	if !cfg.PostgresEnabled() {
+		return nil, errors.New("postgres is required: set HNSX_DATABASE_URL")
 	}
+
+	store, err := db.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("db: open: %w", err)
+	}
+	if err := db.Migrate(ctx, store.SQL, cfg.MigrationsDir); err != nil {
+		return nil, fmt.Errorf("db: migrate: %w", err)
+	}
+	log.Printf("[hnsx-server] migrations applied from %s", cfg.MigrationsDir)
 
 	appState := NewState()
 
-	// Repositories: GORM/Postgres when DB is enabled; InMemory fallback in no-db mode.
-	var domainRepo domainrepository.Repository
-	if store != nil && !store.IsNoDB() {
-		domainRepo = domainrepository.NewPostgresRepository(store)
-	} else {
-		domainRepo = domainrepository.NewInMemoryRepository()
-	}
-
-	var sessionRepo sessionrepository.Repository
-	if store != nil && !store.IsNoDB() {
-		sessionRepo = sessionrepository.NewPostgresRepository(store)
-	} else {
-		sessionRepo = sessionrepository.NewInMemoryRepository()
-	}
-
-	var workerRepo workerrepository.Repository
-	if store != nil && !store.IsNoDB() {
-		workerRepo = workerrepository.NewPostgresRepository(store)
-	} else {
-		workerRepo = workerrepository.NewInMemoryRepository()
-	}
-
-	var auditRepo auditrepository.Repository
-	if store != nil && !store.IsNoDB() {
-		auditRepo = auditrepository.NewPostgresRepository(store)
-	} else {
-		auditRepo = auditrepository.NewInMemoryRepository()
-	}
-
-	var traceRepo tracerepository.Repository
-	if store != nil && !store.IsNoDB() {
-		traceRepo = tracerepository.NewPostgresRepository(store)
-	} else {
-		traceRepo = tracerepository.NewInMemoryRepository()
-	}
-
-	var evalRepo evalrepository.Repository
-	if store != nil && !store.IsNoDB() {
-		evalRepo = evalrepository.NewPostgresRepository(store)
-	} else {
-		evalRepo = evalrepository.NewInMemoryRepository()
-	}
-
-	var policyRepo policyrepository.Repository
-	if store != nil && !store.IsNoDB() {
-		policyRepo = policyrepository.NewPostgresRepository(store)
-	} else {
-		policyRepo = policyrepository.NewInMemoryRepository()
-	}
-
-	var secretRepo secretrepository.Repository
-	if store != nil && !store.IsNoDB() {
-		secretRepo = secretrepository.NewPostgresRepository(store)
-	} else {
-		secretRepo = secretrepository.NewInMemoryRepository()
-	}
+	// Repositories: GORM/Postgres only. InMemory implementations remain in
+	// repository packages as test helpers but are never used at runtime.
+	domainRepo := domainrepository.NewPostgresRepository(store)
+	sessionRepo := sessionrepository.NewPostgresRepository(store)
+	workerRepo := workerrepository.NewPostgresRepository(store)
+	auditRepo := auditrepository.NewPostgresRepository(store)
+	traceRepo := tracerepository.NewPostgresRepository(store)
+	evalRepo := evalrepository.NewPostgresRepository(store)
+	policyRepo := policyrepository.NewPostgresRepository(store)
+	secretRepo := secretrepository.NewPostgresRepository(store)
 
 	// Services.
 	domainSvc := domainservice.NewService(domainRepo)
@@ -158,9 +109,9 @@ func NewApplication(ctx context.Context, cfg *config.Config) (*Application, erro
 	secretSvc := secretservice.NewService(secretRepo)
 
 	// Sinks.
-	sinks := []runtime.Sink{telemetry.NewStdoutSink()}
-	if store != nil && !store.IsNoDB() {
-		sinks = append(sinks, telemetry.NewDBSink(store.Pool))
+	sinks := []runtime.Sink{
+		telemetry.NewStdoutSink(),
+		telemetry.NewDBSink(store.Pool),
 	}
 	if cfg.OTel.Exporter != "none" {
 		sinks = append(sinks, telemetry.NewTracerSink())
