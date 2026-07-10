@@ -28,7 +28,7 @@
 | pnpm workspace | ✅ | `hnsx-console` / `observability` / `sdk/node` |
 | Changesets | ✅ | `.changeset/` + `pnpm changeset` |
 | 统一 Makefile | ✅ | `make ci` = proto-lint + go vet/test + TS lint/type-check/test + worker-test |
-| Go module | ✅ | 单一 `hnsx-server/` module，双 cmd：`cmd/hnsx`（CLI）+ `cmd/hnsx-server`（控制面）|
+| Go modules | ✅ | 主 module `hnsx-server/`，双 cmd：`cmd/hnsx`（CLI）+ `cmd/hnsx-server`（控制面）；`sdk/go/` 为 placeholder，尚未纳入 `go.work` |
 | Python worker | ✅ | `hnsx-worker/` 独立包 + venv + pytest |
 | 文档约定 | ✅ | `MONOREPO.md` 描述包边界、版本管理、提交流程 |
 

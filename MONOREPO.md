@@ -26,13 +26,16 @@ pnpm lint
 pnpm test
 ```
 
-### Go module
+### Go modules
 
-单一 Go module：
+当前有两个 Go module：
 
-- `hnsx-server/` — `github.com/hnsx-io/hnsx/server`
+- `hnsx-server/` — `github.com/hnsx-io/hnsx/server`：Control Plane + CLI，活跃开发中。
+- `sdk/go/` — `github.com/hnsx-io/hnsx/sdk/go`：预留的 Go SDK placeholder，当前为空，尚未纳入 `go.work`。
 
-内部包含两个 `cmd` 入口：
+`go.work` 目前只包含 `./hnsx-server`，因为 `sdk/go` 还没有实际代码。待 SDK 开始实现后，再把它加入 workspace。
+
+`hnsx-server` 内部包含两个 `cmd` 入口：
 
 - `cmd/hnsx` — 操作员 CLI（validate / run / version）
 - `cmd/hnsx-server` — Control Plane 守护进程

@@ -1,7 +1,11 @@
 # HnsX Go SDK
 
 This directory is reserved for the HnsX Go SDK. It is currently a placeholder
-while the server-side Go module (`hnsx-server`) is being actively developed.
+module (`github.com/hnsx-io/hnsx/sdk/go`) with no source files while the
+server-side Go module (`hnsx-server`) is being actively developed.
+
+It is **not yet included in `go.work`**. Once implementation starts, add it to
+`go.work` so the workspace covers both `hnsx-server/` and `sdk/go/`.
 
 Planned scope:
 - `DomainSpec` / `Session` / `Observation` types generated from `proto/hnsx/v1`.
