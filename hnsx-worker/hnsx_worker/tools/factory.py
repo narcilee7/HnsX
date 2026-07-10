@@ -27,6 +27,7 @@ from typing import Any
 
 from .base import Tool
 from .http import HttpTool, HttpToolConfig
+from .mcp_client import McpClientTool, McpToolConfig
 from .python import PythonTool, PythonToolConfig
 from .sql import SqlTool, SqlToolConfig
 
@@ -34,12 +35,18 @@ from .sql import SqlTool, SqlToolConfig
 # Adding a new built-in tool is a one-line edit here.
 _BUILTIN_TOOLS: dict[str, tuple[type, type]] = {
     "http": (HttpToolConfig, HttpTool),
+    "mcp_client": (McpToolConfig, McpClientTool),
     "sql": (SqlToolConfig, SqlTool),
     "python": (PythonToolConfig, PythonTool),
 }
 
 
-def build_tool(spec: dict[str, Any]) -> Tool:
+def build_tool(
+    spec: dict[str, Any],
+    *,
+    mcp_servers: dict[str, Any] | None = None,
+    mcp_schemas: dict[str, Any] | None = None,
+) -> Tool:
     """Construct a ``Tool`` from a spec entry.
 
     Raises:
@@ -77,13 +84,26 @@ def build_tool(spec: dict[str, Any]) -> Tool:
         )
     config_cls, tool_cls = entry
     try:
-        config = config_cls.from_spec(spec.get("config") or {})
+        if tool_type == "mcp_client":
+            config = config_cls.from_spec(
+                spec.get("config") or {},
+                tool_name=name,
+                mcp_servers=mcp_servers,
+                mcp_schemas=mcp_schemas,
+            )
+        else:
+            config = config_cls.from_spec(spec.get("config") or {})
     except ValueError as e:
         raise ValueError(f"tool {name!r}: {e}") from e
     return tool_cls(name, config)
 
 
-def tool_schemas_for_adapter(spec: dict[str, Any]) -> list[dict[str, Any]]:
+def tool_schemas_for_adapter(
+    spec: dict[str, Any],
+    *,
+    mcp_servers: dict[str, Any] | None = None,
+    mcp_schemas: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """Translate ``agent.tools`` into the LLM-facing tool definition list.
 
     Only entries with a known built-in type are translated; unknown /
@@ -104,7 +124,11 @@ def tool_schemas_for_adapter(spec: dict[str, Any]) -> list[dict[str, Any]]:
         # If we can build the tool, ask it for its schema.
         if tool_type and tool_type in _BUILTIN_TOOLS:
             try:
-                tool = build_tool(entry)
+                tool = build_tool(
+                    entry,
+                    mcp_servers=mcp_servers,
+                    mcp_schemas=mcp_schemas,
+                )
                 out.append(
                     {
                         "name": tool.name,

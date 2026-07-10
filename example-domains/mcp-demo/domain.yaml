@@ -1,0 +1,56 @@
+id: mcp-demo
+version: 0.1.0
+description: |
+  Demonstrates the Python worker calling an external MCP server over stdio.
+  The MCP server is a tiny local Python script that exposes two read-only
+  filesystem tools: ``list_directory`` and ``read_file``.
+harness:
+  mcp_servers:
+    - name: demo_filesystem
+      transport: stdio
+      # Run from the repo root so the relative path resolves.
+      command:
+        - python
+        - example-domains/mcp-demo/mcp_server.py
+      timeout_seconds: 30
+
+  agents:
+    demo_agent:
+      id: demo_agent
+      provider: noop
+      adapter:
+        kind: noop
+      system_prompt: default
+      tools:
+        - name: list_directory
+          type: mcp_client
+          description: List files in a directory via MCP
+          config:
+            server: demo_filesystem
+            tool: list_directory
+        - name: read_file
+          type: mcp_client
+          description: Read a text file via MCP
+          config:
+            server: demo_filesystem
+            tool: read_file
+
+  prompts:
+    default:
+      type: system
+      template: |
+        You are a read-only filesystem assistant. You can list directories
+        and read files through the MCP filesystem server.
+
+  policy:
+    budget:
+      max_turns: 5
+    permissions:
+      allowed_tools:
+        - list_directory
+        - read_file
+
+  session:
+    mode: multi-turn
+    agent: demo_agent
+    max_turns: 5

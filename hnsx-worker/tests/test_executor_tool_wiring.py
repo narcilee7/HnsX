@@ -105,7 +105,11 @@ def test_build_registry_registers_http_tool() -> None:
         ]
     }
     registry, failures = _build_tool_registry(
-        agent=agent, session_id="s", domain_id="d", emit=lambda o: None
+        spec={},
+        agent=agent,
+        session_id="s",
+        domain_id="d",
+        emit=lambda o: None,
     )
     assert failures == []
     assert "fetch" in registry
@@ -121,7 +125,11 @@ def test_build_registry_registers_python_tool() -> None:
         ]
     }
     registry, failures = _build_tool_registry(
-        agent=agent, session_id="s", domain_id="d", emit=lambda o: None
+        spec={},
+        agent=agent,
+        session_id="s",
+        domain_id="d",
+        emit=lambda o: None,
     )
     assert failures == []
     assert "calc" in registry
@@ -134,7 +142,11 @@ def test_build_registry_registers_sql_tool() -> None:
         ]
     }
     registry, failures = _build_tool_registry(
-        agent=agent, session_id="s", domain_id="d", emit=lambda o: None
+        spec={},
+        agent=agent,
+        session_id="s",
+        domain_id="d",
+        emit=lambda o: None,
     )
     assert failures == []
     assert "lookup" in registry
@@ -149,7 +161,11 @@ def test_build_registry_passes_through_name_only_entries() -> None:
         ]
     }
     registry, failures = _build_tool_registry(
-        agent=agent, session_id="s", domain_id="d", emit=lambda o: None
+        spec={},
+        agent=agent,
+        session_id="s",
+        domain_id="d",
+        emit=lambda o: None,
     )
     assert failures == []
     # External entry NOT registered as a built-in (the W4 adapter owns it).
@@ -170,7 +186,11 @@ def test_build_registry_surfaces_failures() -> None:
         ]
     }
     registry, failures = _build_tool_registry(
-        agent=agent, session_id="s", domain_id="d", emit=lambda o: None
+        spec={},
+        agent=agent,
+        session_id="s",
+        domain_id="d",
+        emit=lambda o: None,
     )
     # Two entries failed; one (calc) succeeded.
     assert len(failures) == 2
@@ -183,7 +203,11 @@ def test_build_registry_surfaces_failures() -> None:
 def test_build_registry_rejects_non_dict_entries() -> None:
     agent = {"tools": [{"name": "good", "type": "python"}, "bad-entry"]}
     registry, failures = _build_tool_registry(
-        agent=agent, session_id="s", domain_id="d", emit=lambda o: None
+        spec={},
+        agent=agent,
+        session_id="s",
+        domain_id="d",
+        emit=lambda o: None,
     )
     assert "good" in registry
     assert any("non-dict" in f for f in failures)
@@ -191,7 +215,11 @@ def test_build_registry_rejects_non_dict_entries() -> None:
 
 def test_build_registry_handles_missing_tools_key() -> None:
     registry, failures = _build_tool_registry(
-        agent={}, session_id="s", domain_id="d", emit=lambda o: None
+        spec={},
+        agent={},
+        session_id="s",
+        domain_id="d",
+        emit=lambda o: None,
     )
     assert registry.names() == []
     assert failures == []
