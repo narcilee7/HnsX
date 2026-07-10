@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
 	"github.com/hnsx-io/hnsx/server/internal/domain/repository"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
 
 func minimalSpec(id, version string) *spec.DomainSpec {
@@ -21,7 +21,7 @@ func minimalSpec(id, version string) *spec.DomainSpec {
 					Adapter:  spec.AdapterConfig{Kind: "noop"},
 				},
 			},
-			Session: spec.SessionSpec{Mode: "single", Agent: "agent"},
+			Session: spec.SessionSpec{Mode: spec.Single, Agent: "agent"},
 		},
 	}
 }

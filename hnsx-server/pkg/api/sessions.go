@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,11 +13,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
-	"github.com/hnsx-io/hnsx/server/internal/session/broadcaster"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
-	"github.com/hnsx-io/hnsx/server/pkg/worker"
 )
 
 // ListSessions handles GET /api/v1/sessions.
@@ -99,99 +94,16 @@ func (s *Server) triggerSession(c *gin.Context, tenantID tenant.ID, domainID str
 		return
 	}
 
-	sess, err := s.SessionCommands.Trigger(c.Request.Context(), tenantID, d, trigger, runtime.NewSessionID)
+	sess, err := s.SessionCommands.Start(c.Request.Context(), tenantID, d, trigger)
 	if err != nil {
 		writeError(c, NewInternal(err))
 		return
 	}
 
-	bc := s.AppState.AttachBroadcaster(sess.ID)
-
-	if s.SessionQueue != nil {
-		if err := s.enqueueForWorker(tenantID, sess, d, trigger); err != nil {
-			writeError(c, NewInternal(err))
-			return
-		}
-		c.Header("Location", commands.BuildSessionLocation(sess.ID))
-		writeJSON(c, http.StatusAccepted, map[string]any{
-			"id":    sess.ID,
-			"state": sess.State,
-		})
-		return
-	}
-
-	if s.Executor == nil {
-		writeError(c, NewInternal(errors.New("executor not configured")))
-		return
-	}
-
-	go s.runInBackground(tenantID, sess, d, bc, trigger)
-
 	c.Header("Location", commands.BuildSessionLocation(sess.ID))
 	writeJSON(c, http.StatusAccepted, map[string]any{
 		"id":    sess.ID,
 		"state": sess.State,
-	})
-}
-
-// enqueueForWorker serializes the domain spec + trigger and puts the session
-// on the worker queue. The worker will PullSession, run it, and stream
-// observations back via the gRPC StreamChannel.
-func (s *Server) enqueueForWorker(tenantID tenant.ID, sess *app.RegisteredSession, d *app.RegisteredDomain, trigger map[string]any) error {
-	specJSON, err := json.Marshal(d.Spec)
-	if err != nil {
-		return fmt.Errorf("marshal domain spec: %w", err)
-	}
-	triggerJSON, err := json.Marshal(trigger)
-	if err != nil {
-		return fmt.Errorf("marshal trigger: %w", err)
-	}
-
-	req := &worker.SessionRequest{
-		SessionID:            sess.ID,
-		DomainID:             d.ID,
-		DomainVersion:        d.Version,
-		DomainSpecJSON:       string(specJSON),
-		TriggerPayloadJSON:   string(triggerJSON),
-		TraceID:              sess.ID,
-		CorrelationID:        sess.ID,
-		RequiredCapabilities: spec.DeriveCapabilities(d.Spec),
-	}
-
-	s.SessionQueue.Enqueue(req)
-
-	bc := s.AppState.AttachBroadcaster(sess.ID)
-	_ = bc.Publish(context.Background(), runtime.Observation{
-		Kind:      "state",
-		SessionID: sess.ID,
-		DomainID:  d.ID,
-		Payload:   map[string]any{"state": "pending", "worker_pool": true},
-		Timestamp: time.Now().UTC(),
-	})
-	return nil
-}
-
-// runInBackground executes the registered session via the executor.
-func (s *Server) runInBackground(tenantID tenant.ID, sess *app.RegisteredSession, d *app.RegisteredDomain, bc *broadcaster.Broadcaster, trigger map[string]any) {
-	_, _ = s.SessionCommands.MarkRunning(context.Background(), tenantID, sess.ID)
-	executor := s.Executor.WithBroadcaster(bc)
-
-	ctx := runtime.WithSessionID(context.Background(), sess.ID)
-
-	result, err := executor.Execute(ctx, d.Spec, trigger)
-	if result != nil {
-		_, _ = s.SessionCommands.MarkCompleted(context.Background(), tenantID, sess.ID, result)
-	}
-	if err != nil {
-		_, _ = s.SessionCommands.MarkFailed(context.Background(), tenantID, sess.ID)
-	}
-
-	state, _ := s.Queries.GetSession(tenantID, sess.ID)
-	bc.Publish(ctx, runtime.Observation{
-		Kind:      "state",
-		SessionID: sess.ID,
-		DomainID:  sess.DomainID,
-		Payload:   map[string]any{"state": state.State, "result": result},
 	})
 }
 
@@ -211,9 +123,9 @@ func (s *Server) CancelSession(c *gin.Context) {
 		return
 	}
 
-	if s.WorkerRegistry != nil {
-		if workerID, ok := s.WorkerRegistry.SessionWorker(id); ok {
-			s.WorkerRegistry.SendCancel(workerID, id, "user requested cancel", time.Now().Add(5*time.Second).UnixMilli())
+	if s.WorkerService != nil {
+		if workerID, ok := s.WorkerService.SessionWorker(id); ok {
+			s.WorkerService.SendCancel(workerID, id, "user requested cancel", time.Now().Add(5*time.Second).UnixMilli())
 		}
 	}
 
@@ -225,7 +137,7 @@ func (s *Server) CancelSession(c *gin.Context) {
 // RerunSession handles POST /api/v1/sessions/:id/rerun.
 func (s *Server) RerunSession(c *gin.Context) {
 	id := c.Param("id")
-	_, err := s.SessionCommands.Rerun(c.Request.Context(), tenantFromGin(c), id)
+	sess, err := s.SessionCommands.Rerun(c.Request.Context(), tenantFromGin(c), id)
 	if err != nil {
 		if errors.Is(err, commands.ErrSessionNotFound) {
 			writeError(c, NewSessionNotFound(id))
@@ -234,8 +146,12 @@ func (s *Server) RerunSession(c *gin.Context) {
 		writeError(c, NewInternal(err))
 		return
 	}
-	// Re-trigger uses the same backend as a fresh session.
-	s.triggerSession(c, tenantFromGin(c), id, nil)
+
+	c.Header("Location", commands.BuildSessionLocation(sess.ID))
+	writeJSON(c, http.StatusAccepted, map[string]any{
+		"id":    sess.ID,
+		"state": sess.State,
+	})
 }
 
 // GetSessionTrace handles GET /api/v1/sessions/:id/trace.
@@ -259,20 +175,7 @@ func (s *Server) GetSessionTrace(c *gin.Context) {
 			return
 		}
 		for _, rec := range records {
-			observations = append(observations, map[string]any{
-				"kind":              rec.Kind,
-				"session_id":        rec.SessionID,
-				"domain_id":         rec.DomainID,
-				"domain_version":    rec.DomainVersion,
-				"step_id":           rec.StepID,
-				"agent_id":          rec.AgentID,
-				"payload":           rec.Payload,
-				"cost_usd":          rec.CostUSD,
-				"prompt_tokens":     rec.PromptTokens,
-				"completion_tokens": rec.CompletionTokens,
-				"latency_ms":        rec.LatencyMs,
-				"timestamp":         queries.FormatTimeValue(rec.CreatedAt),
-			})
+			observations = append(observations, observationToMap(rec))
 		}
 	}
 

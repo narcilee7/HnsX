@@ -1,11 +1,9 @@
 // Package controlplane is the gRPC control plane entrypoint.
 //
-// V1.1 (Python Worker Pivot) registers the two new services from
-// proto/hnsx/v1/worker.proto: WorkerService and SchedulerService.
-// They share a worker.Registry and worker.SessionQueue owned by the
-// server's caller (see cmd/hnsx-server). The legacy services
-// (DomainRegistryService, etc.) remain available for the Go-side API
-// and console.
+// It registers the two services from proto/hnsx/v1/worker.proto:
+// WorkerService (registration/heartbeat) and SchedulerService (session
+// pull/ack/stream). Both are backed by the worker service owned by the
+// server's caller (see cmd/hnsx-server).
 package controlplane
 
 import (
@@ -15,8 +13,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
+	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 

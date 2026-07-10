@@ -29,7 +29,7 @@ func (r *PostgresRepository) Save(record *model.ObservationRecord) error {
 		return errors.New("trace/postgres: no database configured")
 	}
 	if record == nil {
-		return model.ErrTraceNotFound
+		return errors.New("trace/postgres: unsupported record")
 	}
 
 	payloadJSON, err := json.Marshal(record.Payload)
@@ -91,13 +91,7 @@ func (r *PostgresRepository) Aggregate(sessionIDs []string) (model.Aggregate, er
 		return agg, nil
 	}
 
-	var result struct {
-		CostUSD          float64
-		PromptTokens     int
-		CompletionTokens int
-		AgentInvocations int64
-		ToolInvocations  int64
-	}
+	var result = new(model.Aggregate)
 
 	query := r.db.Model(&ObservationRecord{}).
 		Select(`COALESCE(SUM(cost_usd), 0) AS cost_usd,
@@ -113,12 +107,49 @@ func (r *PostgresRepository) Aggregate(sessionIDs []string) (model.Aggregate, er
 		return agg, err
 	}
 
-	agg.TotalCostUSD = result.CostUSD
-	agg.TotalPromptTokens = result.PromptTokens
-	agg.TotalCompletionTokens = result.CompletionTokens
+	agg.TotalCostUSD = result.TotalCostUSD
+	agg.TotalPromptTokens = result.TotalPromptTokens
+	agg.TotalCompletionTokens = result.TotalCompletionTokens
 	agg.AgentInvocations = int(result.AgentInvocations)
 	agg.ToolInvocations = int(result.ToolInvocations)
 	return agg, nil
+}
+
+// AggregateBySession implements Repository.
+func (r *PostgresRepository) AggregateBySession(sessionIDs []string) (map[string]model.Aggregate, error) {
+	out := make(map[string]model.Aggregate)
+	if r.db == nil {
+		return out, nil
+	}
+
+	var rows = make([]model.AggregateWithSession, 0, len(sessionIDs))
+
+	query := r.db.Model(&ObservationRecord{}).
+		Select(`session_id,
+			COALESCE(SUM(cost_usd), 0) AS cost_usd,
+			COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+			COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+			COUNT(*) FILTER (WHERE kind = ?) AS agent_invocations,
+			COUNT(*) FILTER (WHERE kind = ?) AS tool_invocations`,
+			"agent_invoke", "tool_call").
+		Group("session_id")
+	if len(sessionIDs) > 0 {
+		query = query.Where("session_id IN ?", sessionIDs)
+	}
+	if err := query.Scan(&rows).Error; err != nil {
+		return out, err
+	}
+
+	for _, row := range rows {
+		out[row.SessionID] = model.Aggregate{
+			TotalCostUSD:          row.TotalCostUSD,
+			TotalPromptTokens:     row.TotalPromptTokens,
+			TotalCompletionTokens: row.TotalCompletionTokens,
+			AgentInvocations:      int(row.AgentInvocations),
+			ToolInvocations:       int(row.ToolInvocations),
+		}
+	}
+	return out, nil
 }
 
 func (r *PostgresRepository) toModels(records []ObservationRecord) []model.ObservationRecord {

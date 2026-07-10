@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 
+	"github.com/hnsx-io/hnsx/server/internal/trace/repository"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
 
@@ -14,13 +16,13 @@ import (
 // go/migrations/000002_observations.up.sql. It is intended for the local
 // "no OTLP" mode where operators want basic query/replay.
 type DBSink struct {
-	pool   *pgxpool.Pool
+	db     *gorm.DB
 	schema string // override for testing; default public
 }
 
-// NewDBSink creates a DBSink against the given pgxpool.
-func NewDBSink(pool *pgxpool.Pool) *DBSink {
-	return &DBSink{pool: pool}
+// NewDBSink creates a DBSink against the given GORM DB.
+func NewDBSink(db *gorm.DB) *DBSink {
+	return &DBSink{db: db}
 }
 
 // WithSchema configures the target schema (default "public").
@@ -36,13 +38,14 @@ func (s *DBSink) Name() string { return "db" }
 // does not currently surface sink errors but a future telemetry-aware
 // control loop can use them).
 func (s *DBSink) Record(ctx context.Context, obs runtime.Observation) error {
-	if s == nil || s.pool == nil {
+	if s == nil || s.db == nil {
 		return nil
 	}
 	schema := s.schema
 	if schema == "" {
 		schema = "public"
 	}
+
 	payload := obs.Payload
 	if payload == nil {
 		payload = map[string]any{}
@@ -52,59 +55,29 @@ func (s *DBSink) Record(ctx context.Context, obs runtime.Observation) error {
 		return fmt.Errorf("db sink: marshal payload: %w", err)
 	}
 
-	var (
-		costUSD     *float64
-		promptT     *int
-		completionT *int
-		latencyMs   *int64
-	)
+	record := repository.ObservationRecord{
+		TraceID:   obs.TraceID,
+		SessionID: obs.SessionID,
+		DomainID:  obs.DomainID,
+		StepID:    obs.StepID,
+		AgentID:   obs.AgentID,
+		Kind:      obs.Kind,
+		Payload:   body,
+	}
 	if obs.Cost != nil {
-		v := obs.Cost.CostUSD
-		costUSD = &v
-		if obs.Cost.PromptTokens > 0 {
-			p := obs.Cost.PromptTokens
-			promptT = &p
-		}
-		if obs.Cost.CompletionTokens > 0 {
-			c := obs.Cost.CompletionTokens
-			completionT = &c
-		}
-		if obs.Cost.LatencyMs > 0 {
-			l := obs.Cost.LatencyMs
-			latencyMs = &l
-		}
+		record.CostUSD = obs.Cost.CostUSD
+		record.PromptTokens = obs.Cost.PromptTokens
+		record.CompletionTokens = obs.Cost.CompletionTokens
+		record.LatencyMs = obs.Cost.LatencyMs
+	}
+	if !obs.Timestamp.IsZero() {
+		record.CreatedAt = obs.Timestamp
+	} else {
+		record.CreatedAt = time.Now().UTC()
 	}
 
-	createdAt := obs.Timestamp
-	if createdAt.IsZero() {
-		// pgx will default to NOW() if we pass nil.
-	}
-	var tsArg any = nil
-	if !createdAt.IsZero() {
-		tsArg = createdAt
-	}
-
-	_, err = s.pool.Exec(ctx, fmt.Sprintf(`
-		INSERT INTO %s.observations
-		(trace_id, session_id, domain_id, step_id, agent_id, kind, payload,
-		 cost_usd, prompt_tokens, completion_tokens, latency_ms, created_at)
-		VALUES
-		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, NOW()))
-	`, schema),
-		nullable(obs.TraceID),
-		obs.SessionID,
-		nullable(obs.DomainID),
-		nullable(obs.StepID),
-		nullable(obs.AgentID),
-		obs.Kind,
-		body,
-		costUSD,
-		promptT,
-		completionT,
-		latencyMs,
-		tsArg,
-	)
-	if err != nil {
+	table := fmt.Sprintf("%s.observations", schema)
+	if err := s.db.WithContext(ctx).Table(table).Create(&record).Error; err != nil {
 		return fmt.Errorf("db sink: insert: %w", err)
 	}
 	return nil
@@ -113,12 +86,5 @@ func (s *DBSink) Record(ctx context.Context, obs runtime.Observation) error {
 // Flush is a no-op for now.
 func (s *DBSink) Flush(_ context.Context) error { return nil }
 
-// Close is a no-op; the pool's lifecycle is owned by the host server.
+// Close is a no-op; the DB lifecycle is owned by the host server.
 func (s *DBSink) Close(_ context.Context) error { return nil }
-
-func nullable(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}
