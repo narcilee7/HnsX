@@ -12,6 +12,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
+	"github.com/hnsx-io/hnsx/server/pkg/local"
 )
 
 // ListDomains handles GET /api/v1/domains.
@@ -147,7 +148,7 @@ func (s *Server) ListDomainVersions(w http.ResponseWriter, r *http.Request) {
 // Phase 1 re-validates the body against the v2 loader and returns the same
 // summary as `hnsx validate`.
 func (s *Server) ValidateDomain(w http.ResponseWriter, r *http.Request) {
-	summary, err := commands.ValidateDomain(r.Body, r.Header.Get("Content-Type"))
+	summary, err := local.ValidateDomain(r.Body, r.Header.Get("Content-Type"))
 	if err != nil {
 		writeError(w, r, NewValidation(err))
 		return

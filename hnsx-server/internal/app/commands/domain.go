@@ -1,54 +1,19 @@
-// Package commands implements application use cases that are shared between
-// the CLI and the HTTP API.
+// Package commands implements server-side application use cases. These
+// commands operate on repository-backed services and are consumed by the HTTP
+// API and gRPC control plane, not by the CLI.
 package commands
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
+	"github.com/hnsx-io/hnsx/server/pkg/local"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
-
-// DomainSummary is the output of ValidateDomain.
-type DomainSummary struct {
-	Valid      bool
-	ID         string
-	Version    string
-	Mode       string
-	AgentCount int
-	StepCount  int
-}
-
-// ValidateDomain parses and validates a DomainSpec from a reader and returns
-// a summary. Body can be JSON or YAML.
-func ValidateDomain(r io.Reader, contentType string) (*DomainSummary, error) {
-	s, err := decodeDomainSpec(r, contentType)
-	if err != nil {
-		return nil, err
-	}
-
-	count := len(s.Harness.Agents)
-	steps := 0
-	if s.Harness.Session.Workflow != nil {
-		steps = len(s.Harness.Session.Workflow.Steps)
-	}
-	return &DomainSummary{
-		Valid:      true,
-		ID:         s.ID,
-		Version:    s.Version,
-		Mode:       s.Harness.Session.Mode,
-		AgentCount: count,
-		StepCount:  steps,
-	}, nil
-}
 
 // RegisterResult is returned by RegisterDomain.
 type RegisterResult struct {
@@ -62,7 +27,7 @@ func RegisterDomain(state *app.State, tenantID tenant.ID, r io.Reader, contentTy
 	if state == nil {
 		return nil, errors.New("nil app state")
 	}
-	s, err := decodeDomainSpec(r, contentType)
+	s, err := local.DecodeDomainSpec(r, contentType)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +61,7 @@ func UpdateDomain(state *app.State, tenantID tenant.ID, id string, r io.Reader, 
 		return nil, ErrDomainNotFound
 	}
 
-	s, err := decodeDomainSpec(r, contentType)
+	s, err := local.DecodeDomainSpec(r, contentType)
 	if err != nil {
 		return nil, err
 	}
@@ -123,50 +88,6 @@ func DeleteDomain(state *app.State, tenantID tenant.ID, id string) error {
 	}
 	state.DeleteDomain(tenantID, id)
 	return nil
-}
-
-// decodeDomainSpec parses either YAML or JSON into a validated *DomainSpec.
-func decodeDomainSpec(r io.Reader, contentType string) (*spec.DomainSpec, error) {
-	body, err := io.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-
-	var s spec.DomainSpec
-	if isYAMLContentType(contentType) || looksLikeYAML(body) {
-		if err := yaml.Unmarshal(body, &s); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := json.Unmarshal(body, &s); err != nil {
-			return nil, err
-		}
-	}
-	if err := spec.Validate(&s); err != nil {
-		return nil, err
-	}
-	return &s, nil
-}
-
-// isYAMLContentType returns true for explicit YAML content types.
-func isYAMLContentType(ct string) bool {
-	switch ct {
-	case "application/yaml", "application/x-yaml", "text/yaml":
-		return true
-	default:
-		return false
-	}
-}
-
-// looksLikeYAML heuristically detects YAML bodies (e.g. leading "---").
-func looksLikeYAML(data []byte) bool {
-	for i := 0; i < len(data); i++ {
-		if data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r' {
-			continue
-		}
-		return data[i] == '-'
-	}
-	return false
 }
 
 // TriggerParams contains the inputs needed to start a session.
@@ -246,13 +167,13 @@ func BuildSessionLocation(id string) string {
 	return "/api/v1/sessions/" + id
 }
 
-// Error helpers used by HTTP handlers; kept here so CLI can reuse messages.
+// Error helpers used by HTTP handlers.
 var (
-	ErrDomainExists   = errors.New("domain already exists")
-	ErrDomainNotFound = errors.New("domain not found")
-	ErrSessionExists  = errors.New("session already exists")
+	ErrDomainExists    = errors.New("domain already exists")
+	ErrDomainNotFound  = errors.New("domain not found")
+	ErrSessionExists   = errors.New("session already exists")
 	ErrSessionNotFound = errors.New("session not found")
-	ErrIDMismatch     = errors.New("domain id mismatch")
+	ErrIDMismatch      = errors.New("domain id mismatch")
 )
 
 // NewDomainExistsError formats a domain-exists message.
