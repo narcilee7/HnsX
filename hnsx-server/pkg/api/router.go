@@ -39,6 +39,7 @@ func newRouter(s *Server) *gin.Engine {
 				d.GET("/versions", s.ListDomainVersions)
 				d.POST("/validate", s.ValidateDomain)
 				d.POST("/run", s.TriggerDomain)
+				d.POST("/policies", s.BindPolicy)
 			}
 		}
 
@@ -100,6 +101,12 @@ func newRouter(s *Server) *gin.Engine {
 		}
 
 		v1.GET("/policies", s.ListPolicies)
+		policies := v1.Group("/policies")
+		{
+			policies.POST("", s.CreatePolicy)
+			policies.PUT("/:id", s.UpdatePolicy)
+			policies.DELETE("/:id", s.DeletePolicy)
+		}
 	}
 
 	return r

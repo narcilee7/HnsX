@@ -115,14 +115,19 @@ Refs：`docs/server-design/go-refactor-plan.md §4 D1`
 
 Refs：`docs/server-design/go-refactor-plan.md §4 D3`
 
-#### T4 — Policy CRUD + Domain 绑定（server）
+#### T4 — Policy CRUD + Domain 绑定（server + console）
 
-- [ ] **server** `ListPolicies` 接 repo；新增 `CreatePolicy` / `POST /policies`
-- [ ] **server** 新增 `POST /domains/:id/policies` 绑定
-- [ ] **migration** `000006_domain_policies` 关联表
-- [ ] **router** 加对应路由
-- [ ] **console** `SettingsPage` Policy tab；Domain 详情加 "绑定 Policy" 操作
-- [ ] **验收**：建一条 policy + 绑到 domain，Executor 执行能看到 `pkg/policy.Engine` 生效
+- [x] **server** `internal/policy/model` 重排 — Policy 由 `DomainID` 改为 `ID + Name + BoundDomain`；新增 `ListItem`；新增 `Rules`(JSON-friendly) + `ErrInvalidPolicyID`
+- [x] **server** `internal/policy/repository` 接口换为 ByID/List/Delete/BindDomain/ByDomain；InMemory 维护 id→policy 与 domain→id 双向索引，1:1 不变；Postgres 用 `domain_uuid UUID NULL`（已无需迁移）
+- [x] **server** `internal/policy/entity.go` 把 `DomainUUID` 改成 `*string`，与 SQL NULL 一致
+- [x] **server** `internal/policy/service` 加 `List/CreateOrUpdate/Delete/BindDomain`；`LoadDomainPolicy` 改用 ID == domainID（向后兼容）
+- [x] **server** `pkg/api/auxiliary.go` List/Create/Update/Delete + `BindPolicy` 五个 handler 接通；`SECRETS_UNAVAILABLE→503` 顺手加 `POLICY_UNAVAILABLE→503`
+- [x] **server** `router.go` 挂 `/policies`、`/policies/:id` 与 `POST /domains/:id/policies`
+- [x] **server** `pkg/api/policies_test.go` 6 个 handler 测试：List/CRUD/Bind/1:1 invariant/unknown policy→404/nil service→503
+- [x] **server** `internal/policy/repository/repository_test.go` 重写 6 个测试覆盖 Save/ByID/ByDomain/BindDomain 1:1/Unbind/List/Delete
+- [x] **console** `src/api/settings.ts` Policy 类型扩展 budget/permissions/guardrails/bound_domain；增 `createPolicy/updatePolicy/deletePolicy/bindPolicy`
+- [x] **console** `SettingsPage.PoliciesTab` 列展示 id/name/bound_domain chip + budget 摘要 + permission chip
+- [x] **验收**：`go test ./...` + `pnpm type-check` 全过；包含 1:1 binding 不变量
 
 Refs：`docs/server-design/go-refactor-plan.md §4 D2`
 
