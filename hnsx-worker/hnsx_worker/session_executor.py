@@ -38,12 +38,15 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from collections.abc import Callable
 from typing import Any
 
 from hnsx_worker.adapters import AdapterRegistry
 from hnsx_worker.adapters.base import Adapter
 from hnsx_worker.harness import run as run_orchestration
+from hnsx_worker.memory import MemoryStore
+from hnsx_worker.memory import build_backend as build_memory_backend
 from hnsx_worker.policy import PolicyEngine
 from hnsx_worker.sandbox import build_backend as build_sandbox_backend
 from hnsx_worker.store import build_backend as build_store_backend
@@ -58,6 +61,11 @@ from hnsx_worker.tools import (
 from hnsx_worker.tools.mcp_client import (
     build_mcp_server_map,
     discover_mcp_tools,
+)
+from hnsx_worker.tools.memory import (
+    MemoryForgetTool,
+    MemorySearchTool,
+    MemoryStoreTool,
 )
 
 log = logging.getLogger("hnsx_worker.session_executor")
@@ -85,20 +93,7 @@ def execute_session(
     stop_event: threading.Event,
     emit: EmitFn,
 ) -> dict[str, Any]:
-    """Dispatch to the right mode-specific runner.
-
-    Args:
-        spec: Parsed DomainSpec (Python dict).
-        trigger: Parsed trigger payload.
-        config: The whole config dict read from stdin (contains
-            ``session_id`` / ``correlation_id`` / etc.).
-        stop_event: Set by the SIGTERM handler to ask for graceful exit.
-        emit: Sink for observations (one Python dict per call).
-
-    Returns:
-        A result dict with ``output`` and accumulated cost fields.
-        Eval scores are added when an ``eval_case`` is present.
-    """
+    """Dispatch to the right mode-specific runner."""
     mode = _read_mode(spec)
     result: dict[str, Any] = {
         "output": "",
@@ -107,24 +102,49 @@ def execute_session(
         "cost_usd": 0.0,
         "latency_ms": 0,
     }
-    if mode in ("single", "single-task"):
-        result["output"] = _run_single(
-            spec, trigger, config, stop_event=stop_event, emit=emit, cost_totals=result
-        )
-    elif mode == "multi-turn":
-        result["output"] = _run_multi_turn(
-            spec, trigger, config, stop_event=stop_event, emit=emit, cost_totals=result
-        )
-    elif mode == "workflow":
-        result["output"] = _run_workflow(
-            spec, trigger, config, stop_event=stop_event, emit=emit, cost_totals=result
-        )
-    elif mode in ("supervisor", "hierarchical", "autonomous"):
-        run_orchestration(
-            spec, trigger, config, stop_event=stop_event, emit=emit
-        )
-    else:
-        raise ValueError(f"unknown session.mode: {mode!r}")
+
+    memory_cfg = (spec.get("harness") or {}).get("memory")
+    memory: MemoryStore | None = build_memory_backend(memory_cfg) if memory_cfg else None
+
+    try:
+        if mode in ("single", "single-task"):
+            result["output"] = _run_single(
+                spec, trigger, config, stop_event=stop_event, emit=emit, cost_totals=result
+            )
+        elif mode == "multi-turn":
+            result["output"] = _run_multi_turn(
+                spec,
+                trigger,
+                config,
+                stop_event=stop_event,
+                emit=emit,
+                cost_totals=result,
+                memory=memory,
+            )
+        elif mode == "workflow":
+            result["output"] = _run_workflow(
+                spec, trigger, config, stop_event=stop_event, emit=emit, cost_totals=result
+            )
+        elif mode in ("supervisor", "hierarchical", "autonomous"):
+            run_orchestration(
+                spec, trigger, config, stop_event=stop_event, emit=emit
+            )
+        else:
+            raise ValueError(f"unknown session.mode: {mode!r}")
+
+        # W11: persist a session summary into long-term memory when configured.
+        if memory is not None:
+            _store_session_summary(
+                memory,
+                config.get("session_id", ""),
+                spec,
+                trigger,
+                result.get("output", ""),
+                emit=emit,
+            )
+    finally:
+        if memory is not None:
+            memory.close()
 
     # W9: output guardrails on the final assistant text (for modes that return
     # a final text before session_end).
@@ -276,6 +296,7 @@ def _run_multi_turn(
     stop_event: threading.Event,
     emit: EmitFn,
     cost_totals: dict[str, Any],
+    memory: MemoryStore | None = None,
 ) -> str:
     harness = spec.get("harness", {})
     agents: dict = harness.get("agents", {})
@@ -330,6 +351,7 @@ def _run_multi_turn(
         domain_id=domain_id,
         emit=emit,
         policy_decision=policy.check_tool,
+        memory=memory,
     )
     if schema_failures:
         for failure in schema_failures:
@@ -817,6 +839,7 @@ def _build_tool_registry(
     domain_id: str,
     emit: EmitFn,
     policy_decision: Any = None,
+    memory: MemoryStore | None = None,
 ) -> tuple[ToolRegistry, list[str]]:
     """Build a ToolRegistry from ``agent.tools``.
 
@@ -870,13 +893,44 @@ def _build_tool_registry(
             failures.append(str(e))
             continue
         registry.register(tool)
+
+    # W11: auto-inject memory tools when a memory backend is configured.
+    if memory is not None:
+        for tool in (
+            MemoryStoreTool("memory_store", memory),
+            MemorySearchTool("memory_search", memory),
+            MemoryForgetTool("memory_forget", memory),
+        ):
+            if tool.name not in registry.names():
+                registry.register(tool)
+
     # Inject the LLM-facing tool schemas so adapters see the right
     # definitions when they call the provider API.
-    agent["tools"] = tool_schemas_for_adapter(
+    schemas = tool_schemas_for_adapter(
         {"tools": raw_tools},
         mcp_servers=mcp_server_map,
         mcp_schemas=mcp_schemas,
     )
+    # W11: include auto-injected memory tools in the adapter schema list.
+    if memory is not None:
+        for mem_tool in (
+            MemoryStoreTool("memory_store", memory),
+            MemorySearchTool("memory_search", memory),
+            MemoryForgetTool("memory_forget", memory),
+        ):
+            if mem_tool.name not in {s["name"] for s in schemas}:
+                schemas.append(
+                    {
+                        "name": mem_tool.name,
+                        "description": {
+                            "memory_store": "Save a fact or preference to long-term memory.",
+                            "memory_search": "Search long-term memory for relevant context.",
+                            "memory_forget": "Delete a memory by key.",
+                        }[mem_tool.name],
+                        "input_schema": mem_tool.schema,
+                    }
+                )
+    agent["tools"] = schemas
     return registry, failures
 
 
@@ -1044,6 +1098,50 @@ def _interpolate(value: Any, vars_: dict) -> Any:
     if isinstance(value, list):
         return [_interpolate(v, vars_) for v in value]
     return value
+
+
+def _store_session_summary(
+    memory: MemoryStore,
+    session_id: str,
+    spec: dict[str, Any],
+    trigger: dict[str, Any],
+    output: str,
+    *,
+    emit: EmitFn,
+) -> None:
+    """Persist a lightweight session summary into long-term memory.
+
+    W11 uses a deterministic summary (trigger keys + final output). A future
+    phase can swap this for an LLM-generated summary while keeping the same
+    MemoryStore contract.
+    """
+    from hnsx_worker.memory import MemoryItem
+
+    summary = {
+        "domain_id": spec.get("id", ""),
+        "trigger_keys": sorted(trigger.keys()) if isinstance(trigger, dict) else [],
+        "output_preview": output[:1000],
+        "stored_at": int(time.time() * 1000),
+    }
+    item = MemoryItem(
+        session_id=session_id,
+        kind="summary",
+        content=summary,
+    )
+    memory.add(item)
+    emit(
+        {
+            "kind": "memory_write",
+            "session_id": session_id,
+            "domain_id": spec.get("id", ""),
+            "agent_id": "",
+            "payload": {
+                "operation": "session_summary",
+                "id": item.id,
+                "kind": item.kind,
+            },
+        }
+    )
 
 
 def _expand(s: str, vars_: dict) -> str:
