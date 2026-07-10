@@ -55,6 +55,30 @@ export interface TraceViewModel {
   observations: JsonValue[]
 }
 
+/**
+ * TraceSummaryViewModel is the list-page projection returned by
+ * GET /api/v1/traces. It carries the per-trace rollup from the server's
+ * observation aggregation. observations[] / agentRefs[] are intentionally
+ * absent — the list view does not need them, and fetching them here would
+ * make pagination expensive on busy traces.
+ */
+export interface TraceSummaryViewModel {
+  traceId: string
+  sessionId: string
+  domainId: string
+  domainVersion: string
+  status: string
+  startedAt: Date | null
+  completedAt: Date | null
+  durationMs?: number
+  observationCount: number
+  totalCostUsd: number
+  promptTokens: number
+  completionTokens: number
+  agentInvocations: number
+  toolInvocations: number
+}
+
 export interface ObservationViewModel {
   observationId: string
   traceId: string
@@ -133,6 +157,47 @@ export function parseJsonField(value: string | undefined | null): JsonValue {
     return JSON.parse(value) as JsonValue
   } catch {
     return value
+  }
+}
+
+/**
+ * Coerce a JSON-derived number to a finite float. JSON never returns NaN,
+ * but missing fields, "null", and unparseable strings need a stable default.
+ */
+export function toNumber(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value === 'string') {
+    const n = Number(value)
+    return Number.isFinite(n) ? n : 0
+  }
+  return 0
+}
+
+export function toInt(value: unknown): number {
+  return Math.trunc(toNumber(value))
+}
+
+/**
+ * Map a single TraceSummary item from /api/v1/traces into the list-page
+ * view model. Numeric fields default to 0; missing ISO strings default to
+ * null (so the page can render '-' via formatDate).
+ */
+export function mapTraceSummaryFromJson(json: Record<string, unknown>): TraceSummaryViewModel {
+  return {
+    traceId: String(json.trace_id ?? json.traceId ?? ''),
+    sessionId: String(json.session_id ?? json.sessionId ?? ''),
+    domainId: String(json.domain_id ?? json.domainId ?? ''),
+    domainVersion: String(json.domain_version ?? json.domainVersion ?? ''),
+    status: String(json.status ?? 'unknown'),
+    startedAt: toDate(json.started_at as string | number | bigint | null | undefined),
+    completedAt: toDate(json.completed_at as string | number | bigint | null | undefined),
+    durationMs: typeof json.duration_ms === 'number' ? json.duration_ms : undefined,
+    observationCount: toInt(json.observation_count),
+    totalCostUsd: toNumber(json.total_cost_usd),
+    promptTokens: toInt(json.prompt_tokens),
+    completionTokens: toInt(json.completion_tokens),
+    agentInvocations: toInt(json.agent_invocations),
+    toolInvocations: toInt(json.tool_invocations),
   }
 }
 
