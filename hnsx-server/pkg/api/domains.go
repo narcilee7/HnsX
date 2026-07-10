@@ -1,23 +1,20 @@
 package api
 
 import (
-	"bytes"
-	"encoding/json"
 	"io"
 	"net/http"
 	"sort"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
-	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/local"
 )
 
 // ListDomains handles GET /api/v1/domains.
-func (s *Server) ListDomains(w http.ResponseWriter, r *http.Request) {
-	items := s.Queries.ListDomains(tenant.FromContext(r.Context()))
+func (s *Server) ListDomains(c *gin.Context) {
+	items := s.Queries.ListDomains(tenantFromGin(c))
 	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
 
 	out := make([]map[string]any, 0, len(items))
@@ -31,7 +28,7 @@ func (s *Server) ListDomains(w http.ResponseWriter, r *http.Request) {
 			"updated_at":  queries.FormatTimeValue(d.UpdatedAt),
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"items":  out,
 		"total":  len(out),
 		"limit":  len(out),
@@ -39,15 +36,15 @@ func (s *Server) ListDomains(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetDomain handles GET /api/v1/domains/{id}.
-func (s *Server) GetDomain(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	item, d, ok := s.Queries.GetDomain(tenant.FromContext(r.Context()), id)
+// GetDomain handles GET /api/v1/domains/:id.
+func (s *Server) GetDomain(c *gin.Context) {
+	id := c.Param("id")
+	item, d, ok := s.Queries.GetDomain(tenantFromGin(c), id)
 	if !ok {
-		writeError(w, r, NewDomainNotFound(id))
+		writeError(c, NewDomainNotFound(id))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"id":          item.ID,
 		"version":     item.Version,
 		"description": item.Description,
@@ -59,81 +56,78 @@ func (s *Server) GetDomain(w http.ResponseWriter, r *http.Request) {
 }
 
 // RegisterDomain handles POST /api/v1/domains.
-func (s *Server) RegisterDomain(w http.ResponseWriter, r *http.Request) {
-	res, err := s.DomainCommands.Register(r.Context(), tenant.FromContext(r.Context()), r.Body, r.Header.Get("Content-Type"))
+func (s *Server) RegisterDomain(c *gin.Context) {
+	res, err := s.DomainCommands.Register(c.Request.Context(), tenantFromGin(c), c.Request.Body, c.ContentType())
 	if err != nil {
 		if err == commands.ErrDomainExists {
-			writeError(w, r, &APIError{
+			writeError(c, &APIError{
 				Code:    "DOMAIN_EXISTS",
 				Message: err.Error(),
 				Details: map[string]any{"domain_id": res.Domain.ID},
 			})
 			return
 		}
-		writeError(w, r, NewValidation(err))
+		writeError(c, NewValidation(err))
 		return
 	}
 
-	_ = s.LoadDomainPolicy(r.Context(), res.Domain.ID)
+	_ = s.LoadDomainPolicy(c.Request.Context(), res.Domain.ID)
 
-	w.Header().Set("Location", commands.BuildDomainLocation(res.Domain.ID))
-	writeJSON(w, http.StatusCreated, map[string]any{
+	c.Header("Location", commands.BuildDomainLocation(res.Domain.ID))
+	writeJSON(c, http.StatusCreated, map[string]any{
 		"id":         res.Domain.ID,
 		"version":    res.Domain.Version,
 		"created_at": queries.FormatTimeValue(res.CreatedAt),
 	})
 }
 
-// UpdateDomain handles PUT /api/v1/domains/{id}.
-func (s *Server) UpdateDomain(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	updated, err := s.DomainCommands.Update(r.Context(), tenant.FromContext(r.Context()), id, r.Body, r.Header.Get("Content-Type"))
+// UpdateDomain handles PUT /api/v1/domains/:id.
+func (s *Server) UpdateDomain(c *gin.Context) {
+	id := c.Param("id")
+	updated, err := s.DomainCommands.Update(c.Request.Context(), tenantFromGin(c), id, c.Request.Body, c.ContentType())
 	if err != nil {
 		switch err {
 		case commands.ErrDomainNotFound:
-			writeError(w, r, NewDomainNotFound(id))
+			writeError(c, NewDomainNotFound(id))
 		case commands.ErrIDMismatch:
-			writeError(w, r, &APIError{
+			writeError(c, &APIError{
 				Code:    "INVALID_REQUEST",
 				Message: "domain id in body does not match URL",
 			})
 		default:
-			writeError(w, r, NewValidation(err))
+			writeError(c, NewValidation(err))
 		}
 		return
 	}
 
-	_ = s.LoadDomainPolicy(r.Context(), updated.ID)
+	_ = s.LoadDomainPolicy(c.Request.Context(), updated.ID)
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"id":         updated.ID,
 		"version":    updated.Version,
 		"updated_at": updated.UpdatedAt,
 	})
 }
 
-// DeleteDomain handles DELETE /api/v1/domains/{id}.
-func (s *Server) DeleteDomain(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if err := s.DomainCommands.Delete(r.Context(), tenant.FromContext(r.Context()), id); err != nil {
-		writeError(w, r, NewDomainNotFound(id))
+// DeleteDomain handles DELETE /api/v1/domains/:id.
+func (s *Server) DeleteDomain(c *gin.Context) {
+	id := c.Param("id")
+	if err := s.DomainCommands.Delete(c.Request.Context(), tenantFromGin(c), id); err != nil {
+		writeError(c, NewDomainNotFound(id))
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	c.Status(http.StatusNoContent)
 }
 
-// ListDomainVersions handles GET /api/v1/domains/{id}/versions.
-//
-// Phase 1 returns the currently registered version only — multi-version
-// history is a future PR.
-func (s *Server) ListDomainVersions(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	_, d, ok := s.Queries.GetDomain(tenant.FromContext(r.Context()), id)
+// ListDomainVersions handles GET /api/v1/domains/:id/versions.
+func (s *Server) ListDomainVersions(c *gin.Context) {
+	id := c.Param("id")
+	_, d, ok := s.Queries.GetDomain(tenantFromGin(c), id)
 	if !ok {
-		writeError(w, r, NewDomainNotFound(id))
+		writeError(c, NewDomainNotFound(id))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"items": []map[string]any{{
 			"version":    d.Version,
 			"created_at": d.CreatedAt,
@@ -143,54 +137,38 @@ func (s *Server) ListDomainVersions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ValidateDomain handles POST /api/v1/domains/{id}/validate.
-//
-// Phase 1 re-validates the body against the v2 loader and returns the same
-// summary as `hnsx validate`.
-func (s *Server) ValidateDomain(w http.ResponseWriter, r *http.Request) {
-	summary, err := local.ValidateDomain(r.Body, r.Header.Get("Content-Type"))
+// ValidateDomain handles POST /api/v1/domains/:id/validate.
+func (s *Server) ValidateDomain(c *gin.Context) {
+	summary, err := local.ValidateDomain(c.Request.Body, c.ContentType())
 	if err != nil {
-		writeError(w, r, NewValidation(err))
+		writeError(c, NewValidation(err))
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"valid":       summary.Valid,
 		"id":          summary.ID,
 		"version":     summary.Version,
 		"mode":        summary.Mode,
 		"agent_count": summary.AgentCount,
 		"step_count":  summary.StepCount,
-		"tenant_id":   tenant.FromContext(r.Context()),
+		"tenant_id":   tenantFromGin(c),
 	})
 }
 
-// TriggerDomain handles POST /api/v1/domains/{id}/run.
-//
-// Equivalent to TriggerSession but the domain ID comes from the URL.
-func (s *Server) TriggerDomain(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+// TriggerDomain handles POST /api/v1/domains/:id/run.
+func (s *Server) TriggerDomain(c *gin.Context) {
+	id := c.Param("id")
 	var body struct {
 		Trigger map[string]any `json:"trigger"`
 	}
-	if err := decodeJSONBody(r, &body); err != nil {
-		// Empty body is fine; default to {}.
+	if err := decodeJSONBody(c, &body); err != nil {
 		body.Trigger = map[string]any{}
 	}
-	s.triggerSession(w, r, tenant.FromContext(r.Context()), id, body.Trigger)
+	s.triggerSession(c, tenantFromGin(c), id, body.Trigger)
 }
 
-// decodeJSONBody is a small wrapper kept in this file for handler use.
-func decodeJSONBody(r *http.Request, v any) error {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return err
-	}
-	defer r.Body.Close()
-	body = bytes.TrimSpace(body)
-	if len(body) == 0 {
-		body = []byte("{}")
-	}
-	return json.Unmarshal(body, v)
+// readDomainBody is a small helper kept in this file for handler use.
+func readDomainBody(r io.Reader) ([]byte, error) {
+	return io.ReadAll(r)
 }
-
