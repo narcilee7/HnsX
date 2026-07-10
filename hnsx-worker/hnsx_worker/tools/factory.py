@@ -30,6 +30,7 @@ from .http import HttpTool, HttpToolConfig
 from .mcp_client import McpClientTool, McpToolConfig
 from .python import PythonTool, PythonToolConfig
 from .sql import SqlTool, SqlToolConfig
+from .delegate import DelegateTool, DelegateToolConfig
 
 # Mapping from spec type string → (config_class, tool_class).
 # Adding a new built-in tool is a one-line edit here.
@@ -38,7 +39,33 @@ _BUILTIN_TOOLS: dict[str, tuple[type, type]] = {
     "mcp_client": (McpToolConfig, McpClientTool),
     "sql": (SqlToolConfig, SqlTool),
     "python": (PythonToolConfig, PythonTool),
+    "delegate": (DelegateToolConfig, DelegateTool),
 }
+
+
+def build_delegate_tool(
+    spec: dict[str, Any],
+    *,
+    harness_spec: dict[str, Any],
+    session_config: dict[str, Any],
+    stop_event: Any,
+) -> Tool:
+    """Build a ``delegate_to`` tool directly from the DomainSpec.
+
+    The factory's ``build_tool`` path expects the delegate tool to be
+    pre-configured with the surrounding harness/session. Callers (W12
+    agent strategies) call this helper directly so they don't have to
+    repeat the wiring.
+    """
+    return DelegateTool(
+        str(spec.get("name", "delegate_to")),
+        DelegateToolConfig.from_spec(
+            spec.get("config") or {},
+            spec=harness_spec,
+            session_config=session_config,
+            stop_event=stop_event,
+        ),
+    )
 
 
 def build_tool(

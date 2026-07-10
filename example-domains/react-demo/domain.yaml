@@ -1,0 +1,57 @@
+id: react-demo
+version: 0.1.0
+description: |
+  W12 ReAct demonstration: the primary agent reasons step-by-step
+  (Thought → Action → Observation) using the http tool until it has
+  enough information to answer. Loop detection is enabled so the agent
+  stops early if it repeats the same call too many times.
+harness:
+  agents:
+    researcher:
+      id: researcher
+      provider: openai
+      model: gpt-4o-mini
+      adapter:
+        kind: openai
+        timeout_seconds: 60
+      system_prompt: researcher-prompt
+  prompts:
+    researcher-prompt:
+      type: system
+      template: |
+        You are a research assistant with an http tool. Use ReAct:
+        briefly explain each step, then call at most one tool. Stop when
+        you have enough information to answer concisely.
+  tools:
+    fetch_url:
+      type: http
+      name: fetch_url
+      description: Fetch a URL and return the response body.
+      config:
+        base_url: https://example.com
+        schema:
+          type: object
+          properties:
+            path:
+              type: string
+              description: URL path beginning with "/".
+          required:
+            - path
+  policy:
+    permissions:
+      allow_network: true
+      allow_file_write: false
+      allow_shell: false
+      allow_file_delete: false
+    budget:
+      max_cost_usd: 0.25
+      max_turns: 8
+  session:
+    mode: multi-turn
+    agent: researcher
+  orchestration:
+    strategy: react
+    react:
+      max_steps: 6
+      loop_threshold: 3
+      reflection: true
