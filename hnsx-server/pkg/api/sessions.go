@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
@@ -22,15 +22,14 @@ import (
 )
 
 // ListSessions handles GET /api/v1/sessions.
-func (s *Server) ListSessions(w http.ResponseWriter, r *http.Request) {
-	items := s.Queries.ListSessions(tenant.FromContext(r.Context()))
+func (s *Server) ListSessions(c *gin.Context) {
+	items := s.Queries.ListSessions(tenantFromGin(c))
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].StartedAt.After(items[j].StartedAt)
 	})
 
-	q := r.URL.Query()
-	domainFilter := q.Get("domain")
-	stateFilter := q.Get("state")
+	domainFilter := c.Query("domain")
+	stateFilter := c.Query("state")
 
 	out := make([]map[string]any, 0, len(items))
 	for _, sess := range items {
@@ -52,7 +51,7 @@ func (s *Server) ListSessions(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"items":  out,
 		"total":  len(out),
 		"limit":  len(out),
@@ -60,35 +59,35 @@ func (s *Server) ListSessions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetSession handles GET /api/v1/sessions/{id}.
-func (s *Server) GetSession(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	sess, ok := s.Queries.GetSession(tenant.FromContext(r.Context()), id)
+// GetSession handles GET /api/v1/sessions/:id.
+func (s *Server) GetSession(c *gin.Context) {
+	id := c.Param("id")
+	sess, ok := s.Queries.GetSession(tenantFromGin(c), id)
 	if !ok {
-		writeError(w, r, NewSessionNotFound(id))
+		writeError(c, NewSessionNotFound(id))
 		return
 	}
-	writeJSON(w, http.StatusOK, jsonSession(sess))
+	writeJSON(c, http.StatusOK, jsonSession(sess))
 }
 
 // TriggerSession handles POST /api/v1/sessions.
-func (s *Server) TriggerSession(w http.ResponseWriter, r *http.Request) {
+func (s *Server) TriggerSession(c *gin.Context) {
 	var body struct {
 		DomainID      string         `json:"domain_id"`
 		DomainVersion string         `json:"domain_version,omitempty"`
 		Trigger       map[string]any `json:"trigger,omitempty"`
 	}
-	if err := decodeJSONBody(r, &body); err != nil {
-		writeError(w, r, NewValidation(err))
+	if err := decodeJSONBody(c, &body); err != nil {
+		writeError(c, NewValidation(err))
 		return
 	}
-	s.triggerSession(w, r, tenant.FromContext(r.Context()), body.DomainID, body.Trigger)
+	s.triggerSession(c, tenantFromGin(c), body.DomainID, body.Trigger)
 }
 
-// triggerSession is the shared backend for /sessions and /domains/{id}/run.
-func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, tenantID tenant.ID, domainID string, trigger map[string]any) {
+// triggerSession is the shared backend for /sessions and /domains/:id/run.
+func (s *Server) triggerSession(c *gin.Context, tenantID tenant.ID, domainID string, trigger map[string]any) {
 	if domainID == "" {
-		writeError(w, r, &APIError{
+		writeError(c, &APIError{
 			Code:    "INVALID_REQUEST",
 			Message: "domain_id is required",
 		})
@@ -96,13 +95,13 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, tenantID
 	}
 	_, d, ok := s.Queries.GetDomain(tenantID, domainID)
 	if !ok {
-		writeError(w, r, NewDomainNotFound(domainID))
+		writeError(c, NewDomainNotFound(domainID))
 		return
 	}
 
-	sess, err := s.SessionCommands.Trigger(r.Context(), tenantID, d, trigger, runtime.NewSessionID)
+	sess, err := s.SessionCommands.Trigger(c.Request.Context(), tenantID, d, trigger, runtime.NewSessionID)
 	if err != nil {
-		writeError(w, r, NewInternal(err))
+		writeError(c, NewInternal(err))
 		return
 	}
 
@@ -110,11 +109,11 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, tenantID
 
 	if s.SessionQueue != nil {
 		if err := s.enqueueForWorker(tenantID, sess, d, trigger); err != nil {
-			writeError(w, r, NewInternal(err))
+			writeError(c, NewInternal(err))
 			return
 		}
-		w.Header().Set("Location", commands.BuildSessionLocation(sess.ID))
-		writeJSON(w, http.StatusAccepted, map[string]any{
+		c.Header("Location", commands.BuildSessionLocation(sess.ID))
+		writeJSON(c, http.StatusAccepted, map[string]any{
 			"id":    sess.ID,
 			"state": sess.State,
 		})
@@ -122,14 +121,14 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, tenantID
 	}
 
 	if s.Executor == nil {
-		writeError(w, r, NewInternal(errors.New("executor not configured")))
+		writeError(c, NewInternal(errors.New("executor not configured")))
 		return
 	}
 
 	go s.runInBackground(tenantID, sess, d, bc, trigger)
 
-	w.Header().Set("Location", commands.BuildSessionLocation(sess.ID))
-	writeJSON(w, http.StatusAccepted, map[string]any{
+	c.Header("Location", commands.BuildSessionLocation(sess.ID))
+	writeJSON(c, http.StatusAccepted, map[string]any{
 		"id":    sess.ID,
 		"state": sess.State,
 	})
@@ -196,16 +195,16 @@ func (s *Server) runInBackground(tenantID tenant.ID, sess *app.RegisteredSession
 	})
 }
 
-// CancelSession handles POST /api/v1/sessions/{id}/cancel.
-func (s *Server) CancelSession(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	sess, err := s.SessionCommands.Cancel(r.Context(), tenant.FromContext(r.Context()), id)
+// CancelSession handles POST /api/v1/sessions/:id/cancel.
+func (s *Server) CancelSession(c *gin.Context) {
+	id := c.Param("id")
+	sess, err := s.SessionCommands.Cancel(c.Request.Context(), tenantFromGin(c), id)
 	if err != nil {
 		if errors.Is(err, commands.ErrSessionNotFound) {
-			writeError(w, r, NewSessionNotFound(id))
+			writeError(c, NewSessionNotFound(id))
 			return
 		}
-		writeError(w, r, &APIError{
+		writeError(c, &APIError{
 			Code:    "INVALID_REQUEST",
 			Message: err.Error(),
 		})
@@ -220,34 +219,34 @@ func (s *Server) CancelSession(w http.ResponseWriter, r *http.Request) {
 
 	s.AppState.DetachBroadcaster(id)
 
-	writeJSON(w, http.StatusOK, jsonSession(sess))
+	writeJSON(c, http.StatusOK, jsonSession(sess))
 }
 
-// RerunSession handles POST /api/v1/sessions/{id}/rerun.
-func (s *Server) RerunSession(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	_, err := s.SessionCommands.Rerun(r.Context(), tenant.FromContext(r.Context()), id)
+// RerunSession handles POST /api/v1/sessions/:id/rerun.
+func (s *Server) RerunSession(c *gin.Context) {
+	id := c.Param("id")
+	_, err := s.SessionCommands.Rerun(c.Request.Context(), tenantFromGin(c), id)
 	if err != nil {
 		if errors.Is(err, commands.ErrSessionNotFound) {
-			writeError(w, r, NewSessionNotFound(id))
+			writeError(c, NewSessionNotFound(id))
 			return
 		}
-		writeError(w, r, NewInternal(err))
+		writeError(c, NewInternal(err))
 		return
 	}
 	// Re-trigger uses the same backend as a fresh session.
-	s.triggerSession(w, r, tenant.FromContext(r.Context()), id, nil)
+	s.triggerSession(c, tenantFromGin(c), id, nil)
 }
 
-// GetSessionTrace handles GET /api/v1/sessions/{id}/trace.
+// GetSessionTrace handles GET /api/v1/sessions/:id/trace.
 //
 // Returns the persisted observation trace for the session. When TraceService
 // is not configured, falls back to the in-memory broadcaster replay buffer.
-func (s *Server) GetSessionTrace(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	sess, ok := s.Queries.GetSession(tenant.FromContext(r.Context()), id)
+func (s *Server) GetSessionTrace(c *gin.Context) {
+	id := c.Param("id")
+	sess, ok := s.Queries.GetSession(tenantFromGin(c), id)
 	if !ok {
-		writeError(w, r, NewSessionNotFound(id))
+		writeError(c, NewSessionNotFound(id))
 		return
 	}
 
@@ -256,7 +255,7 @@ func (s *Server) GetSessionTrace(w http.ResponseWriter, r *http.Request) {
 	if s.TraceService != nil {
 		records, err := s.TraceService.BySession(id)
 		if err != nil {
-			writeError(w, r, NewInternal(err))
+			writeError(c, NewInternal(err))
 			return
 		}
 		for _, rec := range records {
@@ -277,7 +276,7 @@ func (s *Server) GetSessionTrace(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"trace_id":     id,
 		"session_id":   id,
 		"domain_id":    sess.DomainID,
@@ -285,64 +284,59 @@ func (s *Server) GetSessionTrace(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// StreamSessionEvents handles GET /api/v1/sessions/{id}/events (SSE).
+// StreamSessionEvents handles GET /api/v1/sessions/:id/events (SSE).
 //
 // On open, it replays the broadcaster's current snapshot, then streams new
 // events as they are published. Closes when the session completes or the
 // client disconnects.
-func (s *Server) StreamSessionEvents(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if _, ok := s.Queries.GetSession(tenant.FromContext(r.Context()), id); !ok {
-		writeError(w, r, NewSessionNotFound(id))
+func (s *Server) StreamSessionEvents(c *gin.Context) {
+	id := c.Param("id")
+	if _, ok := s.Queries.GetSession(tenantFromGin(c), id); !ok {
+		writeError(c, NewSessionNotFound(id))
 		return
 	}
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		writeError(w, r, NewInternal(errors.New("streaming unsupported")))
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+	c.Status(http.StatusOK)
+	c.Writer.Flush()
 
 	bc := s.AppState.AttachBroadcaster(id)
 	ch, unsubscribe := bc.Subscribe()
 	defer unsubscribe()
 
-	writeSSE(w, flusher, "state", map[string]any{"state": "subscribed", "session_id": id})
+	writeSSE(c, "state", map[string]any{"state": "subscribed", "session_id": id})
 
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-r.Context().Done():
+		case <-c.Request.Context().Done():
 			return
 		case obs, open := <-ch:
 			if !open {
-				writeSSE(w, flusher, "done", map[string]any{})
+				writeSSE(c, "done", map[string]any{})
 				return
 			}
-			writeSSE(w, flusher, "observation", obs)
+			writeSSE(c, "observation", obs)
 		case <-ticker.C:
-			writeSSE(w, flusher, "heartbeat", map[string]any{"ts": time.Now().UTC().Format(time.RFC3339)})
+			writeSSE(c, "heartbeat", map[string]any{"ts": time.Now().UTC().Format(time.RFC3339)})
 		}
 	}
 }
 
 // writeSSE serializes payload as an SSE event and flushes.
-func writeSSE(w http.ResponseWriter, flusher http.Flusher, event string, payload any) {
+func writeSSE(c *gin.Context, event string, payload any) {
 	b, err := json.Marshal(payload)
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(w, "event: %s\n", event)
-	fmt.Fprintf(w, "data: %s\n\n", b)
-	flusher.Flush()
+	fmt.Fprintf(c.Writer, "event: %s\n", event)
+	fmt.Fprintf(c.Writer, "data: %s\n\n", b)
+	c.Writer.Flush()
 }
 
 // ----------------------------------------------------------------------------
@@ -402,4 +396,3 @@ func sessionSummary(sess queries.SessionListItem) map[string]any {
 	out["total_cost_usd"] = 0.0
 	return out
 }
-

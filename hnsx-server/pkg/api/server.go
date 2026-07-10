@@ -8,13 +8,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
 	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
 	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
-	sessionmodel "github.com/hnsx-io/hnsx/server/internal/session/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
@@ -36,9 +37,7 @@ type BuildInfo struct {
 // (internal/app) and only handles HTTP protocol concerns: routing, decoding,
 // encoding, and SSE streaming.
 type Server struct {
-	// App is the composed server-side application. Existing transitional
-	// fields below are populated from App in the constructor so that Phase 0
-	// handlers continue to work unchanged; Phase 1 will remove them.
+	// App is the composed server-side application.
 	App *app.Application
 
 	BuildInfo BuildInfo
@@ -86,15 +85,12 @@ var ErrDomainNotFound = errors.New("domain not found")
 type Domain = app.RegisteredDomain
 
 // NewServer constructs an API Server wired to the supplied Application.
-// BuildInfo should be supplied by the main package; pass an empty struct for tests.
 func NewServer(build BuildInfo, application *app.Application) *Server {
 	return NewServerWithWorkerPool(build, application)
 }
 
 // NewServerWithWorkerPool constructs an API Server wired to the V1.1 worker
-// pool through the supplied Application. When Application.WorkerRegistry and
-// SessionQueue are non-nil, session triggers are enqueued for Python workers
-// instead of executed locally.
+// pool through the supplied Application.
 func NewServerWithWorkerPool(build BuildInfo, application *app.Application) *Server {
 	return &Server{
 		App:             application,
@@ -114,16 +110,14 @@ func NewServerWithWorkerPool(build BuildInfo, application *app.Application) *Ser
 	}
 }
 
-// WithWorkerPool wires an existing server into the V1.1 worker pool. Used by
-// tests and by main when the gRPC control plane is enabled.
+// WithWorkerPool wires an existing server into the V1.1 worker pool.
 func (s *Server) WithWorkerPool(reg *worker.Registry, q worker.SessionQueue) *Server {
 	s.WorkerRegistry = reg
 	s.SessionQueue = q
 	return s
 }
 
-// LoadDomainPolicy persists the policy for the named domain. It is called
-// automatically after domain registration/update and bootstrap seeding.
+// LoadDomainPolicy persists the policy for the named domain.
 func (s *Server) LoadDomainPolicy(ctx context.Context, domainID string) error {
 	if s.PolicyService == nil {
 		return nil
@@ -135,13 +129,12 @@ func (s *Server) LoadDomainPolicy(ctx context.Context, domainID string) error {
 	return s.PolicyService.LoadDomainPolicy(domainID, d.Spec)
 }
 
-// Handler returns the http.Handler with the entire API surface mounted.
-func (s *Server) Handler() http.Handler {
-	return s.drainMiddleware(newRouter(s))
+// Handler returns the gin.Engine with the entire API surface mounted.
+func (s *Server) Handler() *gin.Engine {
+	return newRouter(s)
 }
 
-// Listen starts the HTTP server on addr. Blocks until Shutdown is called or
-// the listener fails.
+// Listen starts the HTTP server on addr. Blocks until Shutdown is called.
 func (s *Server) Listen(addr string) error {
 	s.httpServer = &http.Server{
 		Addr:              addr,
@@ -166,7 +159,6 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 // Drain marks the server as draining and waits for active requests to finish.
-// New requests receive 503 Service Unavailable. Call before Shutdown.
 func (s *Server) Drain(ctx context.Context) error {
 	s.draining.Store(true)
 	done := make(chan struct{})
@@ -182,19 +174,14 @@ func (s *Server) Drain(ctx context.Context) error {
 	}
 }
 
-// drainMiddleware tracks in-flight requests and rejects new ones once draining.
-func (s *Server) drainMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.draining.Load() {
-			w.Header().Set("Retry-After", "0")
-			http.Error(w, "server is shutting down", http.StatusServiceUnavailable)
-			return
-		}
-		s.activeRequests.Add(1)
-		defer s.activeRequests.Done()
-		next.ServeHTTP(w, r)
-	})
-}
+// IsDraining reports whether the server is currently draining.
+func (s *Server) IsDraining() bool { return s.draining.Load() }
+
+// TrackRequest marks a request as in-flight. Callers must call Done().
+func (s *Server) TrackRequest() { s.activeRequests.Add(1) }
+
+// DoneRequest marks a request as finished.
+func (s *Server) DoneRequest() { s.activeRequests.Done() }
 
 // timeoutCtx derives a request-scoped context with the configured timeout.
 func (s *Server) timeoutCtx(r *http.Request) (context.Context, context.CancelFunc) {
@@ -202,8 +189,7 @@ func (s *Server) timeoutCtx(r *http.Request) (context.Context, context.CancelFun
 }
 
 // PublishObservation forwards an observation into the named session's
-// broadcaster so SSE clients see it. It is the bridge between the gRPC
-// worker StreamChannel and the HTTP /events endpoint.
+// broadcaster so SSE clients see it.
 func (s *Server) PublishObservation(sessionID string, obs runtime.Observation) bool {
 	if s.AppState == nil {
 		return false
@@ -211,18 +197,8 @@ func (s *Server) PublishObservation(sessionID string, obs runtime.Observation) b
 	return s.AppState.PublishObservation(sessionID, obs)
 }
 
-// UpdateSessionState updates the session state through the session service.
-// Called by the scheduler when the worker reports a status update.
-func (s *Server) UpdateSessionState(tenantID tenant.ID, sessionID, state string) {
-	if s.App == nil || s.App.SessionService == nil {
-		return
-	}
-	_, _ = s.App.SessionService.UpdateState(sessionID, sessionmodel.State(state))
-}
-
 // RegisterBootstrapDomain inserts an already-validated *spec.DomainSpec
-// into the domain registry. Intended for the `seed-from` path in main,
-// not for the public API.
+// into the domain registry. Intended for the `seed-from` path in main.
 func (s *Server) RegisterBootstrapDomain(tenantID tenant.ID, v any) {
 	if s.App == nil || s.App.DomainService == nil {
 		return

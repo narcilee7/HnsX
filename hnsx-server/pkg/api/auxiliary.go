@@ -6,22 +6,20 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
-	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
 
 // ListTraces handles GET /api/v1/traces — returns the per-domain trace index.
-func (s *Server) ListTraces(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	domainFilter := q.Get("domain")
-	limit := intQuery(r, "limit", 50)
-	offset := intQuery(r, "offset", 0)
+func (s *Server) ListTraces(c *gin.Context) {
+	domainFilter := c.Query("domain")
+	limit := intQueryGin(c, "limit", 50)
+	offset := intQueryGin(c, "offset", 0)
 
-	items := s.Queries.ListSessions(tenant.FromContext(r.Context()))
+	items := s.Queries.ListSessions(tenantFromGin(c))
 	out := make([]map[string]any, 0, len(items))
 	for _, sess := range items {
 		if domainFilter != "" && sess.DomainID != domainFilter {
@@ -45,7 +43,7 @@ func (s *Server) ListTraces(w http.ResponseWriter, r *http.Request) {
 	if end > len(out) {
 		end = len(out)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"items":  out[offset:end],
 		"total":  len(out),
 		"limit":  limit,
@@ -53,15 +51,15 @@ func (s *Server) ListTraces(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetTrace handles GET /api/v1/traces/{traceId}.
-func (s *Server) GetTrace(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "traceId")
-	sess, ok := s.Queries.GetSession(tenant.FromContext(r.Context()), id)
+// GetTrace handles GET /api/v1/traces/:traceId.
+func (s *Server) GetTrace(c *gin.Context) {
+	id := c.Param("traceId")
+	sess, ok := s.Queries.GetSession(tenantFromGin(c), id)
 	if !ok {
-		writeError(w, r, NewSessionNotFound(id))
+		writeError(c, NewSessionNotFound(id))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"trace_id":      sess.ID,
 		"session_id":    sess.ID,
 		"domain_id":     sess.DomainID,
@@ -73,8 +71,8 @@ func (s *Server) GetTrace(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListApprovals handles GET /api/v1/approvals.
-func (s *Server) ListApprovals(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+func (s *Server) ListApprovals(c *gin.Context) {
+	writeJSON(c, http.StatusOK, map[string]any{
 		"items":  []map[string]any{},
 		"total":  0,
 		"limit":  0,
@@ -82,32 +80,32 @@ func (s *Server) ListApprovals(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ApproveApproval handles POST /api/v1/approvals/{id}/approve.
-func (s *Server) ApproveApproval(w http.ResponseWriter, r *http.Request) {
-	writeError(w, r, &APIError{
+// ApproveApproval handles POST /api/v1/approvals/:id/approve.
+func (s *Server) ApproveApproval(c *gin.Context) {
+	writeError(c, &APIError{
 		Code:    "APPROVAL_NOT_FOUND",
 		Message: "approval subsystem not enabled in this build",
 	})
 }
 
-// RejectApproval handles POST /api/v1/approvals/{id}/reject.
-func (s *Server) RejectApproval(w http.ResponseWriter, r *http.Request) {
-	writeError(w, r, &APIError{
+// RejectApproval handles POST /api/v1/approvals/:id/reject.
+func (s *Server) RejectApproval(c *gin.Context) {
+	writeError(c, &APIError{
 		Code:    "APPROVAL_NOT_FOUND",
 		Message: "approval subsystem not enabled in this build",
 	})
 }
 
 // ListEvalSets handles GET /api/v1/evals.
-func (s *Server) ListEvalSets(w http.ResponseWriter, r *http.Request) {
-	limit := intQuery(r, "limit", 50)
-	offset := intQuery(r, "offset", 0)
+func (s *Server) ListEvalSets(c *gin.Context) {
+	limit := intQueryGin(c, "limit", 50)
+	offset := intQueryGin(c, "offset", 0)
 	if limit <= 0 {
 		limit = 50
 	}
 
 	if s.EvalService == nil {
-		writeJSON(w, http.StatusOK, map[string]any{
+		writeJSON(c, http.StatusOK, map[string]any{
 			"items":  []map[string]any{},
 			"total":  0,
 			"limit":  limit,
@@ -118,7 +116,7 @@ func (s *Server) ListEvalSets(w http.ResponseWriter, r *http.Request) {
 
 	sets, total, err := s.EvalService.ListSets(limit, offset)
 	if err != nil {
-		writeError(w, r, NewInternal(err))
+		writeError(c, NewInternal(err))
 		return
 	}
 
@@ -134,7 +132,7 @@ func (s *Server) ListEvalSets(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"items":  out,
 		"total":  total,
 		"limit":  limit,
@@ -143,29 +141,29 @@ func (s *Server) ListEvalSets(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateEvalSet handles POST /api/v1/evals.
-func (s *Server) CreateEvalSet(w http.ResponseWriter, r *http.Request) {
+func (s *Server) CreateEvalSet(c *gin.Context) {
 	if s.EvalService == nil {
-		writeError(w, r, NewInternal(errors.New("eval service not configured")))
+		writeError(c, NewInternal(errors.New("eval service not configured")))
 		return
 	}
 
 	var body struct {
-		SetID       string              `json:"set_id"`
-		DomainID    string              `json:"domain_id"`
-		Description string              `json:"description,omitempty"`
+		SetID       string               `json:"set_id"`
+		DomainID    string               `json:"domain_id"`
+		Description string               `json:"description,omitempty"`
 		Cases       []evalmodel.EvalCase `json:"cases"`
 	}
-	if err := decodeJSONBody(r, &body); err != nil {
-		writeError(w, r, NewValidation(err))
+	if err := decodeJSONBody(c, &body); err != nil {
+		writeError(c, NewValidation(err))
 		return
 	}
 	if body.SetID == "" || body.DomainID == "" {
-		writeError(w, r, NewValidation(errors.New("set_id and domain_id are required")))
+		writeError(c, NewValidation(errors.New("set_id and domain_id are required")))
 		return
 	}
-	_, _, ok := s.Queries.GetDomain(tenant.FromContext(r.Context()), body.DomainID)
+	_, _, ok := s.Queries.GetDomain(tenantFromGin(c), body.DomainID)
 	if !ok {
-		writeError(w, r, NewDomainNotFound(body.DomainID))
+		writeError(c, NewDomainNotFound(body.DomainID))
 		return
 	}
 
@@ -177,12 +175,12 @@ func (s *Server) CreateEvalSet(w http.ResponseWriter, r *http.Request) {
 		Cases:       body.Cases,
 	}
 	if err := s.EvalService.CreateSet(set); err != nil {
-		writeError(w, r, NewInternal(err))
+		writeError(c, NewInternal(err))
 		return
 	}
 
-	w.Header().Set("Location", "/api/v1/evals/"+set.ID)
-	writeJSON(w, http.StatusCreated, map[string]any{
+	c.Header("Location", "/api/v1/evals/"+set.ID)
+	writeJSON(c, http.StatusCreated, map[string]any{
 		"id":         set.ID,
 		"set_id":     set.SetID,
 		"domain_id":  set.DomainID,
@@ -190,11 +188,11 @@ func (s *Server) CreateEvalSet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetEvalSet handles GET /api/v1/evals/{setId}.
-func (s *Server) GetEvalSet(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "setId")
+// GetEvalSet handles GET /api/v1/evals/:setId.
+func (s *Server) GetEvalSet(c *gin.Context) {
+	id := c.Param("setId")
 	if s.EvalService == nil {
-		writeError(w, r, &APIError{
+		writeError(c, &APIError{
 			Code:    "EVAL_SET_NOT_FOUND",
 			Message: "eval service not configured",
 		})
@@ -204,13 +202,13 @@ func (s *Server) GetEvalSet(w http.ResponseWriter, r *http.Request) {
 	set, err := s.EvalService.GetSet(id)
 	if err != nil {
 		if errors.Is(err, evalmodel.ErrEvalSetNotFound) {
-			writeError(w, r, &APIError{
+			writeError(c, &APIError{
 				Code:    "EVAL_SET_NOT_FOUND",
 				Message: err.Error(),
 			})
 			return
 		}
-		writeError(w, r, NewInternal(err))
+		writeError(c, NewInternal(err))
 		return
 	}
 
@@ -225,7 +223,7 @@ func (s *Server) GetEvalSet(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"id":          set.ID,
 		"set_id":      set.SetID,
 		"domain_id":   set.DomainID,
@@ -236,11 +234,11 @@ func (s *Server) GetEvalSet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// RunEval handles POST /api/v1/evals/{setId}/run.
-func (s *Server) RunEval(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "setId")
+// RunEval handles POST /api/v1/evals/:setId/run.
+func (s *Server) RunEval(c *gin.Context) {
+	id := c.Param("setId")
 	if s.EvalService == nil {
-		writeError(w, r, &APIError{
+		writeError(c, &APIError{
 			Code:    "ADAPTER_NOT_IMPLEMENTED",
 			Message: "eval runner not yet implemented (target: Phase 2)",
 		})
@@ -250,19 +248,19 @@ func (s *Server) RunEval(w http.ResponseWriter, r *http.Request) {
 	set, err := s.EvalService.GetSet(id)
 	if err != nil {
 		if errors.Is(err, evalmodel.ErrEvalSetNotFound) {
-			writeError(w, r, &APIError{
+			writeError(c, &APIError{
 				Code:    "EVAL_SET_NOT_FOUND",
 				Message: err.Error(),
 			})
 			return
 		}
-		writeError(w, r, NewInternal(err))
+		writeError(c, NewInternal(err))
 		return
 	}
 
-	_, domain, ok := s.Queries.GetDomain(tenant.FromContext(r.Context()), set.DomainID)
+	_, domain, ok := s.Queries.GetDomain(tenantFromGin(c), set.DomainID)
 	if !ok {
-		writeError(w, r, NewDomainNotFound(set.DomainID))
+		writeError(c, NewDomainNotFound(set.DomainID))
 		return
 	}
 
@@ -276,7 +274,7 @@ func (s *Server) RunEval(w http.ResponseWriter, r *http.Request) {
 		TotalCases:    len(set.Cases),
 	}
 	if err := s.EvalService.CreateRun(run); err != nil {
-		writeError(w, r, NewInternal(err))
+		writeError(c, NewInternal(err))
 		return
 	}
 
@@ -285,18 +283,18 @@ func (s *Server) RunEval(w http.ResponseWriter, r *http.Request) {
 	// sessions in batch.
 	_ = s.EvalService.FinishRun(run.ID, 0.0, 0, run.TotalCases, 0, 0)
 
-	w.Header().Set("Location", fmt.Sprintf("/api/v1/evals/%s/runs/%s", set.ID, run.ID))
-	writeJSON(w, http.StatusAccepted, map[string]any{
+	c.Header("Location", fmt.Sprintf("/api/v1/evals/%s/runs/%s", set.ID, run.ID))
+	writeJSON(c, http.StatusAccepted, map[string]any{
 		"run_id": run.ID,
 		"state":  "running",
 	})
 }
 
-// GetEvalRun handles GET /api/v1/evals/{setId}/runs/{runId}.
-func (s *Server) GetEvalRun(w http.ResponseWriter, r *http.Request) {
-	runID := chi.URLParam(r, "runId")
+// GetEvalRun handles GET /api/v1/evals/:setId/runs/:runId.
+func (s *Server) GetEvalRun(c *gin.Context) {
+	runID := c.Param("runId")
 	if s.EvalService == nil {
-		writeError(w, r, &APIError{
+		writeError(c, &APIError{
 			Code:    "ADAPTER_NOT_IMPLEMENTED",
 			Message: "eval runner not yet implemented (target: Phase 2)",
 		})
@@ -306,17 +304,17 @@ func (s *Server) GetEvalRun(w http.ResponseWriter, r *http.Request) {
 	run, err := s.EvalService.GetRun(runID)
 	if err != nil {
 		if errors.Is(err, evalmodel.ErrEvalRunNotFound) {
-			writeError(w, r, &APIError{
+			writeError(c, &APIError{
 				Code:    "EVAL_RUN_NOT_FOUND",
 				Message: err.Error(),
 			})
 			return
 		}
-		writeError(w, r, NewInternal(err))
+		writeError(c, NewInternal(err))
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"id":             run.ID,
 		"eval_set_id":    run.EvalSetID,
 		"domain_id":      run.DomainID,
@@ -334,15 +332,15 @@ func (s *Server) GetEvalRun(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListAudit handles GET /api/v1/audit.
-func (s *Server) ListAudit(w http.ResponseWriter, r *http.Request) {
-	limit := intQuery(r, "limit", 50)
-	offset := intQuery(r, "offset", 0)
+func (s *Server) ListAudit(c *gin.Context) {
+	limit := intQueryGin(c, "limit", 50)
+	offset := intQueryGin(c, "offset", 0)
 	if limit <= 0 {
 		limit = 50
 	}
 
 	if s.AuditService == nil {
-		writeJSON(w, http.StatusOK, map[string]any{
+		writeJSON(c, http.StatusOK, map[string]any{
 			"items":  []map[string]any{},
 			"total":  0,
 			"limit":  limit,
@@ -353,7 +351,7 @@ func (s *Server) ListAudit(w http.ResponseWriter, r *http.Request) {
 
 	entries, total, err := s.AuditService.List(limit, offset)
 	if err != nil {
-		writeError(w, r, NewInternal(err))
+		writeError(c, NewInternal(err))
 		return
 	}
 
@@ -375,7 +373,7 @@ func (s *Server) ListAudit(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"items":  out,
 		"total":  total,
 		"limit":  limit,
@@ -384,10 +382,9 @@ func (s *Server) ListAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetMetrics handles GET /api/v1/metrics.
-func (s *Server) GetMetrics(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	domainFilter := q.Get("domain")
-	sessions := s.Queries.ListSessions(tenant.FromContext(r.Context()))
+func (s *Server) GetMetrics(c *gin.Context) {
+	domainFilter := c.Query("domain")
+	sessions := s.Queries.ListSessions(tenantFromGin(c))
 	total := 0
 	completed := 0
 	failed := 0
@@ -409,7 +406,7 @@ func (s *Server) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	if total > 0 {
 		totalCost = 0 // Cost is not yet populated by NoopAdapter; future PR.
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"domain_id":          domainFilter,
 		"total_sessions":     total,
 		"completed_sessions": completed,
@@ -421,10 +418,9 @@ func (s *Server) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-
 // ListRuntimes handles GET /api/v1/runtimes.
-func (s *Server) ListRuntimes(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+func (s *Server) ListRuntimes(c *gin.Context) {
+	writeJSON(c, http.StatusOK, map[string]any{
 		"items": []map[string]any{
 			{
 				"runtime_id":        "local-control-plane",
@@ -439,40 +435,40 @@ func (s *Server) ListRuntimes(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListSecrets handles GET /api/v1/secrets — never returns secret *values*.
-func (s *Server) ListSecrets(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+func (s *Server) ListSecrets(c *gin.Context) {
+	writeJSON(c, http.StatusOK, map[string]any{
 		"items": []map[string]any{},
 		"total": 0,
 	})
 }
 
 // CreateSecret handles POST /api/v1/secrets.
-func (s *Server) CreateSecret(w http.ResponseWriter, r *http.Request) {
-	writeError(w, r, &APIError{
+func (s *Server) CreateSecret(c *gin.Context) {
+	writeError(c, &APIError{
 		Code:    "ADAPTER_NOT_IMPLEMENTED",
 		Message: "secret store not yet implemented (target: Phase 2)",
 	})
 }
 
-// UpdateSecret handles PUT /api/v1/secrets/{id}.
-func (s *Server) UpdateSecret(w http.ResponseWriter, r *http.Request) {
-	writeError(w, r, &APIError{
+// UpdateSecret handles PUT /api/v1/secrets/:id.
+func (s *Server) UpdateSecret(c *gin.Context) {
+	writeError(c, &APIError{
 		Code:    "ADAPTER_NOT_IMPLEMENTED",
 		Message: "secret store not yet implemented (target: Phase 2)",
 	})
 }
 
-// DeleteSecret handles DELETE /api/v1/secrets/{id}.
-func (s *Server) DeleteSecret(w http.ResponseWriter, r *http.Request) {
-	writeError(w, r, &APIError{
+// DeleteSecret handles DELETE /api/v1/secrets/:id.
+func (s *Server) DeleteSecret(c *gin.Context) {
+	writeError(c, &APIError{
 		Code:    "ADAPTER_NOT_IMPLEMENTED",
 		Message: "secret store not yet implemented (target: Phase 2)",
 	})
 }
 
 // ListPolicies handles GET /api/v1/policies.
-func (s *Server) ListPolicies(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+func (s *Server) ListPolicies(c *gin.Context) {
+	writeJSON(c, http.StatusOK, map[string]any{
 		"items": []map[string]any{},
 		"total": 0,
 	})
@@ -482,17 +478,17 @@ func (s *Server) ListPolicies(w http.ResponseWriter, r *http.Request) {
 // tiny helpers
 // ----------------------------------------------------------------------------
 
-func intQuery(r *http.Request, key string, def int) int {
-	v := r.URL.Query().Get(key)
+func intQueryGin(c *gin.Context, key string, def int) int {
+	v := c.Query(key)
 	if v == "" {
 		return def
 	}
 	n := 0
-	for _, c := range v {
-		if c < '0' || c > '9' {
+	for _, ch := range v {
+		if ch < '0' || ch > '9' {
 			return def
 		}
-		n = n*10 + int(c-'0')
+		n = n*10 + int(ch-'0')
 	}
 	return n
 }
