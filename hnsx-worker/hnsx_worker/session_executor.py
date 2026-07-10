@@ -47,6 +47,7 @@ from hnsx_worker.tools import (
     ToolContext,
     ToolDecision,
     ToolRegistry,
+    ToolResult,
     build_tool,
     tool_schemas_for_adapter,
 )
@@ -375,17 +376,12 @@ def _run_multi_turn(
             }
         )
 
-        # Call each tool through the ToolRegistry. The ``tool_call``
-        # observation was emitted above; here we resolve the call and
-        # emit ``tool_result`` (with structured error on failure).
-        # ``policy_hook`` runs inside the registry and may emit a
-        # ``policy_violation`` observation on its own.
+        # Call each tool. API-agent tool_calls go through the ToolRegistry;
+        # CLI-agent tool_calls are already executed by the CLI internally, so
+        # we only audit them and synthesize a result so the multi-turn loop
+        # can continue.
         for tc in tool_calls:
             ctx = tool_ctx_factory(turn=turn, tool_call_id=tc.id)
-            # The policy hook isn't authoritative in W3 — we always
-            # still call the tool so the agent sees the result and can
-            # adapt. W6's PolicyEngine will short-circuit via the
-            # registry's existing deny path.
             decision = policy_hook(tc.name, dict(tc.input), ctx)
             if not decision.allow:
                 log.info(
@@ -394,7 +390,10 @@ def _run_multi_turn(
                     decision.decision,
                 )
 
-            result = registry.call(tc.name, ctx, dict(tc.input))
+            if _is_cli_adapter(adapter):
+                result = _delegate_cli_tool_result(tc, decision=decision)
+            else:
+                result = registry.call(tc.name, ctx, dict(tc.input))
             payload = {
                 "tool_call_id": tc.id,
                 "name": tc.name,
@@ -794,6 +793,52 @@ def _allow_all_policy_hook() -> Callable[[str, dict, ToolContext], ToolDecision]
         return ToolDecision(allow=True, decision="allow", reason="w3-stub")
 
     return _hook
+
+
+# ---------------------------------------------------------------------------
+# CLI-agent helpers
+# ---------------------------------------------------------------------------
+
+
+_CLI_ADAPTER_KINDS = frozenset({"claudecode", "codex"})
+
+
+def _is_cli_adapter(adapter: Any) -> bool:
+    """Return True if the adapter delegates to an external CLI agent."""
+    return adapter.name() in _CLI_ADAPTER_KINDS
+
+
+def _delegate_cli_tool_result(
+    tool_call: Any,
+    *,
+    decision: ToolDecision,
+) -> ToolResult:
+    """Synthesize a ToolResult for a tool that the CLI agent already executed.
+
+    CLI agents (Claude Code / Codex) bring their own shell/file/edit
+    primitives. The Harness does not re-execute them; it only audits the
+    operation. The synthesized result lets the multi-turn loop continue.
+    """
+    if not decision.allow:
+        return ToolResult(
+            error=f"policy denied: {decision.reason or decision.decision}",
+            metadata={
+                "delegated_to_cli": True,
+                "observed_only": True,
+                "policy_decision": decision.decision,
+            },
+        )
+    return ToolResult(
+        output={
+            "delegated_to_cli": True,
+            "raw": tool_call.raw_input or tool_call.input,
+            "message": "operation executed by CLI agent (audited only)",
+        },
+        metadata={
+            "delegated_to_cli": True,
+            "observed_only": True,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
