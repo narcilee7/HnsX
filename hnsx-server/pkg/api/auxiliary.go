@@ -14,6 +14,7 @@ import (
 	evalrunner "github.com/hnsx-io/hnsx/server/internal/evaluation/runner"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	tracemodel "github.com/hnsx-io/hnsx/server/internal/trace/model"
+	workerpkg "github.com/hnsx-io/hnsx/server/internal/worker"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
 
@@ -554,20 +555,93 @@ func (s *Server) GetMetrics(c *gin.Context) {
 	})
 }
 
-// ListRuntimes handles GET /api/v1/runtimes.
+// ListRuntimes handles GET /api/v1/runtimes — returns every live runtime
+// worker that has registered with the control plane, with a freshness
+// projection. WorkerService is only wired when the gRPC control plane is
+// enabled (cfg.GRPCAddr != ""); in pure HTTP mode we return an empty list
+// instead of a hand-rolled placeholder so the UI can render the "no
+// workers yet" empty state honestly.
 func (s *Server) ListRuntimes(c *gin.Context) {
+	if s.WorkerService == nil {
+		writeJSON(c, http.StatusOK, map[string]any{
+			"items": []map[string]any{},
+			"total": 0,
+		})
+		return
+	}
+	snaps := s.WorkerService.List()
+	items := make([]map[string]any, 0, len(snaps))
+	for _, snap := range snaps {
+		items = append(items, runtimeSnapshotToJSON(snap))
+	}
 	writeJSON(c, http.StatusOK, map[string]any{
-		"items": []map[string]any{
-			{
-				"runtime_id":        "local-control-plane",
-				"version":           "phase1",
-				"region":            "local",
-				"status":            "active",
-				"last_heartbeat_at": time.Now().UTC().Format(time.RFC3339),
-			},
-		},
-		"total": 1,
+		"items": items,
+		"total": len(items),
 	})
+}
+
+func runtimeSnapshotToJSON(snap workerpkg.Snapshot) map[string]any {
+	out := map[string]any{
+		"runtime_id":        snap.WorkerID,
+		"status":            runtimeStatus(snap),
+		"last_heartbeat_at": snap.LastSeen.UTC().Format(time.RFC3339Nano),
+		"age_seconds":       snap.AgeSeconds,
+		"healthy":           snap.Healthy,
+	}
+	if snap.Info == nil {
+		return out
+	}
+	if snap.Info.Version != "" {
+		out["version"] = snap.Info.Version
+	}
+	if snap.Info.Region != "" {
+		out["region"] = snap.Info.Region
+	}
+	if snap.Info.Hostname != "" {
+		out["hostname"] = snap.Info.Hostname
+	}
+	if snap.Info.Pid != "" {
+		out["pid"] = snap.Info.Pid
+	}
+	if snap.Info.Capacity != nil {
+		if snap.Info.Capacity.MaxConcurrentSessions > 0 {
+			out["capacity"] = snap.Info.Capacity.MaxConcurrentSessions
+		}
+		if len(snap.Info.Capacity.Providers) > 0 {
+			out["capabilities"] = append([]string(nil), snap.Info.Capacity.Providers...)
+		}
+		if len(snap.Info.Capacity.Models) > 0 {
+			out["models"] = append([]string(nil), snap.Info.Capacity.Models...)
+		}
+		if len(snap.Info.Capacity.SandboxRuntimes) > 0 {
+			out["sandbox_runtimes"] = append([]string(nil), snap.Info.Capacity.SandboxRuntimes...)
+		}
+	}
+	if len(snap.Info.Labels) > 0 {
+		labels := make(map[string]string, len(snap.Info.Labels))
+		for k, v := range snap.Info.Labels {
+			labels[k] = v
+		}
+		out["labels"] = labels
+	}
+	return out
+}
+
+// runtimeStatus maps the registry's liveness signal into the wire-level
+// status vocabulary that the UI expects:
+//   - healthy       : last heartbeat within 30s
+//   - degraded      : older but not yet evicted
+//   - offline       : beyond the soft-eviction threshold (60s)
+// Note: the registry's EvictStale policy decides when a worker is
+// actually removed; this function only labels, it does not mutate state.
+func runtimeStatus(snap workerpkg.Snapshot) string {
+	if !snap.LastSeen.IsZero() && snap.AgeSeconds > 60 {
+		return "offline"
+	}
+	if snap.Healthy {
+		return "healthy"
+	}
+	return "degraded"
 }
 
 // ListSecrets handles GET /api/v1/secrets — never returns secret *values*.
