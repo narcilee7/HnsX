@@ -74,6 +74,48 @@ class OutputGuardrails:
 
 
 @dataclass
+class ApprovalPolicy:
+    """W14 approval-gate DSL.
+
+    ``tools`` is a flat list of tool names. ``resources`` is a list of
+    glob-style patterns (``user:*``) matched against any string value in
+    the tool's input dict (the agent-side analogue of "this touches
+    sensitive data"). ``cost_threshold_usd`` triggers approval when a
+    single tool's projected cost exceeds the threshold; cost is supplied
+    via the tool context (see ``estimate_cost_usd`` on the registry).
+    """
+
+    tools: set[str] = field(default_factory=set)
+    resources: list[str] = field(default_factory=list)
+    cost_threshold_usd: float = 0.0
+    default_timeout_seconds: float = 0.0
+
+    def requires_approval(
+        self,
+        tool_name: str,
+        tool_input: dict[str, Any] | None = None,
+        *,
+        projected_cost_usd: float = 0.0,
+    ) -> tuple[bool, str]:
+        """Return ``(needs_approval, rule)`` if any condition matches."""
+        if tool_name in self.tools:
+            return True, "policy.approval.required_for.tools"
+        if tool_input:
+            for value in tool_input.values():
+                if not isinstance(value, str):
+                    continue
+                for pattern in self.resources:
+                    if _glob_match(pattern, value):
+                        return True, "policy.approval.required_for.resources"
+        if (
+            self.cost_threshold_usd > 0
+            and projected_cost_usd >= self.cost_threshold_usd
+        ):
+            return True, "policy.approval.required_for.cost_threshold_usd"
+        return False, ""
+
+
+@dataclass
 class Decision(ToolDecision):
     """Result of a policy check."""
 
@@ -127,6 +169,26 @@ class PolicyEngine:
         self.output_guardrails = OutputGuardrails(
             blocked_patterns=list(guard.get("blocked_patterns") or []),
             blocked_keywords=list(guard.get("blocked_keywords") or []),
+        )
+
+        # W14: ``policy.approval.required_for`` DSL. Supports three shapes:
+        #
+        #   policy:
+        #     approval:
+        #       required_for:
+        #         tools: [refund, shell]
+        #         resources: ["user:*", "billing:write"]
+        #         cost_threshold_usd: 0.50
+        #
+        approval_cfg = policy.get("approval", {}) or {}
+        required_for = approval_cfg.get("required_for", {}) or {}
+        self.approval_policy = ApprovalPolicy(
+            tools=set(required_for.get("tools") or []),
+            resources=list(required_for.get("resources") or []),
+            cost_threshold_usd=float(required_for.get("cost_threshold_usd") or 0.0),
+            default_timeout_seconds=float(
+                approval_cfg.get("default_timeout_seconds") or 0.0
+            ),
         )
 
     # ------------------------------------------------------------------ output
@@ -327,4 +389,36 @@ class PolicyEngine:
         )
 
 
-__all__ = ["Budget", "Decision", "OutputGuardrails", "PolicyEngine", "ToolPolicy"]
+__all__ = [
+    "ApprovalPolicy",
+    "Budget",
+    "Decision",
+    "OutputGuardrails",
+    "PolicyEngine",
+    "ToolPolicy",
+]
+
+
+def _glob_match(pattern: str, value: str) -> bool:
+    """Tiny glob helper: only ``*`` is supported (anything else is literal).
+
+    Examples::
+
+        _glob_match("user:*", "user:42")        -> True
+        _glob_match("user:*", "billing:42")     -> False
+        _glob_match("user:42", "user:42")       -> True
+    """
+    if "*" not in pattern:
+        return pattern == value
+    parts = pattern.split("*")
+    if not value.startswith(parts[0]):
+        return False
+    if not value.endswith(parts[-1]):
+        return False
+    middle = value[len(parts[0]) : len(value) - len(parts[-1]) if parts[-1] else len(value)]
+    for piece in parts[1:-1]:
+        idx = middle.find(piece)
+        if idx < 0:
+            return False
+        middle = middle[idx + len(piece) :]
+    return True
