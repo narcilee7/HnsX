@@ -1,0 +1,46 @@
+id: workflow-demo-e2e
+version: 0.1.0
+description: |
+  E2E variant of workflow-demo. Uses the echo adapter so it runs without
+  external LLM keys, and exercises the workflow session mode with two steps
+  connected by a step variable.
+harness:
+  agents:
+    classifier:
+      id: classifier
+      provider: echo
+      adapter:
+        kind: echo
+      system_prompt: default
+
+    responder:
+      id: responder
+      provider: echo
+      adapter:
+        kind: echo
+      system_prompt: default
+
+  prompts:
+    default:
+      type: system
+      template: |
+        You are a workflow demo assistant.
+
+  policy:
+    budget:
+      max_turns: 5
+
+  session:
+    mode: workflow
+    workflow:
+      entry: classify
+      steps:
+        - id: classify
+          agent: classifier
+          output: classification
+          next: respond
+        - id: respond
+          agent: responder
+          input:
+            classification: "${classification}"
+          output: response

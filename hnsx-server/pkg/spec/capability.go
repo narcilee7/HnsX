@@ -8,14 +8,12 @@ import "sort"
 // Capability format follows "namespace:value" conventions:
 //   - provider:<provider>        e.g. provider:anthropic
 //   - model:<model>              e.g. model:claude-haiku-4-5
-//   - adapter:<kind>             e.g. adapter:anthropic
-//   - sandbox:<policy>           e.g. sandbox:process
-//   - tool:<name>                e.g. tool:web_search
-//   - tool_kind:<kind>           e.g. tool_kind:http
+//   - adapter:<kind>             e.g. adapter:echo
+//   - sandbox:<policy>           e.g. sandbox:none
 //
-// A worker declares the capabilities it offers via WorkerInfo.Capacity;
-// the scheduler pulls only sessions whose required capabilities are a
-// subset of the worker's offered capabilities.
+// Tool capabilities are intentionally omitted until workers advertise the
+// tool sets they support; the Python runtime currently ships with built-in
+// tools and resolves them at execution time.
 func DeriveCapabilities(s *DomainSpec) []string {
 	if s == nil {
 		return nil
@@ -38,14 +36,7 @@ func DeriveCapabilities(s *DomainSpec) []string {
 		caps["sandbox:"+s.Harness.Sandbox.Policy] = struct{}{}
 	}
 
-	for name, tool := range s.Harness.Tools {
-		if name != "" {
-			caps["tool:"+name] = struct{}{}
-		}
-		if tool.Kind != "" {
-			caps["tool_kind:"+tool.Kind] = struct{}{}
-		}
-	}
+	// Tool capabilities intentionally omitted — see doc comment above.
 
 	out := make([]string, 0, len(caps))
 	for c := range caps {

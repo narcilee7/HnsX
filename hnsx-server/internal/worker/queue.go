@@ -81,10 +81,10 @@ func (q *MemorySessionQueue) Enqueue(req *SessionRequest) {
 }
 
 // Dequeue blocks until either a session matching “required“ is
-// available or “ctx“ is cancelled. The match rule is "all required
-// capabilities must be present in the request's RequiredCapabilities"
-// (intersection is non-empty for every key). Returns (nil, false) on
-// cancellation.
+// available or “ctx“ is cancelled. The match rule is "every capability
+// required by the session must be offered by the worker" (session
+// RequiredCapabilities ⊆ worker required capabilities). Returns
+// (nil, false) on cancellation.
 func (q *MemorySessionQueue) Dequeue(ctx context.Context, required []string) (*SessionRequest, bool) {
 	// Watch for ctx cancellation while waiting.
 	stop := make(chan struct{})
@@ -140,10 +140,10 @@ func (q *MemorySessionQueue) Len() int {
 	return len(q.pending)
 }
 
-// matches: every required capability must appear in the offered
-// RequiredCapabilities list. A session with no RequiredCapabilities
-// matches every required filter (acts as "any worker can pick this up").
-func matches(offered, required []string) bool {
+// matches returns true when every required capability is present in the
+// offered capability set. A session with no RequiredCapabilities matches
+// every worker (acts as "any worker can pick this up").
+func matches(required, offered []string) bool {
 	if len(required) == 0 {
 		return true
 	}

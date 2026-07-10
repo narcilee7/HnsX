@@ -46,3 +46,17 @@ func (s *Service) BySession(sessionID string) ([]model.ObservationRecord, error)
 func (s *Service) ByTrace(traceID string) ([]model.ObservationRecord, error) {
 	return s.repo.ByTrace(traceID)
 }
+
+// ListSummaries returns a paginated list of TraceSummary records matching the
+// filter, plus the total count of matching trace_ids. It is the single
+// read path for GET /api/v1/traces.
+func (s *Service) ListSummaries(filter model.TraceListFilter) (model.TraceSummaryWithCount, error) {
+	return s.repo.ListSummaries(filter)
+}
+
+// Detail returns the full trace: per-trace rollup + chronological
+// observations. ErrTraceNotFound surfaces from the repository and is
+// mapped to a 404 by the HTTP handler.
+func (s *Service) Detail(traceID string) (*model.TraceDetail, error) {
+	return s.repo.Detail(traceID)
+}

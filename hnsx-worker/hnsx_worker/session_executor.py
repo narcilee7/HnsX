@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -251,6 +252,19 @@ def execute_session(
     return result
 
 
+def _resolve_adapter_kind(agent: dict[str, Any]) -> str:
+    """Return the adapter kind for an agent, allowing local-dev override.
+
+    Set ``HNSX_FORCE_ADAPTER_KIND`` to make all agents use the same offline
+    adapter (e.g. ``noop`` or ``echo``) regardless of what the DomainSpec
+    declares. This keeps docker-compose demos runnable without real API keys.
+    """
+    forced = os.environ.get("HNSX_FORCE_ADAPTER_KIND", "")
+    if forced:
+        return forced
+    return agent.get("adapter", {}).get("kind", "noop")
+
+
 # ---------------------------------------------------------------------------
 # mode runners
 # ---------------------------------------------------------------------------
@@ -276,7 +290,7 @@ def _run_single(
         raise KeyError(f"session.agent {agent_name!r} not in harness.agents")
     agent = agents[agent_name]
     prompt = _resolve_prompt(spec, agent)
-    adapter = AdapterRegistry.get(agent.get("adapter", {}).get("kind", "noop"))
+    adapter = AdapterRegistry.get(_resolve_adapter_kind(agent))
 
     _maybe_stop(stop_event, emit, config)
 
@@ -369,7 +383,7 @@ def _run_multi_turn(
         raise KeyError(f"session.agent {agent_name!r} not in harness.agents")
     agent = agents[agent_name]
     prompt = _resolve_prompt(spec, agent)
-    adapter = AdapterRegistry.get(agent.get("adapter", {}).get("kind", "noop"))
+    adapter = AdapterRegistry.get(_resolve_adapter_kind(agent))
     max_turns = int(
         (harness.get("policy", {}) or {}).get("budget", {}).get("max_turns")
         or session.get("max_turns")
@@ -676,13 +690,23 @@ def _run_workflow(
         if agent_name not in agents:
             raise KeyError(f"step {step['id']!r} references unknown agent {agent_name!r}")
         agent = agents[agent_name]
-        prompt = _resolve_prompt(spec, agent)
-        adapter = AdapterRegistry.get(agent.get("adapter", {}).get("kind", "noop"))
+        prompt = _resolve_prompt_for_step(spec, agent, step)
+        adapter = AdapterRegistry.get(_resolve_adapter_kind(agent))
         step_input = _build_step_input(step.get("input"), vars_)
 
         emit(
             {
                 "kind": "step_start",
+                "session_id": config.get("session_id", ""),
+                "domain_id": spec.get("id", ""),
+                "step_id": step["id"],
+                "agent_id": agent_name,
+                "payload": {"adapter": adapter.name()},
+            }
+        )
+        emit(
+            {
+                "kind": "agent_invoke",
                 "session_id": config.get("session_id", ""),
                 "domain_id": spec.get("id", ""),
                 "step_id": step["id"],
@@ -965,6 +989,30 @@ def _build_tool_registry(
     copy).
     """
     raw_tools = list(agent.get("tools") or [])
+    harness_tools = (spec.get("harness") or {}).get("tools") or {}
+    resolved_tools: list[dict[str, Any]] = []
+    failures: list[str] = []
+    for entry in raw_tools:
+        if isinstance(entry, dict):
+            resolved_tools.append(entry)
+        elif isinstance(entry, str):
+            cfg = harness_tools.get(entry)
+            if not isinstance(cfg, dict):
+                failures.append(f"tool reference {entry!r} not found in harness.tools")
+                continue
+            resolved = {
+                "name": cfg.get("name") or cfg.get("kind") or entry,
+                "type": cfg.get("kind"),
+                "description": cfg.get("description", ""),
+                "config": cfg.get("config") or {},
+            }
+            if not resolved["type"]:
+                failures.append(f"tool {entry!r} has no kind")
+                continue
+            resolved_tools.append(resolved)
+        else:
+            failures.append(f"invalid tool entry: {entry!r}")
+    raw_tools = resolved_tools
     if extra_tool_specs:
         # Skill tools come last; existing agent.tools entries with the
         # same name take precedence in tool_schemas_for_adapter /
@@ -975,7 +1023,6 @@ def _build_tool_registry(
     # Discover remote tool schemas for any referenced MCP servers so the
     # LLM-facing schema is accurate and we don't reconnect per tool.
     mcp_schemas: dict[str, dict[str, Any]] = {}
-    failures: list[str] = []
     referenced_servers: set[str] = set()
     for entry in raw_tools:
         if not isinstance(entry, dict):
@@ -1452,6 +1499,28 @@ def _resolve_prompt(spec: dict, agent: dict) -> str:
     if sp in prompts:
         return prompts[sp].get("template", "")
     return sp
+
+
+def _resolve_prompt_for_step(spec: dict, agent: dict, step: dict) -> str:
+    """Return the prompt for a workflow step.
+
+    Step-level configuration takes precedence over the agent's default
+    system prompt so that individual steps can specialize their instructions.
+    Supports:
+
+      - ``step.prompt`` (literal template string)
+      - ``step.prompt_ref`` (reference to ``harness.prompts``)
+      - fallback to ``agent.system_prompt``
+    """
+    if "prompt" in step:
+        return str(step["prompt"] or "")
+    prompt_ref = step.get("prompt_ref")
+    if prompt_ref:
+        prompts = spec.get("harness", {}).get("prompts", {}) or {}
+        if prompt_ref in prompts:
+            return prompts[prompt_ref].get("template", "")
+        return ""
+    return _resolve_prompt(spec, agent)
 
 
 def _input_to_user_content(input: dict) -> str:

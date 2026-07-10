@@ -47,7 +47,7 @@ Environment:
   HNSX_HTTP_ADDR           Listen address (default 127.0.0.1:50051)
   HNSX_DATABASE_URL        Postgres connection string (required)
   HNSX_MIGRATIONS_DIR      SQL migrations directory
-  HNSX_OTEL_EXPORTER       stdout | otlp | none
+  HNSX_OTEL_EXPORTER       stdout | otlp | none (default otlp)
   HNSX_OTEL_OTLP_ENDPOINT  OTLP gRPC endpoint (default 127.0.0.1:4317)
   HNSX_OTEL_SERVICE_NAME   service.name attribute
   HNSX_LOG_LEVEL           debug | info | warn | error

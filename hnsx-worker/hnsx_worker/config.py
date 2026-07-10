@@ -43,12 +43,14 @@ class WorkerConfig:
         max_concurrent_sessions: int,
         providers: str,
         models: str,
+        sandbox_runtimes: str,
         heartbeat_interval: int,
     ) -> WorkerConfig:
         capacity = ResourceCapacity(
             max_concurrent_sessions=max_concurrent_sessions,
             providers=_split_csv(providers),
             models=_split_csv(models),
+            sandbox_runtimes=_split_csv(sandbox_runtimes),
         )
         return cls(
             server_addr=server,

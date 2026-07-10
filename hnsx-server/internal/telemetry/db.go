@@ -55,6 +55,15 @@ func (s *DBSink) Record(ctx context.Context, obs runtime.Observation) error {
 		return fmt.Errorf("db sink: marshal payload: %w", err)
 	}
 
+	metadata := obs.Metadata
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	metaBody, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("db sink: marshal metadata: %w", err)
+	}
+
 	record := repository.ObservationRecord{
 		TraceID:   obs.TraceID,
 		SessionID: obs.SessionID,
@@ -63,6 +72,7 @@ func (s *DBSink) Record(ctx context.Context, obs runtime.Observation) error {
 		AgentID:   obs.AgentID,
 		Kind:      obs.Kind,
 		Payload:   body,
+		Metadata:  metaBody,
 	}
 	if obs.Cost != nil {
 		record.CostUSD = obs.Cost.CostUSD

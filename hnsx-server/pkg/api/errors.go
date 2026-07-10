@@ -80,10 +80,14 @@ func HTTPStatusFor(code string) int {
 		"EVAL_RUN_NOT_FOUND", "TRACE_NOT_FOUND", "APPROVAL_NOT_FOUND",
 		"SECRET_NOT_FOUND", "POLICY_NOT_FOUND", "RUNTIME_NOT_FOUND":
 		return http.StatusNotFound
-	case "DOMAIN_EXISTS", "VERSION_EXISTS", "EVAL_SET_EXISTS":
+	case "DOMAIN_EXISTS", "VERSION_EXISTS", "EVAL_SET_EXISTS",
+		"APPROVAL_ALREADY_RESOLVED":
 		return http.StatusConflict
 	case "ADAPTER_NOT_IMPLEMENTED", "MODE_NOT_IMPLEMENTED":
 		return http.StatusUnprocessableEntity
+	case "SECRETS_UNAVAILABLE", "POLICY_UNAVAILABLE",
+		"APPROVAL_UNAVAILABLE":
+		return http.StatusServiceUnavailable
 	default:
 		return http.StatusInternalServerError
 	}

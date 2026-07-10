@@ -73,20 +73,29 @@ function SecretsTab() {
   const createSecret = useCreateSecret()
   const deleteSecret = useDeleteSecret()
   const [createOpen, setCreateOpen] = useState(false)
-  const [draftId, setDraftId] = useState('')
+  const [draftName, setDraftName] = useState('')
   const [draftValue, setDraftValue] = useState('')
-  const [draftProvider, setDraftProvider] = useState('env')
+  const [draftDescription, setDraftDescription] = useState('')
+  const [draftKind, setDraftKind] = useState('api_key')
+  const [createError, setCreateError] = useState<string | null>(null)
 
   const handleCreate = async () => {
-    await createSecret.mutateAsync({
-      id: draftId,
-      value: draftValue,
-      provider: draftProvider,
-    })
-    setCreateOpen(false)
-    setDraftId('')
-    setDraftValue('')
-    setDraftProvider('env')
+    setCreateError(null)
+    try {
+      await createSecret.mutateAsync({
+        name: draftName,
+        value: draftValue,
+        description: draftDescription || undefined,
+        kind: draftKind || undefined,
+      })
+      setCreateOpen(false)
+      setDraftName('')
+      setDraftValue('')
+      setDraftDescription('')
+      setDraftKind('api_key')
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : String(e))
+    }
   }
 
   if (error) return <ErrorState description={error.message} onRetry={refetch} />
@@ -98,7 +107,7 @@ function SecretsTab() {
           <div>
             <CardTitle className="text-base">Secret Registry</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              集中存储 model API key / DB password / OAuth token。值仅在创建时提交，列表只显示 fingerprint。
+              AES-256-GCM 加密落库，列表只暴露 fingerprint；引用用 ${'{'}secret:name{'}'} 占位符。
             </p>
           </div>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
@@ -114,8 +123,8 @@ function SecretsTab() {
           ) : (
             <SecretTable
               items={data.items}
-              onDelete={(id) => {
-                if (confirm(`Delete secret "${id}"?`)) deleteSecret.mutate(id)
+              onDelete={(name) => {
+                if (confirm(`Delete secret "${name}"?`)) deleteSecret.mutate(name)
               }}
             />
           )}
@@ -127,31 +136,41 @@ function SecretsTab() {
           <DialogHeader>
             <DialogTitle>Create Secret</DialogTitle>
             <DialogDescription>
-              ID 之后不能改。值会加密入库，列表只显示 fingerprint。
+              名字唯一标识，DomainSpec 通过 ${'{'}secret:&lt;name&gt;{'}'} 引用。值只用于这一次提交，列表只回显 fingerprint。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label htmlFor="secret-id">ID</Label>
+              <Label htmlFor="secret-name">Name</Label>
               <Input
-                id="secret-id"
+                id="secret-name"
                 placeholder="openai-api-key"
-                value={draftId}
-                onChange={(e) => setDraftId(e.target.value)}
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="secret-provider">Provider</Label>
+              <Label htmlFor="secret-kind">Kind</Label>
               <select
-                id="secret-provider"
-                value={draftProvider}
-                onChange={(e) => setDraftProvider(e.target.value)}
+                id="secret-kind"
+                value={draftKind}
+                onChange={(e) => setDraftKind(e.target.value)}
                 className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
               >
-                <option value="env">env</option>
-                <option value="vault">vault</option>
-                <option value="aws-sm">aws-sm</option>
+                <option value="api_key">api_key</option>
+                <option value="token">token</option>
+                <option value="password">password</option>
+                <option value="generic">generic</option>
               </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="secret-description">Description</Label>
+              <Input
+                id="secret-description"
+                placeholder="OpenAI prod key"
+                value={draftDescription}
+                onChange={(e) => setDraftDescription(e.target.value)}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="secret-value">Value</Label>
@@ -163,10 +182,12 @@ function SecretsTab() {
                 className="min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono"
               />
             </div>
-            <div className="flex items-start gap-2 rounded-md border border-[var(--warning)]/30 bg-[var(--warning-soft)] p-2 text-xs text-[var(--warning-text)]">
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>Phase 1 stub：后端 CreateSecret 返回 ADAPTER_NOT_IMPLEMENTED。Phase 2 上线加密存储。</span>
-            </div>
+            {createError ? (
+              <div className="flex items-start gap-2 rounded-md border border-[var(--danger)]/30 bg-[var(--danger-soft)] p-2 text-xs text-[var(--danger-text)]">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{createError}</span>
+              </div>
+            ) : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
@@ -174,7 +195,7 @@ function SecretsTab() {
             </Button>
             <Button
               onClick={handleCreate}
-              disabled={!draftId || !draftValue || createSecret.isPending}
+              disabled={!draftName || !draftValue || createSecret.isPending}
             >
               {createSecret.isPending ? 'Creating…' : 'Create'}
             </Button>
@@ -190,34 +211,34 @@ function SecretTable({
   onDelete,
 }: {
   items: Secret[]
-  onDelete: (id: string) => void
+  onDelete: (name: string) => void
 }) {
   return (
     <div className="divide-y">
       {items.map((s) => (
-        <div key={s.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+        <div key={s.name} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
           <div className="min-w-0 space-y-1">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-sm font-medium">{s.id}</span>
-              {s.scope && (
+              <span className="font-mono text-sm font-medium">{s.name}</span>
+              {s.kind && (
                 <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  {s.scope}
+                  {s.kind}
                 </span>
               )}
             </div>
+            {s.description ? (
+              <div className="text-xs text-muted-foreground">{s.description}</div>
+            ) : null}
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              {s.provider && <span>provider: {s.provider}</span>}
-              {s.fingerprint && (
-                <span className="font-mono">fp: {s.fingerprint}</span>
-              )}
+              <span className="font-mono">fp: {s.fingerprint}</span>
               {s.updated_at && <Timestamp date={new Date(s.updated_at)} />}
             </div>
           </div>
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={() => onDelete(s.id)}
-            aria-label={`Delete ${s.id}`}
+            onClick={() => onDelete(s.name)}
+            aria-label={`Delete ${s.name}`}
           >
             <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
@@ -241,14 +262,15 @@ function PoliciesTab() {
       <CardHeader>
         <CardTitle className="text-base">Policy Registry</CardTitle>
         <p className="mt-1 text-xs text-muted-foreground">
-          Budget / Permission / Guardrail 规则。Phase 1 只读，规则通过 DomainSpec YAML 注入。
+          Named Budget / Permission / Guardrail bundles that can be bound to a Domain via the
+          Domain detail page.
         </p>
       </CardHeader>
       <CardContent>
         {isLoading ? (
           <Loading />
         ) : !data?.items.length ? (
-          <Empty description="目前没有 Policy。规则随 DomainSpec 注入，每个 Domain 独立管理。" />
+          <Empty description="还没有 Policy。在 example-domains 里随 YAML 自动注入，或通过 Settings 手动加。" />
         ) : (
           <div className="divide-y">
             {data.items.map((p) => (
@@ -256,33 +278,42 @@ function PoliciesTab() {
                 <div className="min-w-0 space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-sm font-medium">{p.id}</span>
-                    {p.scope && (
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
-                        {p.scope}
+                    {p.name ? (
+                      <span className="text-xs text-muted-foreground">/ {p.name}</span>
+                    ) : null}
+                    {p.bound_domain ? (
+                      <span className="rounded bg-[var(--success-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--success-text)]">
+                        bound → {p.bound_domain}
                       </span>
-                    )}
-                    {p.effect && (
-                      <span
-                        className={
-                          p.effect === 'deny'
-                            ? 'rounded bg-[var(--danger-soft)] px-1.5 py-0.5 text-[10px] text-[var(--danger-text)]'
-                            : p.effect === 'allow'
-                              ? 'rounded bg-[var(--success-soft)] px-1.5 py-0.5 text-[10px] text-[var(--success-text)]'
-                              : 'rounded bg-[var(--warning-soft)] px-1.5 py-0.5 text-[10px] text-[var(--warning-text)]'
-                        }
-                      >
-                        {p.effect}
+                    ) : (
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        unbound
                       </span>
                     )}
                   </div>
                   {p.description && (
                     <p className="text-xs text-muted-foreground">{p.description}</p>
                   )}
-                  {p.rule && (
-                    <pre className="mt-1 max-w-2xl overflow-x-auto rounded bg-muted px-2 py-1 text-[11px]">
-                      {p.rule}
-                    </pre>
-                  )}
+                  {(p.budget || p.permissions) ? (
+                    <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                      {p.budget?.max_cost_usd != null ? (
+                        <span>budget ${p.budget.max_cost_usd.toFixed(2)}</span>
+                      ) : null}
+                      {p.budget?.max_turns ? (
+                        <span>/ {p.budget.max_turns} turns</span>
+                      ) : null}
+                      {p.permissions?.allow_shell === false ? (
+                        <span className="rounded bg-[var(--danger-soft)] px-1 text-[var(--danger-text)]">
+                          shell denied
+                        </span>
+                      ) : null}
+                      {p.permissions?.allow_network === false ? (
+                        <span className="rounded bg-[var(--warning-soft)] px-1 text-[var(--warning-text)]">
+                          network denied
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -321,19 +352,51 @@ function RuntimesTab() {
               <thead className="bg-muted/50 text-xs text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Runtime ID</th>
-                  <th className="px-3 py-2 text-left font-medium">Version</th>
+                  <th className="px-3 py-2 text-left font-medium">Host</th>
                   <th className="px-3 py-2 text-left font-medium">Region</th>
+                  <th className="px-3 py-2 text-left font-medium">Capabilities</th>
                   <th className="px-3 py-2 text-left font-medium">Status</th>
-                  <th className="px-3 py-2 text-right font-medium">Active</th>
+                  <th className="px-3 py-2 text-right font-medium">Slots</th>
                   <th className="px-3 py-2 text-right font-medium">Last Heartbeat</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {data.items.map((rt) => (
                   <tr key={rt.runtime_id} className="hover:bg-muted/30">
-                    <td className="px-3 py-2 font-mono text-xs">{rt.runtime_id}</td>
-                    <td className="px-3 py-2 text-xs">{rt.version ?? '—'}</td>
+                    <td className="px-3 py-2">
+                      <div className="font-mono text-xs">{rt.runtime_id}</div>
+                      {rt.version ? (
+                        <div className="text-[10px] text-muted-foreground">v{rt.version}</div>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      {rt.hostname ?? '—'}
+                      {rt.pid ? (
+                        <span className="ml-1 text-muted-foreground">pid {rt.pid}</span>
+                      ) : null}
+                    </td>
                     <td className="px-3 py-2 text-xs">{rt.region ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {rt.capabilities?.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {rt.capabilities.slice(0, 4).map((c) => (
+                            <span
+                              key={c}
+                              className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium"
+                            >
+                              {c}
+                            </span>
+                          ))}
+                          {rt.capabilities.length > 4 ? (
+                            <span className="text-[10px] text-muted-foreground">
+                              +{rt.capabilities.length - 4}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       <StatusBadge status={rt.status ?? 'unknown'} />
                     </td>
