@@ -1,4 +1,4 @@
-import { get, post } from './client'
+import { get, post, put, del } from './client'
 import { mapEvalSet, mapEvalRunResult } from './mappers'
 import type { EvalRunViewModel, EvalSetViewModel } from './mappers'
 import type { JsonValue } from '@bufbuild/protobuf'
@@ -50,6 +50,20 @@ export function getEvalSet(setId: string): Promise<EvalSetViewModel> {
   )
 }
 
+export function updateEvalSet(
+  setId: string,
+  body: {
+    description?: string
+    cases: EvalCase[]
+  },
+): Promise<{ id: string; set_id: string }> {
+  return put(`/evals/${setId}`, body)
+}
+
+export function deleteEvalSet(setId: string): Promise<void> {
+  return del(`/evals/${setId}`)
+}
+
 export function createEvalSet(body: {
   set_id: string
   domain_id: string
@@ -64,6 +78,38 @@ export function runEval(
   body: { orchestration?: string; baseline_run_id?: string } = {},
 ): Promise<{ run_id: string; state: string }> {
   return post(`/evals/${setId}/run`, body)
+}
+
+export interface EvalRunListItem {
+  id: string
+  eval_set_id: string
+  domain_id: string
+  domain_version: string
+  orchestration: string
+  state: string
+  score: number
+  total_cases: number
+  passed_cases: number
+  total_cost_usd: number
+  duration_ms: number
+  created_at?: string
+  completed_at?: string
+}
+
+export function listEvalRuns(
+  setId: string,
+  params: ListParams = {},
+): Promise<{
+  items: EvalRunListItem[]
+  total: number
+}> {
+  const search = new URLSearchParams()
+  if (params.limit !== undefined) search.set('limit', String(params.limit))
+  if (params.offset !== undefined) search.set('offset', String(params.offset))
+  return get<unknown>(`/evals/${setId}/runs?${search.toString()}`).then((res) => {
+    const data = res as { items: EvalRunListItem[]; total: number }
+    return data
+  })
 }
 
 export function getEvalRun(setId: string, runId: string): Promise<EvalRunViewModel> {

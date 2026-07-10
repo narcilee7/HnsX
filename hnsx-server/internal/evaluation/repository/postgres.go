@@ -26,6 +26,55 @@ func NewPostgresRepository(database *db.DB) *PostgresRepository {
 	return &PostgresRepository{db: database.GormDB}
 }
 
+// UpdateSet implements Repository. It reuses SaveSet because SaveSet performs an
+// upsert based on the set_id.
+func (r *PostgresRepository) UpdateSet(set *model.EvalSet) error {
+	return r.SaveSet(set)
+}
+
+// DeleteSet implements Repository. It deletes the eval set, its cases, and any
+// associated runs/results. Idempotent: missing sets do not return an error.
+func (r *PostgresRepository) DeleteSet(id string) error {
+	if r.db == nil {
+		return errors.New("evaluation/postgres: no database configured")
+	}
+	if id == "" {
+		return errors.New("evaluation: invalid set id")
+	}
+
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var rec EvalSetRecord
+		err := tx.Where("tenant_id = ? AND set_id = ?", evaluationDefaultTenantUUID, id).
+			Take(&rec).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		// Delete results tied to this set's runs first, then the runs, then cases.
+		if err := tx.Exec(
+			`DELETE FROM eval_results WHERE eval_run_uuid IN (
+				SELECT id FROM eval_runs WHERE eval_set_uuid = ? AND tenant_id = ?
+			)`,
+			rec.ID, evaluationDefaultTenantUUID,
+		).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("tenant_id = ? AND eval_set_uuid = ?", evaluationDefaultTenantUUID, rec.ID).
+			Delete(&EvalRunRecord{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("tenant_id = ? AND eval_set_uuid = ?", evaluationDefaultTenantUUID, rec.ID).
+			Delete(&EvalCaseRecord{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("tenant_id = ? AND id = ?", evaluationDefaultTenantUUID, rec.ID).
+			Delete(&EvalSetRecord{}).Error
+	})
+}
+
 // SaveSet implements Repository.
 func (r *PostgresRepository) SaveSet(set *model.EvalSet) error {
 	if r.db == nil {

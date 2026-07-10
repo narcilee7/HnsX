@@ -2,6 +2,7 @@
 package service
 
 import (
+	"errors"
 	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/evaluation/model"
@@ -32,6 +33,23 @@ func (s *Service) CreateSet(set *model.EvalSet) error {
 // GetSet returns an EvalSet by ID.
 func (s *Service) GetSet(id string) (*model.EvalSet, error) {
 	return s.repo.SetByID(id)
+}
+
+// UpdateSet updates an existing EvalSet.
+func (s *Service) UpdateSet(set *model.EvalSet) error {
+	if set == nil || set.ID == "" {
+		return errors.New("evaluation: invalid set")
+	}
+	if _, err := s.repo.SetByID(set.ID); err != nil {
+		return err
+	}
+	set.UpdatedAt = time.Now().UTC()
+	return s.repo.UpdateSet(set)
+}
+
+// DeleteSet removes an EvalSet by ID.
+func (s *Service) DeleteSet(id string) error {
+	return s.repo.DeleteSet(id)
 }
 
 // ListSets returns paginated eval sets.
