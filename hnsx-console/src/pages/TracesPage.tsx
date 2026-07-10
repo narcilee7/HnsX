@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select'
 import { useTraces } from '@/hooks/useTraces'
 import { useDomains } from '@/hooks/useDomains'
-import type { TraceViewModel } from '@/api/mappers'
+import type { TraceSummaryViewModel } from '@/api/mappers'
 import { TraceMiniBar } from '@hnsx/observability'
 import { Search, RotateCcw } from 'lucide-react'
 
@@ -29,48 +29,17 @@ function formatDuration(ms: number | undefined): string {
 }
 
 /**
- * 从 trace 里的 observations 构造 mini bar 数据。
- * 真实数据里 observations 是 JsonValue[]，每条带 createdAtMs；
- * 我们把它当作 startMs 序列，相邻 observation 之间形成 segment。
+ * TraceSummary rows don't carry observations (the server keeps the list
+ * endpoint aggregate-only to keep paging cheap). Render the mini bar as
+ * a single neutral segment carrying the total duration so the column
+ * still has visual weight. Detail pages build real spans from /traces/:id.
  */
-function buildMiniSpans(trace: TraceViewModel): { id: string; startMs: number; endMs: number; variant: 'chart-1' | 'chart-2' | 'chart-3' | 'chart-4' | 'chart-5' | 'success' | 'warning' | 'danger' | 'info' }[] {
-  const obs = trace.observations
-  if (!Array.isArray(obs) || obs.length === 0) return []
-  const KIND_VARIANT: Record<string, 'chart-1' | 'chart-2' | 'chart-3' | 'chart-4' | 'chart-5' | 'success' | 'warning' | 'danger' | 'info'> = {
-    text: 'chart-1',
-    message: 'chart-1',
-    tool_call: 'chart-2',
-    tool_result: 'chart-2',
-    user: 'chart-3',
-    state: 'chart-5',
-    cost: 'chart-4',
-    error: 'danger',
-  }
-  const points = obs
-    .map((o) => {
-      if (!o || typeof o !== 'object') return null
-      const r = o as Record<string, unknown>
-      const t =
-        typeof r.created_at_ms === 'number'
-          ? r.created_at_ms
-          : typeof r.createdAtMs === 'number'
-            ? r.createdAtMs
-            : typeof r.created_at === 'string'
-              ? Date.parse(r.created_at as string)
-              : 0
-      const kind = (r.kind as string) || 'message'
-      return { t, variant: KIND_VARIANT[kind] ?? 'chart-1' }
-    })
-    .filter((p): p is { t: number; variant: 'chart-1' | 'chart-2' | 'chart-3' | 'chart-4' | 'chart-5' | 'success' | 'warning' | 'danger' | 'info' } => p !== null && p.t > 0)
-    .sort((a, b) => a.t - b.t)
-
-  if (points.length < 2) return []
-  return points.slice(1).map((p, i) => ({
-    id: `seg-${i}`,
-    startMs: points[i]!.t,
-    endMs: p.t,
-    variant: p.variant,
-  }))
+function buildMiniSpans(sum: TraceSummaryViewModel): { id: string; startMs: number; endMs: number; variant: 'chart-1' | 'chart-2' | 'chart-3' | 'chart-4' | 'chart-5' | 'success' | 'warning' | 'danger' | 'info' }[] {
+  const totalMs = sum.durationMs ?? 0
+  if (totalMs <= 0) return []
+  return [
+    { id: 'seg-total', startMs: 0, endMs: totalMs, variant: sum.status === 'completed' ? 'chart-1' : 'chart-3' },
+  ]
 }
 
 export default function TracesPage() {
@@ -98,7 +67,7 @@ export default function TracesPage() {
     limit: 50,
   })
 
-  const columns = useMemo<ColumnDef<TraceViewModel>[]>(
+  const columns = useMemo<ColumnDef<TraceSummaryViewModel>[]>(
     () => [
       {
         accessorKey: 'traceId',
@@ -148,29 +117,27 @@ export default function TracesPage() {
         ),
       },
       {
-        accessorKey: 'agentRefs',
-        header: 'Agents',
-        cell: ({ row }) => {
-          const refs = row.original.agentRefs
-          if (!refs.length) return <span className="text-muted-foreground">-</span>
-          return (
-            <div className="flex flex-wrap gap-1">
-              {refs.slice(0, 3).map((agent) => (
-                <span
-                  key={agent}
-                  className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium"
-                >
-                  {agent}
-                </span>
-              ))}
-              {refs.length > 3 && (
-                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
-                  +{refs.length - 3}
-                </span>
-              )}
-            </div>
-          )
-        },
+        accessorKey: 'observationCount',
+        header: 'Observations',
+        cell: ({ row }) => (
+          <span className="text-sm tabular-nums">{row.original.observationCount}</span>
+        ),
+      },
+      {
+        accessorKey: 'agentInvocations',
+        header: 'Agent / Tool',
+        cell: ({ row }) => (
+          <span className="text-sm tabular-nums">
+            {row.original.agentInvocations} / {row.original.toolInvocations}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'totalCostUsd',
+        header: 'Cost (USD)',
+        cell: ({ row }) => (
+          <span className="text-sm tabular-nums">${row.original.totalCostUsd.toFixed(4)}</span>
+        ),
       },
     ],
     [],

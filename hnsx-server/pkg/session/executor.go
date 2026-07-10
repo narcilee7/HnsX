@@ -49,6 +49,33 @@ type noopRecorder struct{}
 
 func (noopRecorder) Record(context.Context, AuditEntry) error { return nil }
 
+// ApprovalRequest is the minimal contract the executor needs from a
+// human-in-the-loop gate. The gate is responsible for surfacing the
+// request to operators, blocking until they decide, and reporting the
+// outcome. The approval subsystem implements this today; Python
+// workers implement their own gRPC equivalent.
+type ApprovalRequest struct {
+	SessionID string
+	DomainID  string
+	Action    string
+	Resource  string
+	Context   map[string]any
+}
+
+// ApprovalGate is the runtime↔approval control-plane contract.
+type ApprovalGate interface {
+	Request(ctx context.Context, req ApprovalRequest) (approved bool, comment string, err error)
+}
+
+// noopGate is the default; it logs a policy_check and treats "human_approval"
+// as the policy says — i.e. blocks — but yields the same error path as before
+// so existing tests keep passing.
+type noopGate struct{}
+
+func (noopGate) Request(context.Context, ApprovalRequest) (bool, string, error) {
+	return false, "", errors.New("approval: gate not configured")
+}
+
 // Executor wires the runner, broadcaster, telemetry sinks, policy engine, and
 // audit recorder into a single component that the API layer calls per session.
 //
@@ -60,13 +87,15 @@ func (noopRecorder) Record(context.Context, AuditEntry) error { return nil }
 //   - Mirror every observation into a per-session broadcaster (for SSE).
 //   - Mirror every observation into all registered telemetry sinks.
 //   - Record policy decisions and lifecycle events to the audit log.
+//   - Block on policy-approved human gates via the optional ApprovalGate.
 type Executor struct {
-	adapter   runtime.Adapter
-	sinks     []runtime.Sink
-	broadcast *broadcaster.Broadcaster
-	policies  PolicyEngineProvider
-	audit     AuditRecorder
-	mu        sync.Mutex
+	adapter    runtime.Adapter
+	sinks      []runtime.Sink
+	broadcast  *broadcaster.Broadcaster
+	policies   PolicyEngineProvider
+	audit      AuditRecorder
+	approval   ApprovalGate
+	mu         sync.Mutex
 }
 
 // NewExecutor constructs an Executor bound to a single runtime.Adapter and zero or
@@ -78,6 +107,7 @@ func NewExecutor(adapter runtime.Adapter, sinks ...runtime.Sink) *Executor {
 		sinks:    sinks,
 		policies: permissiveProvider{},
 		audit:    noopRecorder{},
+		approval: noopGate{},
 	}
 }
 
@@ -106,6 +136,18 @@ func (e *Executor) WithAuditRecorder(a AuditRecorder) *Executor {
 	defer e.mu.Unlock()
 	if a != nil {
 		e.audit = a
+	}
+	return e
+}
+
+// WithApprovalGate wires the human-in-the-loop gate. When the active
+// policy emits a human_approval decision, the executor calls Request
+// and blocks until the operator resolves or context is canceled.
+func (e *Executor) WithApprovalGate(g ApprovalGate) *Executor {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if g != nil {
+		e.approval = g
 	}
 	return e
 }
@@ -146,6 +188,7 @@ func (e *Executor) Execute(ctx context.Context, s *spec.DomainSpec, trigger map[
 		audit:     audit,
 		spec:      s,
 		sessionID: sessID,
+		approval:  e.approval,
 	}
 
 	runner := runtime.NewRunner(wrapped)
@@ -218,6 +261,23 @@ func (e *Executor) publish(ctx context.Context, obs runtime.Observation) {
 	}
 }
 
+// ForwardObservation routes an observation that originated outside the
+// executor (e.g. from a worker over the gRPC control plane) into the same
+// telemetry sinks used by locally-executed sessions. It does NOT broadcast
+// to the per-session SSE channel; callers that need SSE should do so
+// separately.
+func (e *Executor) ForwardObservation(ctx context.Context, obs runtime.Observation) {
+	e.mu.Lock()
+	sinks := e.sinks
+	e.mu.Unlock()
+
+	for _, s := range sinks {
+		go func(s runtime.Sink) {
+			_ = s.Record(ctx, obs)
+		}(s)
+	}
+}
+
 func (e *Executor) auditObservation(ctx context.Context, audit AuditRecorder, obs runtime.Observation) {
 	decision := AuditDecisionAllow
 	if obs.Kind == "error" {
@@ -247,6 +307,7 @@ type policyAdapter struct {
 	inner     runtime.Adapter
 	engine    *policy.Engine
 	audit     AuditRecorder
+	approval  ApprovalGate
 	spec      *spec.DomainSpec
 	sessionID string
 }
@@ -300,7 +361,41 @@ func (a *policyAdapter) Invoke(ctx context.Context, agent spec.AgentSpec, prompt
 			a.recordDeny(ctx, "guardrail_block", resource, decision.Message)
 			return "", fmt.Errorf("%w: %s", policy.ErrGuardrailBlocked, decision.Message)
 		case "human_approval":
-			// Phase 1: human approval is not yet implemented; fall through to log.
+			// Suspend the agent call until a human approves or rejects the
+			// action. The control-plane gate blocks; if no gate is wired,
+			// the noopGate returns an error so the executor surfaces it
+			// instead of letting the call proceed silently.
+			if a.approval == nil {
+				a.recordDeny(ctx, "approval_no_gate", resource,
+					"policy requires human approval but no approval gate is wired")
+				return "", fmt.Errorf(
+					"approval: policy requires human approval but no gate is configured")
+			}
+			req := ApprovalRequest{
+				SessionID: a.sessionID,
+				DomainID:  a.spec.ID,
+				Action:    fmt.Sprintf("guardrail:%s", decision.GuardrailID),
+				Resource:  resource,
+				Context: map[string]any{
+					"guardrail_id": decision.GuardrailID,
+					"message":      decision.Message,
+					"input":        input,
+				},
+			}
+			approved, comment, gerr := a.approval.Request(ctx, req)
+			a.recordAllow(ctx, "approval_decision", resource, map[string]any{
+				"approved": approved,
+				"comment":  comment,
+				"gate_err": gerr,
+			})
+			if gerr != nil {
+				a.recordDeny(ctx, "approval_gate_error", resource, gerr.Error())
+				return "", gerr
+			}
+			if !approved {
+				a.recordDeny(ctx, "approval_rejected", resource, comment)
+				return "", fmt.Errorf("approval: rejected by operator: %s", comment)
+			}
 		}
 	}
 

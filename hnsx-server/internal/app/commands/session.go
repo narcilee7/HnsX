@@ -159,7 +159,7 @@ func (c *SessionCommands) buildWorkerRequest(sess *app.RegisteredSession, domain
 		return nil, fmt.Errorf("marshal trigger: %w", err)
 	}
 
-	return &worker.SessionRequest{
+	req := &worker.SessionRequest{
 		SessionID:            sess.ID,
 		DomainID:             domain.ID,
 		DomainVersion:        domain.Version,
@@ -168,7 +168,8 @@ func (c *SessionCommands) buildWorkerRequest(sess *app.RegisteredSession, domain
 		TraceID:              sess.ID,
 		CorrelationID:        sess.ID,
 		RequiredCapabilities: spec.DeriveCapabilities(domain.Spec),
-	}, nil
+	}
+	return req, nil
 }
 
 // runLocal executes the session in-process via the executor.

@@ -22,12 +22,20 @@ func NewService(repo repository.Repository) *Service {
 }
 
 // LoadDomainPolicy persists the policy derived from a DomainSpec.
+//
+// Backward-compat path: Domain YAML's harness.policy is treated as a
+// policy whose ID equals the domain_id and which is bound to the
+// same domain. This preserves the existing LoadDomainPolicy contract
+// callers (RegisterDomain → LoadDomainPolicy on validator/bootstrap)
+// rely on, while letting the new /api/v1/policies endpoints also
+// manage named policies independently.
 func (s *Service) LoadDomainPolicy(domainID string, ds *spec.DomainSpec) error {
 	if ds == nil {
 		return nil
 	}
 	return s.repo.Save(&model.Policy{
-		DomainID: domainID,
+		ID:   domainID,
+		Name: domainID,
 		Budget: model.Budget{
 			MaxCostUSD: ds.Harness.Policy.Budget.MaxCostUSD,
 			MaxTurns:   ds.Harness.Policy.Budget.MaxTurns,
@@ -39,8 +47,34 @@ func (s *Service) LoadDomainPolicy(domainID string, ds *spec.DomainSpec) error {
 			AllowNetwork:    ds.Harness.Policy.Permissions.AllowNetwork,
 			AllowShell:      ds.Harness.Policy.Permissions.AllowShell,
 		},
-		Guardrails: convertGuardrails(ds.Harness.Policy.Guardrails),
+		Guardrails:  convertGuardrails(ds.Harness.Policy.Guardrails),
+		BoundDomain: domainID,
 	})
+}
+
+// List returns every policy registered with the service.
+func (s *Service) List() ([]model.ListItem, error) {
+	return s.repo.List()
+}
+
+// CreateOrUpdate idempotently persists the supplied policy.
+func (s *Service) CreateOrUpdate(p *model.Policy) error {
+	if p == nil || p.ID == "" {
+		return model.ErrInvalidPolicyID
+	}
+	return s.repo.Save(p)
+}
+
+// Delete removes the policy by id.
+func (s *Service) Delete(id string) error {
+	return s.repo.Delete(id)
+}
+
+// BindDomain associates an existing policy with the named domain. If
+// the domain is already bound to another policy, that binding is
+// cleared so the 1:1 invariant holds.
+func (s *Service) BindDomain(policyID, domainID string) error {
+	return s.repo.BindDomain(policyID, domainID)
 }
 
 // SessionEngine returns a fresh, session-scoped policy.Engine for the named

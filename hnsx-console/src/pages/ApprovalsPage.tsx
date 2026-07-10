@@ -49,24 +49,40 @@ export default function ApprovalsPage() {
           </Link>
         ),
       },
-      { accessorKey: 'step_id', header: 'Step',
-        cell: ({ row }) => row.original.step_id ? <span className="font-mono text-[10px]">{row.original.step_id.slice(0, 16)}</span> : <span className="text-muted-foreground">—</span>,
+      {
+        accessorKey: 'domain_id',
+        header: 'Domain',
+        cell: ({ row }) => (
+          <Link
+            to={`/domains/${row.original.domain_id}`}
+            className="font-mono text-[10px] hover:underline"
+          >
+            {row.original.domain_id}
+          </Link>
+        ),
       },
-      { accessorKey: 'requested_action', header: 'Action',
-        cell: ({ row }) => <span className="truncate font-mono text-xs">{row.original.requested_action}</span>,
+      { accessorKey: 'action', header: 'Action',
+        cell: ({ row }) => <span className="truncate font-mono text-xs">{row.original.action}</span>,
       },
       {
-        accessorKey: 'risk_description',
+        accessorKey: 'risk_level',
         header: 'Risk',
-        cell: ({ row }) =>
-          row.original.risk_description ? (
+        cell: ({ row }) => {
+          const level = row.original.risk_level
+          const tone =
+            level === 'critical' ? 'text-[var(--danger-text)]'
+              : level === 'high' ? 'text-[var(--danger)]'
+              : level === 'medium' ? 'text-[var(--warning-text)]'
+              : 'text-muted-foreground'
+          return level ? (
             <div className="flex items-center gap-1.5 text-xs">
-              <AlertTriangle className="h-3 w-3 shrink-0 text-[var(--warning)]" />
-              <span className="truncate">{row.original.risk_description}</span>
+              <AlertTriangle className={`h-3 w-3 shrink-0 ${tone}`} />
+              <span className={`truncate font-medium capitalize ${tone}`}>{level}</span>
             </div>
           ) : (
             <span className="text-muted-foreground">—</span>
-          ),
+          )
+        },
       },
       {
         accessorKey: 'status',
@@ -213,21 +229,25 @@ function ApprovalDetailDialog({
 
             <div className="space-y-4 py-2">
               {/* Risk banner */}
-              {approval.risk_description && (
+              {approval.risk_level && (
                 <div className="flex items-start gap-2 rounded-md border border-[var(--warning)]/40 bg-[var(--warning-soft)] p-3 text-sm text-[var(--warning-text)]">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <div>
-                    <p className="font-medium">风险提示</p>
-                    <p className="mt-0.5 text-[var(--chart-text-secondary)]">{approval.risk_description}</p>
+                    <p className="font-medium capitalize">Risk: {approval.risk_level}</p>
+                    {approval.resource ? (
+                      <p className="mt-0.5 text-[var(--chart-text-secondary)]">
+                        resource: <span className="font-mono">{approval.resource}</span>
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               )}
 
               {/* Action detail */}
               <div className="space-y-1">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Requested Action</p>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Action</p>
                 <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
-                  {approval.requested_action}
+                  {approval.action}
                 </pre>
               </div>
 
@@ -242,10 +262,17 @@ function ApprovalDetailDialog({
                     <ExternalLink className="h-3 w-3" />
                   </Link>
                 </Field>
-                <Field label="Step">
-                  <span className="font-mono text-xs">
-                    {approval.step_id ?? <span className="text-muted-foreground">—</span>}
-                  </span>
+                <Field label="Domain">
+                  {approval.domain_id ? (
+                    <Link
+                      to={`/domains/${approval.domain_id}`}
+                      className="font-mono text-xs hover:underline"
+                    >
+                      {approval.domain_id}
+                    </Link>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </Field>
                 <Field label="Status">
                   <StatusBadge status={approval.status} />
@@ -253,9 +280,9 @@ function ApprovalDetailDialog({
                 <Field label="Created">
                   <Timestamp date={new Date(approval.created_at)} />
                 </Field>
-                {approval.resolver && (
-                  <Field label="Resolver">
-                    <span className="text-xs">{approval.resolver}</span>
+                {approval.reviewed_by && (
+                  <Field label="Reviewed by">
+                    <span className="text-xs">{approval.reviewed_by}</span>
                   </Field>
                 )}
                 {approval.resolved_at && (

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { create, type EvalSet, EvalSetSchema, EvalCaseSchema } from '@hnsx/sdk-node'
+import { useNavigate } from 'react-router-dom'
+import { create, EvalCaseSchema } from '@hnsx/sdk-node'
 import {
   listEvalSets,
   getEvalSet,
@@ -7,141 +8,132 @@ import {
   updateEvalSet,
   deleteEvalSet,
   runEval,
-  listEvalRuns,
   getEvalRun,
-} from '@/api/domains'
-import { mapEvalSet, mapEvalRunResult } from '@/api/mappers'
+  listEvalRuns,
+  type EvalSetListItem,
+  type EvalRunListItem,
+} from '@/api/evals'
 import type { EvalSetViewModel, EvalRunViewModel } from '@/api/mappers'
 
 const evalKeys = {
   all: ['evals'] as const,
-  lists: (domainId: string) => [...evalKeys.all, 'list', domainId] as const,
-  details: (domainId: string) => [...evalKeys.all, 'detail', domainId] as const,
-  detail: (domainId: string, setId: string) =>
-    [...evalKeys.details(domainId), setId] as const,
-  runs: (domainId: string, setId: string) =>
-    [...evalKeys.detail(domainId, setId), 'runs'] as const,
-  run: (domainId: string, setId: string, runId: string) =>
-    [...evalKeys.runs(domainId, setId), runId] as const,
+  lists: () => [...evalKeys.all, 'list'] as const,
+  detail: (setId: string) => [...evalKeys.all, 'detail', setId] as const,
+  run: (setId: string, runId: string) =>
+    [...evalKeys.detail(setId), 'run', runId] as const,
 }
 
-export function useEvalSets(domainId: string | undefined) {
-  return useQuery<EvalSetViewModel[]>({
-    queryKey: evalKeys.lists(domainId || ''),
-    queryFn: async () => {
-      const sets = await listEvalSets(domainId!)
-      return sets.map((s) => mapEvalSet(s, domainId!))
-    },
-    enabled: !!domainId,
+/**
+ * EvalSets are server-global, not per-domain (the route is /api/v1/evals,
+ * not /api/v1/domains/:id/evals). The page filters by domain client-side
+ * from the dataset's domain_id field.
+ */
+export function useEvalSets() {
+  return useQuery<{ items: EvalSetListItem[]; total: number }>({
+    queryKey: evalKeys.lists(),
+    queryFn: () => listEvalSets({ limit: 100 }),
   })
 }
 
-export function useEvalSet(domainId: string | undefined, setId: string | undefined) {
+export function useEvalSet(setId: string | undefined) {
   return useQuery<EvalSetViewModel>({
-    queryKey: evalKeys.detail(domainId || '', setId || ''),
-    queryFn: async () => {
-      const set = await getEvalSet(domainId!, setId!)
-      return mapEvalSet(set, domainId!)
-    },
-    enabled: !!domainId && !!setId,
+    queryKey: evalKeys.detail(setId || ''),
+    queryFn: () => getEvalSet(setId!),
+    enabled: !!setId,
   })
 }
 
-export interface EvalSetInput {
-  id: string
-  description: string
-  cases: { id: string; name: string; input: string; expect: string }[]
+export interface CreateEvalSetInput {
+  set_id: string
+  domain_id: string
+  description?: string
+  cases: Array<{
+    id: string
+    name?: string
+    input: unknown
+    expect: unknown
+    scorer?: unknown
+  }>
 }
 
-function toEvalSet(input: EvalSetInput): EvalSet {
-  return create(EvalSetSchema, {
-    id: input.id,
-    description: input.description,
-    cases: input.cases.map((c) =>
-      create(EvalCaseSchema, {
-        id: c.id,
-        name: c.name,
-        input: c.input,
-        expect: c.expect,
+export function useCreateEvalSet() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateEvalSetInput) =>
+      createEvalSet({
+        set_id: input.set_id,
+        domain_id: input.domain_id,
+        description: input.description,
+        cases: input.cases.map((c) =>
+          create(EvalCaseSchema, {
+            id: c.id,
+            name: c.name ?? c.id,
+            input: JSON.stringify(c.input ?? {}),
+            expect: JSON.stringify(c.expect ?? {}),
+            scorer: c.scorer ? { scorers: [] } : undefined,
+          }),
+        ),
       }),
-    ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: evalKeys.lists() }),
   })
 }
 
-export function useCreateEvalSet(domainId: string | undefined) {
-  const queryClient = useQueryClient()
+export function useUpdateEvalSet(setId: string) {
+  const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: EvalSetInput) => createEvalSet(domainId!, toEvalSet(input)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: evalKeys.lists(domainId || '') })
-    },
-  })
-}
-
-export function useUpdateEvalSet(domainId: string | undefined, setId: string | undefined) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (input: EvalSetInput) => updateEvalSet(domainId!, setId!, toEvalSet(input)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: evalKeys.detail(domainId || '', setId || '') })
-      queryClient.invalidateQueries({ queryKey: evalKeys.lists(domainId || '') })
-    },
-  })
-}
-
-export function useDeleteEvalSet(domainId: string | undefined) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (setId: string) => deleteEvalSet(domainId!, setId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: evalKeys.lists(domainId || '') })
-    },
-  })
-}
-
-export function useRunEval(domainId: string | undefined, setId: string | undefined) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (body: { orchestration?: string; baselineRunId?: string } = {}) =>
-      runEval(domainId!, setId!, {
-        orchestration: body.orchestration,
-        baseline_run_id: body.baselineRunId,
+    mutationFn: (input: { description?: string; cases: CreateEvalSetInput['cases'] }) =>
+      updateEvalSet(setId, {
+        description: input.description,
+        cases: input.cases.map((c) =>
+          create(EvalCaseSchema, {
+            id: c.id,
+            name: c.name ?? c.id,
+            input: JSON.stringify(c.input ?? {}),
+            expect: JSON.stringify(c.expect ?? {}),
+            scorer: c.scorer ? { scorers: [] } : undefined,
+          }),
+        ),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: evalKeys.runs(domainId || '', setId || '') })
+      qc.invalidateQueries({ queryKey: evalKeys.detail(setId) })
+      qc.invalidateQueries({ queryKey: evalKeys.lists() })
     },
   })
 }
 
-export function useEvalRuns(
-  domainId: string | undefined,
-  setId: string | undefined,
-  params: { limit?: number; offset?: number } = {},
-) {
-  return useQuery<{ items: EvalRunViewModel[]; total: number }>({
-    queryKey: [...evalKeys.runs(domainId || '', setId || ''), params],
-    queryFn: async () => {
-      const res = await listEvalRuns(domainId!, setId!, params)
-      return {
-        items: res.items.map((r) => mapEvalRunResult(r)),
-        total: res.total,
-      }
+export function useDeleteEvalSet() {
+  const qc = useQueryClient()
+  const navigate = useNavigate()
+  return useMutation({
+    mutationFn: (setId: string) => deleteEvalSet(setId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: evalKeys.lists() })
+      navigate('/evals')
     },
-    enabled: !!domainId && !!setId,
   })
 }
 
-export function useEvalRun(
-  domainId: string | undefined,
-  setId: string | undefined,
-  runId: string | undefined,
-) {
+export function useEvalRuns(setId: string | undefined) {
+  return useQuery<{ items: EvalRunListItem[]; total: number }>({
+    queryKey: [...evalKeys.detail(setId || ''), 'runs'],
+    queryFn: () => listEvalRuns(setId!),
+    enabled: !!setId,
+  })
+}
+
+export function useRunEval(setId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { orchestration?: string; baseline_run_id?: string } = {}) =>
+      runEval(setId, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: evalKeys.detail(setId) }),
+  })
+}
+
+export function useEvalRun(setId: string | undefined, runId: string | undefined) {
   return useQuery<EvalRunViewModel>({
-    queryKey: evalKeys.run(domainId || '', setId || '', runId || ''),
-    queryFn: async () => {
-      const res = await getEvalRun(domainId!, setId!, runId!)
-      return mapEvalRunResult(res)
-    },
-    enabled: !!domainId && !!setId && !!runId,
+    queryKey: evalKeys.run(setId || '', runId || ''),
+    queryFn: () => getEvalRun(setId!, runId!),
+    enabled: !!setId && !!runId,
   })
 }

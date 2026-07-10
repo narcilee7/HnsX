@@ -60,6 +60,14 @@ Usage:
   hnsx remote  sessions cancel <id>
   hnsx remote  sessions rerun <id>
   hnsx remote  sessions events <id>
+  hnsx remote  evals list
+  hnsx remote  evals create --set-id <id> --domain <id> [--description <text>] [--cases <json>]
+  hnsx remote  evals get <id>
+  hnsx remote  evals update <id> [--description <text>] [--cases <json>]
+  hnsx remote  evals delete <id>
+  hnsx remote  evals run <set-id>
+  hnsx remote  evals runs list <set-id>
+  hnsx remote  evals runs get <set-id> <run-id>
   hnsx version
 
 Examples:
@@ -188,6 +196,8 @@ func cmdRemote(args []string) int {
 		return cmdRemoteDomains(args[1:])
 	case "sessions":
 		return cmdRemoteSessions(args[1:])
+	case "evals":
+		return cmdRemoteEvals(args[1:])
 	default:
 		printRemoteUsage()
 		return 1
@@ -207,6 +217,14 @@ Usage:
   hnsx remote sessions cancel <id>
   hnsx remote sessions rerun <id>
   hnsx remote sessions events <id>
+  hnsx remote evals list
+  hnsx remote evals create --set-id <id> --domain <id> [--description <text>] [--cases <json>]
+  hnsx remote evals get <id>
+  hnsx remote evals update <id> [--description <text>] [--cases <json>]
+  hnsx remote evals delete <id>
+  hnsx remote evals run <set-id>
+  hnsx remote evals runs list <set-id>
+  hnsx remote evals runs get <set-id> <run-id>
 
 Environment:
   HNSX_SERVER_URL   Server base URL (default http://127.0.0.1:50051)
@@ -370,6 +388,138 @@ func cmdRemoteSessionEvents(c *client.Client, id string) int {
 			return 0
 		}
 	}
+}
+
+func cmdRemoteEvals(args []string) int {
+	if len(args) < 1 {
+		printRemoteUsage()
+		return 1
+	}
+	c := client.New()
+	switch args[0] {
+	case "list":
+		items, err := c.ListEvalSets()
+		if err != nil {
+			printRemoteError("list eval sets", err)
+			return 1
+		}
+		printJSON(items)
+	case "create":
+		fs := flag.NewFlagSet("create", flag.ExitOnError)
+		setID := fs.String("set-id", "", "eval set id")
+		domainID := fs.String("domain", "", "domain id")
+		description := fs.String("description", "", "eval set description")
+		casesJSON := fs.String("cases", "[]", "JSON array of eval cases")
+		_ = fs.Parse(args[1:])
+		if *setID == "" || *domainID == "" {
+			fmt.Fprintln(os.Stderr, "--set-id and --domain are required")
+			return 1
+		}
+		var cases []client.EvalCase
+		if err := json.Unmarshal([]byte(*casesJSON), &cases); err != nil {
+			fmt.Fprintf(os.Stderr, "parse cases: %v\n", err)
+			return 1
+		}
+		set, err := c.CreateEvalSet(*setID, *domainID, *description, cases)
+		if err != nil {
+			printRemoteError("create eval set", err)
+			return 1
+		}
+		printJSON(set)
+	case "get":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "eval set id required")
+			return 1
+		}
+		set, err := c.GetEvalSet(args[1])
+		if err != nil {
+			printRemoteError("get eval set", err)
+			return 1
+		}
+		printJSON(set)
+	case "update":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "eval set id required")
+			return 1
+		}
+		fs := flag.NewFlagSet("update", flag.ExitOnError)
+		description := fs.String("description", "", "eval set description")
+		casesJSON := fs.String("cases", "[]", "JSON array of eval cases")
+		_ = fs.Parse(args[2:])
+		var cases []client.EvalCase
+		if err := json.Unmarshal([]byte(*casesJSON), &cases); err != nil {
+			fmt.Fprintf(os.Stderr, "parse cases: %v\n", err)
+			return 1
+		}
+		set, err := c.UpdateEvalSet(args[1], *description, cases)
+		if err != nil {
+			printRemoteError("update eval set", err)
+			return 1
+		}
+		printJSON(set)
+	case "delete":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "eval set id required")
+			return 1
+		}
+		if err := c.DeleteEvalSet(args[1]); err != nil {
+			printRemoteError("delete eval set", err)
+			return 1
+		}
+		fmt.Println("deleted")
+	case "run":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "eval set id required")
+			return 1
+		}
+		run, err := c.RunEval(args[1])
+		if err != nil {
+			printRemoteError("run eval", err)
+			return 1
+		}
+		printJSON(run)
+	case "runs":
+		return cmdRemoteEvalRuns(c, args[1:])
+	default:
+		printRemoteUsage()
+		return 1
+	}
+	return 0
+}
+
+func cmdRemoteEvalRuns(c *client.Client, args []string) int {
+	if len(args) < 1 {
+		printRemoteUsage()
+		return 1
+	}
+	switch args[0] {
+	case "list":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "eval set id required")
+			return 1
+		}
+		runs, err := c.ListEvalRuns(args[1])
+		if err != nil {
+			printRemoteError("list eval runs", err)
+			return 1
+		}
+		printJSON(runs)
+	case "get":
+		if len(args) < 3 {
+			fmt.Fprintln(os.Stderr, "eval set id and run id required")
+			return 1
+		}
+		run, err := c.GetEvalRun(args[1], args[2])
+		if err != nil {
+			printRemoteError("get eval run", err)
+			return 1
+		}
+		printJSON(run)
+	default:
+		printRemoteUsage()
+		return 1
+	}
+	return 0
 }
 
 func printJSON(v any) {

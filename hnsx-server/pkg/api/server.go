@@ -13,9 +13,11 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
+	approvalservice "github.com/hnsx-io/hnsx/server/internal/approval/service"
 	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
 	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
 	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
+	secretservice "github.com/hnsx-io/hnsx/server/internal/secret/service"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
@@ -57,6 +59,15 @@ type Server struct {
 	// EvalService manages eval sets and runs.
 	EvalService *evalservice.Service
 
+	// ApprovalService implements the human-in-the-loop gate; nil is OK
+	// only if the operator never wires any domain with require_human_approval.
+	ApprovalService *approvalservice.Service
+
+	// SecretService resolves ${secret:name} placeholders and persists
+	// AES-GCM encrypted values; nil means the operator did not configure
+	// HNSX_SECRET_KEY and the control plane refused to start.
+	SecretService *secretservice.Service
+
 	// WorkerService manages worker registration, scheduling, and session queueing.
 	WorkerService *workerservice.Service
 
@@ -68,6 +79,10 @@ type Server struct {
 
 	// Queries exposes read-only application queries.
 	Queries *queries.Queries
+
+	// ConnectHandler serves the Connect-RPC control plane on /hnsx.v1.* paths.
+	// When nil the HTTP server exposes only the REST API.
+	ConnectHandler http.Handler
 
 	shutdownOnce   sync.Once
 	httpServer     *http.Server
@@ -95,11 +110,20 @@ func NewServer(build BuildInfo, application *app.Application) *Server {
 		AuditService:    application.AuditService,
 		TraceService:    application.TraceService,
 		EvalService:     application.EvalService,
+		ApprovalService: application.ApprovalService,
+		SecretService:   application.SecretService,
 		WorkerService:   application.WorkerService,
 		DomainCommands:  commands.NewDomainCommands(application.DomainService),
 		SessionCommands: commands.NewSessionCommands(application.SessionService, application.DomainService, application.WorkerService, application.Executor, application.State),
 		Queries:         queries.NewQueries(application.DomainService, application.SessionService),
 	}
+}
+
+// WithConnectHandler attaches the Connect-RPC handler mux to the HTTP server.
+// It returns the same *Server for chaining.
+func (s *Server) WithConnectHandler(h http.Handler) *Server {
+	s.ConnectHandler = h
+	return s
 }
 
 // LoadDomainPolicy persists the policy for the named domain.

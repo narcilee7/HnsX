@@ -70,6 +70,9 @@ func NewServerFromArgs(args []string) (*Server, error) {
 	}
 	apiServer := api.NewServer(build, application)
 
+	connectSrv := controlplane.NewConnectServer(application)
+	apiServer.WithConnectHandler(connectSrv.Handler())
+
 	if *seedFrom != "" {
 		seedFromDir(log, apiServer, *seedFrom)
 	}
@@ -89,7 +92,11 @@ func NewServerFromArgs(args []string) (*Server, error) {
 				if obs.GetPayload() != "" {
 					_ = json.Unmarshal([]byte(obs.GetPayload()), &payload)
 				}
-				apiServer.PublishObservation(sessionID, runtime.Observation{
+				metadata := map[string]any{}
+				if obs.GetMetadata() != "" {
+					_ = json.Unmarshal([]byte(obs.GetMetadata()), &metadata)
+				}
+				ro := runtime.Observation{
 					Kind:      obs.GetKind(),
 					SessionID: obs.GetSessionId(),
 					DomainID:  obs.GetDomainId(),
@@ -98,8 +105,16 @@ func NewServerFromArgs(args []string) (*Server, error) {
 					ParentID:  obs.GetParentId(),
 					TraceID:   obs.GetTraceId(),
 					Payload:   payload,
+					Metadata:  metadata,
 					Timestamp: time.UnixMilli(obs.GetCreatedAtMs()),
-				})
+				}
+				apiServer.PublishObservation(sessionID, ro)
+				if apiServer.TraceService != nil {
+					_ = apiServer.TraceService.Record(context.Background(), ro)
+				}
+				if application.Executor != nil {
+					application.Executor.ForwardObservation(context.Background(), ro)
+				}
 			}
 			grpcSrv.Sched.OnSessionStatus = func(tid tenant.ID, sessionID, state string) {
 				if application.SessionService != nil {

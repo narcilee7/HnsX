@@ -12,6 +12,8 @@ import (
 // Repository is the persistence contract for EvalSet / EvalRun aggregates.
 type Repository interface {
 	SaveSet(set *model.EvalSet) error
+	UpdateSet(set *model.EvalSet) error
+	DeleteSet(id string) error
 	SetByID(id string) (*model.EvalSet, error)
 	SetsByDomain(domainID string) ([]model.EvalSet, error)
 	ListSets(limit, offset int) ([]model.EvalSet, int, error)
@@ -46,6 +48,20 @@ func (r *InMemoryRepository) SaveSet(set *model.EvalSet) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.sets[set.ID] = set
+	return nil
+}
+
+// UpdateSet implements Repository. It is an alias for SaveSet in the in-memory
+// implementation because SaveSet already performs upsert.
+func (r *InMemoryRepository) UpdateSet(set *model.EvalSet) error {
+	return r.SaveSet(set)
+}
+
+// DeleteSet implements Repository. Idempotent: missing sets do not return an error.
+func (r *InMemoryRepository) DeleteSet(id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.sets, id)
 	return nil
 }
 

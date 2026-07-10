@@ -15,7 +15,11 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/audit/model"
 	auditrepository "github.com/hnsx-io/hnsx/server/internal/audit/repository"
 	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
+	approvalmodel "github.com/hnsx-io/hnsx/server/internal/approval/model"
+	approvalrepo "github.com/hnsx-io/hnsx/server/internal/approval/repository"
+	approvalservice "github.com/hnsx-io/hnsx/server/internal/approval/service"
 	"github.com/hnsx-io/hnsx/server/internal/config"
+	secretcrypto "github.com/hnsx-io/hnsx/server/internal/secret/crypto"
 	domainrepository "github.com/hnsx-io/hnsx/server/internal/domain/repository"
 	domainservice "github.com/hnsx-io/hnsx/server/internal/domain/service"
 	evalrepository "github.com/hnsx-io/hnsx/server/internal/evaluation/repository"
@@ -54,6 +58,7 @@ type Application struct {
 	TraceService   *traceservice.Service
 	EvalService    *evalservice.Service
 	SecretService  *secretservice.Service
+	ApprovalService *approvalservice.Service
 	StoreService   *storeservice.Service
 
 	Executor *pkgexecutor.Executor
@@ -103,6 +108,7 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 	evalRepo := evalrepository.NewPostgresRepository(store)
 	policyRepo := policyrepository.NewPostgresRepository(store)
 	secretRepo := secretrepository.NewPostgresRepository(store)
+	approvalRepo := approvalrepo.NewPostgresRepository(store)
 
 	// Services.
 	domainSvc := domainservice.NewService(domainRepo)
@@ -111,8 +117,17 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 	auditSvc := auditservice.NewService(auditRepo)
 	traceSvc := traceservice.NewService(traceRepo)
 	evalSvc := evalservice.NewService(evalRepo)
-	secretSvc := secretservice.NewService(secretRepo)
+	// Secret encryption at rest is fail-fast: HNSX_SECRET_KEY must be set
+	// before the control plane boots. Server refuses to start without it
+	// rather than silently downgrading to plaintext.
+	secretCipher, err := secretcrypto.New()
+	if err != nil {
+		return nil, fmt.Errorf("secret cipher: %w (set HNSX_SECRET_KEY, min 16 chars)", err)
+	}
+	log.Info("secret store: encryption enabled", zap.String("alg", "AES-256-GCM"))
+	secretSvc := secretservice.NewService(secretRepo, secretCipher)
 	storeSvc := storeservice.NewService(store)
+	approvalSvc := approvalservice.NewService(approvalRepo, nil)
 
 	// Sinks.
 	sinks := []runtime.Sink{
@@ -133,6 +148,7 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 	// Executor.
 	exec := pkgexecutor.NewExecutor(adapter.NewNoopAdapter(), sinks...).
 		WithPolicyProvider(policySvc).
+		WithApprovalGate(approvalServiceGateAdapter{svc: approvalSvc}).
 		WithAuditRecorder(&auditRecorder{svc: auditSvc})
 
 	// Worker pool is only enabled when a gRPC address is configured.
@@ -165,6 +181,7 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 		DomainService:  domainSvc,
 		SessionService: sessionSvc,
 		WorkerService:  workerSvc,
+		ApprovalService: approvalSvc,
 		PolicyService:  policySvc,
 		AuditService:   auditSvc,
 		TraceService:   traceSvc,
@@ -198,6 +215,31 @@ func (a *Application) Close(ctx context.Context) error {
 // AuditRecorder interface used by the executor.
 type auditRecorder struct {
 	svc *auditservice.Service
+}
+
+// approvalServiceGateAdapter adapts the approval service to the executor's
+// ApprovalGate contract. The adapter builds a domain.Agreement row from the
+// executor's ApprovalRequest, blocks waiting on operator resolution, and
+// reports the outcome as bool + comment.
+type approvalServiceGateAdapter struct {
+	svc *approvalservice.Service
+}
+
+func (g approvalServiceGateAdapter) Request(ctx context.Context, req pkgexecutor.ApprovalRequest) (bool, string, error) {
+	a := &approvalmodel.Approval{
+		ID:        approvalmodel.NewID(req.SessionID),
+		SessionID: req.SessionID,
+		DomainID:  req.DomainID,
+		Action:    req.Action,
+		Resource:  req.Resource,
+		RiskLevel: approvalmodel.RiskHigh,
+		Context:   req.Context,
+	}
+	decision, comment, err := g.svc.Request(ctx, a)
+	if err != nil {
+		return false, comment, err
+	}
+	return decision == approvalservice.DecisionApproved, comment, nil
 }
 
 func (r *auditRecorder) Record(ctx context.Context, entry pkgexecutor.AuditEntry) error {

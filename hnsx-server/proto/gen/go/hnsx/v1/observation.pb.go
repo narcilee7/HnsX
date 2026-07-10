@@ -22,6 +22,10 @@ const (
 )
 
 // Observation is the atomic unit of observable agent behavior.
+//
+// `payload` and `metadata` are JSON-encoded strings on the wire. Empty or
+// absent values MUST be serialized as the string "{}". Consumers decode them
+// into objects/maps at the application layer.
 type Observation struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ObservationId string                 `protobuf:"bytes,1,opt,name=observation_id,json=observationId,proto3" json:"observation_id,omitempty"`

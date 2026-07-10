@@ -297,26 +297,30 @@ GET /api/v1/traces/:traceId
 
 ## 6. Eval API
 
+Eval sets are globally scoped under `/api/v1/evals`. The `domain_id` field
+inside each set ties it to a domain.
+
 ### 6.1 列出 EvalSet
 
 ```http
-GET /api/v1/domains/:id/evals
+GET /api/v1/evals?limit=20&offset=0
 ```
 
 ### 6.2 获取 EvalSet
 
 ```http
-GET /api/v1/domains/:id/evals/:setId
+GET /api/v1/evals/:setId
 ```
 
 ### 6.3 创建 EvalSet
 
 ```http
-POST /api/v1/domains/:id/evals
+POST /api/v1/evals
 Content-Type: application/json
 
 {
-  "id": "routing-accuracy",
+  "set_id": "routing-accuracy",
+  "domain_id": "customer-service",
   "description": "...",
   "cases": [ ... ]
 }
@@ -325,19 +329,25 @@ Content-Type: application/json
 ### 6.4 更新 EvalSet
 
 ```http
-PUT /api/v1/domains/:id/evals/:setId
+PUT /api/v1/evals/:setId
+Content-Type: application/json
+
+{
+  "description": "...",
+  "cases": [ ... ]
+}
 ```
 
 ### 6.5 删除 EvalSet
 
 ```http
-DELETE /api/v1/domains/:id/evals/:setId
+DELETE /api/v1/evals/:setId
 ```
 
 ### 6.6 运行 Eval
 
 ```http
-POST /api/v1/domains/:id/evals/:setId/run
+POST /api/v1/evals/:setId/run
 Content-Type: application/json
 
 {
@@ -358,7 +368,7 @@ Content-Type: application/json
 ### 6.7 获取 EvalRun
 
 ```http
-GET /api/v1/domains/:id/evals/:setId/runs/:runId
+GET /api/v1/evals/:setId/runs/:runId
 ```
 
 响应：
@@ -383,7 +393,7 @@ GET /api/v1/domains/:id/evals/:setId/runs/:runId
 ### 6.8 列出 EvalRun
 
 ```http
-GET /api/v1/domains/:id/evals/:setId/runs?limit=20&offset=0
+GET /api/v1/evals/:setId/runs?limit=20&offset=0
 ```
 
 ---
@@ -638,7 +648,7 @@ Authorization: Bearer hnsx-api-key-xxx
 | Session 列表 | `GET /api/v1/sessions` |
 | Session 详情 | `GET /api/v1/sessions/:id`, `GET /api/v1/sessions/:id/events` |
 | Trace 查询 | `GET /api/v1/traces` |
-| Eval | `GET/POST /api/v1/domains/:id/evals/...` |
+| Eval | `GET/POST/PUT/DELETE /api/v1/evals/...` |
 | Observability | Grafana 嵌入 |
 | AuditLog | `GET /api/v1/audit` |
 | Approvals | `GET/POST /api/v1/approvals` |
