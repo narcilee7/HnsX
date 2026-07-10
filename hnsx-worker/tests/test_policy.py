@@ -106,3 +106,36 @@ def test_add_cost_updates_budget() -> None:
     engine.add_cost(0.3)
     assert engine.budget.cumulative_cost_usd == 0.8
     assert engine.budget.turns_used == 2
+
+
+def test_output_guardrail_blocks_keyword() -> None:
+    spec = {
+        "harness": {
+            "policy": {"output_guardrails": {"blocked_keywords": ["secret_key"]}}
+        }
+    }
+    engine, captured = _capturing_engine(spec)
+    decision = engine.check_output("the secret_key is exposed")
+    assert decision.allow is False
+    assert decision.rule == "output_guardrails.blocked_keywords"
+    assert any(o["kind"] == "policy_violation" for o in captured)
+
+
+def test_output_guardrail_blocks_pattern() -> None:
+    spec = {
+        "harness": {
+            "policy": {"output_guardrails": {"blocked_patterns": [r"\b\d{4}-\d{4}-\d{4}-\d{4}\b"]}}
+        }
+    }
+    engine, captured = _capturing_engine(spec)
+    decision = engine.check_output("my card is 1234-5678-9012-3456")
+    assert decision.allow is False
+    assert decision.rule == "output_guardrails.blocked_patterns"
+
+
+def test_output_guardrail_allows_clean_text() -> None:
+    spec = {"harness": {"policy": {"output_guardrails": {"blocked_keywords": ["bad"]}}}}
+    engine, captured = _capturing_engine(spec)
+    decision = engine.check_output("this is fine")
+    assert decision.allow is True
+    assert any(o["kind"] == "policy_check" for o in captured)
