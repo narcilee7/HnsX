@@ -70,7 +70,7 @@ def execute_session(
     *,
     stop_event: threading.Event,
     emit: EmitFn,
-) -> None:
+) -> dict[str, Any]:
     """Dispatch to the right mode-specific runner.
 
     Args:
@@ -80,20 +80,42 @@ def execute_session(
             ``session_id`` / ``correlation_id`` / etc.).
         stop_event: Set by the SIGTERM handler to ask for graceful exit.
         emit: Sink for observations (one Python dict per call).
+
+    Returns:
+        A result dict with at least ``output`` (the final assistant text).
+        Eval scores are added by the caller (session_runtime) when an
+        ``eval_case`` is present.
     """
     mode = _read_mode(spec)
+    result: dict[str, Any] = {"output": ""}
     if mode in ("single", "single-task"):
-        _run_single(spec, trigger, config, stop_event=stop_event, emit=emit)
+        result["output"] = _run_single(
+            spec, trigger, config, stop_event=stop_event, emit=emit
+        )
     elif mode == "multi-turn":
-        _run_multi_turn(spec, trigger, config, stop_event=stop_event, emit=emit)
+        result["output"] = _run_multi_turn(
+            spec, trigger, config, stop_event=stop_event, emit=emit
+        )
     elif mode == "workflow":
-        _run_workflow(spec, trigger, config, stop_event=stop_event, emit=emit)
+        result["output"] = _run_workflow(
+            spec, trigger, config, stop_event=stop_event, emit=emit
+        )
     elif mode in ("supervisor", "hierarchical", "autonomous"):
         run_orchestration(
             spec, trigger, config, stop_event=stop_event, emit=emit
         )
     else:
         raise ValueError(f"unknown session.mode: {mode!r}")
+
+    # W8: if an EvalCase was injected, run scorers against the final output.
+    eval_case = config.get("eval_case")
+    if eval_case:
+        from hnsx_worker.eval import aggregate_scores, run_eval
+
+        scores = run_eval(eval_case, result.get("output"), emit=emit)
+        result["eval_scores"] = aggregate_scores(scores)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +130,7 @@ def _run_single(
     *,
     stop_event: threading.Event,
     emit: EmitFn,
-) -> None:
+) -> str:
     harness = spec.get("harness", {})
     agents: dict = harness.get("agents", {})
     session = harness.get("session", {})
@@ -188,6 +210,7 @@ def _run_single(
             "payload": {"turn": 1, "stop_reason": "natural"},
         }
     )
+    return final_text
 
 
 def _run_multi_turn(
@@ -197,7 +220,7 @@ def _run_multi_turn(
     *,
     stop_event: threading.Event,
     emit: EmitFn,
-) -> None:
+) -> str:
     harness = spec.get("harness", {})
     agents: dict = harness.get("agents", {})
     session = harness.get("session", {})
@@ -454,6 +477,7 @@ def _run_multi_turn(
                 "payload": {"content": final_text, "final": True, "truncated": True},
             }
         )
+    return final_text
 
 
 def _run_workflow(
@@ -463,7 +487,7 @@ def _run_workflow(
     *,
     stop_event: threading.Event,
     emit: EmitFn,
-) -> None:
+) -> str:
     harness = spec.get("harness", {})
     agents: dict = harness.get("agents", {})
     session = harness.get("session", {})
@@ -482,6 +506,7 @@ def _run_workflow(
     if isinstance(workflow.get("variables"), dict):
         for k, v in workflow["variables"].items():
             vars_.setdefault(k, v)
+    final_text = ""
 
     while step:
         if step["id"] in seen:
@@ -521,6 +546,7 @@ def _run_workflow(
             stop_event=stop_event,
             emit=emit,
         )
+        final_text = text
         if step.get("output"):
             vars_[step["output"]] = text
         if cost is not None:
@@ -551,10 +577,12 @@ def _run_workflow(
         )
         next_id = step.get("next")
         if not next_id:
-            return
+            return final_text
         if next_id not in steps_by_id:
             raise KeyError(f"step {step['id']!r} next {next_id!r} not in steps")
         step = steps_by_id[next_id]
+
+    return final_text
 
 
 # ---------------------------------------------------------------------------

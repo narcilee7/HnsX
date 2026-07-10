@@ -47,6 +47,7 @@ from hnsx_worker.proto_client import (
     ResourceCapacity,
     ResourceUsage,
     ServerEvent,
+    SessionFinalResult,
     SessionStatusUpdate,
     WorkerHealth,
     WorkerHealthStatus,
@@ -441,6 +442,18 @@ class WorkerService:
         )
 
         if obs.get("kind") == "session_end":
+            payload = obs.get("payload") or {}
+            result_dict = payload.get("result")
+            if isinstance(result_dict, dict):
+                self._obs_queue.put(
+                    OutboundMessage(
+                        kind="result",
+                        result=SessionFinalResult(
+                            session_id=handle.session_id,
+                            result=result_dict,
+                        ),
+                    )
+                )
             self._obs_queue.put(
                 OutboundMessage(
                     kind="status",
