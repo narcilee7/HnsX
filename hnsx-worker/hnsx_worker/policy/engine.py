@@ -26,6 +26,7 @@ Spec shape::
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -62,6 +63,14 @@ class ToolPolicy:
     allowed_tools: set[str] = field(default_factory=set)
     denied_tools: set[str] = field(default_factory=set)
     require_human_approval: set[str] = field(default_factory=set)
+
+
+@dataclass
+class OutputGuardrails:
+    """Output guardrail rules."""
+
+    blocked_patterns: list[str] = field(default_factory=list)
+    blocked_keywords: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -113,6 +122,53 @@ class PolicyEngine:
             denied_tools=set(perms.get("denied_tools") or []),
             require_human_approval=set(perms.get("require_human_approval") or []),
         )
+
+        guard = policy.get("output_guardrails", {}) or {}
+        self.output_guardrails = OutputGuardrails(
+            blocked_patterns=list(guard.get("blocked_patterns") or []),
+            blocked_keywords=list(guard.get("blocked_keywords") or []),
+        )
+
+    # ------------------------------------------------------------------ output
+
+    def check_output(self, text: str) -> Decision:
+        """Check final agent output against configured guardrails."""
+        g = self.output_guardrails
+        text_str = str(text)
+
+        for pattern in g.blocked_patterns:
+            try:
+                if re.search(pattern, text_str):
+                    decision = Decision(
+                        allow=False,
+                        decision="deny",
+                        reason=f"output matched blocked pattern {pattern!r}",
+                        rule="output_guardrails.blocked_patterns",
+                    )
+                    self._emit_violation("output", decision)
+                    return decision
+            except re.error as e:
+                log.warning("invalid blocked pattern %r: %s", pattern, e)
+
+        for keyword in g.blocked_keywords:
+            if keyword.lower() in text_str.lower():
+                decision = Decision(
+                    allow=False,
+                    decision="deny",
+                    reason=f"output contained blocked keyword {keyword!r}",
+                    rule="output_guardrails.blocked_keywords",
+                )
+                self._emit_violation("output", decision)
+                return decision
+
+        decision = Decision(
+            allow=True,
+            decision="allow",
+            reason="output passed guardrails",
+            rule="output_guardrails",
+        )
+        self._emit_check("output", decision)
+        return decision
 
     # ------------------------------------------------------------------ budget
 
@@ -271,4 +327,4 @@ class PolicyEngine:
         )
 
 
-__all__ = ["Budget", "Decision", "PolicyEngine", "ToolPolicy"]
+__all__ = ["Budget", "Decision", "OutputGuardrails", "PolicyEngine", "ToolPolicy"]

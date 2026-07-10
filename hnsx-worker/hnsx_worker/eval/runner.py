@@ -114,6 +114,8 @@ def run_eval_set(
     eval_set_id = str(eval_set.get("eval_set_id", "") or uuid.uuid4().hex[:8])
     cases = list(eval_set.get("cases") or [])
     base_session_id = str(config.get("session_id", f"eval-{eval_set_id}"))
+    max_cost_usd = float(eval_set.get("max_cost_usd") or 0.0)
+    cumulative_cost_usd = 0.0
 
     def _noop_emit(_obs: dict) -> None:
         return None
@@ -128,6 +130,7 @@ def run_eval_set(
         "avg_score": 0.0,
         "total_duration_ms": 0,
         "total_cost_usd": 0.0,
+        "budget_exceeded": False,
         "cases": [],
         "baseline": None,
     }
@@ -143,6 +146,16 @@ def run_eval_set(
     for idx, case in enumerate(cases):
         if stop_event.is_set():
             log.info("eval_set %s cancelled at case %s", eval_set_id, idx)
+            break
+
+        if max_cost_usd > 0 and cumulative_cost_usd >= max_cost_usd:
+            report["budget_exceeded"] = True
+            log.info(
+                "eval_set %s already at max_cost_usd %.6f before case %s",
+                eval_set_id,
+                max_cost_usd,
+                idx,
+            )
             break
 
         if not isinstance(case, dict):
@@ -208,6 +221,30 @@ def run_eval_set(
             and eval_scores.get("total", 0) > 0
         ):
             passed_count += 1
+
+        cumulative_cost_usd += case_report["cost_usd"]
+        if max_cost_usd > 0 and cumulative_cost_usd > max_cost_usd:
+            report["budget_exceeded"] = True
+            log.info(
+                "eval_set %s exceeded max_cost_usd %.6f at case %s",
+                eval_set_id,
+                max_cost_usd,
+                case_id,
+            )
+            if emit is not None:
+                emit(
+                    {
+                        "kind": "eval_budget_exceeded",
+                        "session_id": case_config["session_id"],
+                        "payload": {
+                            "eval_set_id": eval_set_id,
+                            "case_id": case_id,
+                            "max_cost_usd": max_cost_usd,
+                            "cumulative_cost_usd": cumulative_cost_usd,
+                        },
+                    }
+                )
+            break
 
         if emit is not None:
             emit(
