@@ -36,12 +36,22 @@ Multi-turn contract:
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from collections.abc import Callable
 from typing import Any
 
 from hnsx_worker.adapters import AdapterRegistry
 from hnsx_worker.adapters.base import Adapter
+from hnsx_worker.tools import (
+    ToolContext,
+    ToolDecision,
+    ToolRegistry,
+    build_tool,
+    tool_schemas_for_adapter,
+)
+
+log = logging.getLogger("hnsx_worker.session_executor")
 
 EmitFn = Callable[[dict], None]
 
@@ -210,6 +220,46 @@ def _run_multi_turn(
     final_text = ""
     stop_reason = "natural"
 
+    # Build the ToolRegistry from the agent's ``tools`` spec entries.
+    # Each entry like ``{name: fetch, type: http, config: {...}}`` is
+    # routed through :func:`build_tool`. The LLM-facing tool schemas
+    # are also injected back onto the agent so adapters see the right
+    # definitions when calling the provider API.
+    registry, schema_failures = _build_tool_registry(
+        agent=agent,
+        session_id=session_id,
+        domain_id=domain_id,
+        emit=emit,
+    )
+    if schema_failures:
+        for failure in schema_failures:
+            log.warning(
+                "tool spec dropped for agent %s: %s", agent_name, failure
+            )
+        emit(
+            {
+                "kind": "tool_spec_invalid",
+                "session_id": session_id,
+                "domain_id": domain_id,
+                "agent_id": agent_name,
+                "payload": {"failures": schema_failures},
+            }
+        )
+
+    # Build a fresh per-session ToolContext. Secrets come from
+    # ``config['secrets']`` (Control Plane resolves ``{secret.X}``
+    # placeholders in the spec and forwards the values here). For W3
+    # the policy hook is an allow-all stub; W6 plugs in PolicyEngine.
+    secrets = _read_secrets(config)
+    tool_ctx_factory = _make_tool_context_factory(
+        session_id=session_id,
+        domain_id=domain_id,
+        agent_id=agent_name,
+        secrets=secrets,
+        emit=emit,
+    )
+    policy_hook = _allow_all_policy_hook()
+
     for turn in range(1, max_turns + 1):
         if stop_event.is_set():
             stop_reason = "cancelled"
@@ -325,24 +375,47 @@ def _run_multi_turn(
             }
         )
 
-        # Synthesize tool results + extend messages for the next turn.
+        # Call each tool through the ToolRegistry. The ``tool_call``
+        # observation was emitted above; here we resolve the call and
+        # emit ``tool_result`` (with structured error on failure).
+        # ``policy_hook`` runs inside the registry and may emit a
+        # ``policy_violation`` observation on its own.
         for tc in tool_calls:
-            stub_result = _stub_tool_result(tc)
+            ctx = tool_ctx_factory(turn=turn, tool_call_id=tc.id)
+            # The policy hook isn't authoritative in W3 — we always
+            # still call the tool so the agent sees the result and can
+            # adapt. W6's PolicyEngine will short-circuit via the
+            # registry's existing deny path.
+            decision = policy_hook(tc.name, dict(tc.input), ctx)
+            if not decision.allow:
+                log.info(
+                    "policy hook blocked tool %s (decision=%s)",
+                    tc.name,
+                    decision.decision,
+                )
+
+            result = registry.call(tc.name, ctx, dict(tc.input))
+            payload = {
+                "tool_call_id": tc.id,
+                "name": tc.name,
+                "output": result.to_observation_payload(),
+                "ok": result.ok,
+                "turn": turn,
+            }
             emit(
                 {
                     "kind": "tool_result",
                     "session_id": session_id,
                     "domain_id": domain_id,
                     "agent_id": agent_name,
-                    "payload": {
-                        "tool_call_id": tc.id,
-                        "name": tc.name,
-                        "output": stub_result,
-                        "turn": turn,
-                    },
+                    "payload": payload,
                 }
             )
-            messages = _append_tool_result(messages, tc, stub_result, adapter_kind=adapter.name())
+            # Serialize for the messages history: ok→output, !ok→error.
+            serialized = result.output if result.ok else {"error": result.error}
+            messages = _append_tool_result(
+                messages, tc, serialized, adapter_kind=adapter.name()
+            )
 
         if turn >= max_turns:
             stop_reason = "max_turns"
@@ -621,20 +694,106 @@ def _append_tool_result(
     return messages
 
 
-def _stub_tool_result(tool_call: Any) -> dict:
-    """Placeholder tool result.
+# ---------------------------------------------------------------------------
+# Tool registry / context wiring
+# ---------------------------------------------------------------------------
 
-    Real Tool Registry (http/shell/sql/python) lands in M3. For now the
-    executor emits an empty / echo result so multi-turn loops can still
-    terminate and the agent gets *something* to react to.
+
+def _build_tool_registry(
+    *,
+    agent: dict,
+    session_id: str,
+    domain_id: str,
+    emit: EmitFn,
+) -> tuple[ToolRegistry, list[str]]:
+    """Build a ToolRegistry from ``agent.tools``.
+
+    Returns ``(registry, failures)`` where ``failures`` is a list of
+    human-readable error strings for entries that couldn't be built.
+    The executor emits a ``tool_spec_invalid`` observation so the user
+    can see what was dropped.
     """
-    return {
-        "ok": True,
-        "stub": True,
-        "name": tool_call.name,
-        "echo_input": tool_call.input,
-        "message": "tool registry not implemented yet (M3)",
-    }
+    raw_tools = agent.get("tools") or []
+    registry = ToolRegistry()
+    failures: list[str] = []
+    for entry in raw_tools:
+        if not isinstance(entry, dict):
+            failures.append(f"non-dict tool entry: {entry!r}")
+            continue
+        # Pass through name-only references unchanged (CLI-agent / W4).
+        if "type" not in entry:
+            continue
+        try:
+            tool = build_tool(entry)
+        except ValueError as e:
+            failures.append(str(e))
+            continue
+        registry.register(tool)
+    # Inject the LLM-facing tool schemas so adapters see the right
+    # definitions when they call the provider API.
+    agent["tools"] = tool_schemas_for_adapter({"tools": raw_tools})
+    return registry, failures
+
+
+def _read_secrets(config: dict) -> dict[str, str]:
+    """Pull resolved secrets from the session config.
+
+    The Control Plane resolves ``{secret.X}`` placeholders in the
+    DomainSpec at submission time and forwards the values here. We
+    accept either a flat dict or a structured list-of-pairs shape so
+    older call sites can stay compatible.
+    """
+    raw = config.get("secrets") or {}
+    if isinstance(raw, dict):
+        return {str(k): str(v) for k, v in raw.items()}
+    if isinstance(raw, list):
+        out: dict[str, str] = {}
+        for item in raw:
+            if isinstance(item, dict) and "name" in item:
+                out[str(item["name"])] = str(item.get("value", ""))
+        return out
+    return {}
+
+
+def _make_tool_context_factory(
+    *,
+    session_id: str,
+    domain_id: str,
+    agent_id: str,
+    secrets: dict[str, str],
+    emit: EmitFn,
+) -> Callable[..., ToolContext]:
+    """Return a callable that builds a per-call ToolContext.
+
+    The factory closes over session-scoped fields (session_id / domain_id
+    / agent_id / secrets / emit) and accepts per-call fields (turn /
+    tool_call_id). Using a factory keeps the per-turn loop body tidy.
+    """
+    def _factory(*, turn: int, tool_call_id: str) -> ToolContext:
+        return ToolContext(
+            session_id=session_id,
+            domain_id=domain_id,
+            agent_id=agent_id,
+            turn=turn,
+            tool_call_id=tool_call_id,
+            secrets=dict(secrets),
+            emit=emit,
+        )
+
+    return _factory
+
+
+def _allow_all_policy_hook() -> Callable[[str, dict, ToolContext], ToolDecision]:
+    """Default policy hook: allow everything.
+
+    W6 will replace this with a real :class:`PolicyEngine`. The hook
+    still runs (and the registry emits ``policy_check`` once W6 wires
+    that), so existing audit infrastructure keeps working.
+    """
+    def _hook(name: str, input: dict, ctx: ToolContext) -> ToolDecision:
+        return ToolDecision(allow=True, decision="allow", reason="w3-stub")
+
+    return _hook
 
 
 # ---------------------------------------------------------------------------

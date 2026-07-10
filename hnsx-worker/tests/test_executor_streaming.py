@@ -19,7 +19,6 @@ from hnsx_worker.session_executor import (
     execute_session,
 )
 
-
 # ---------------------------------------------------------------------------
 # stub adapter registry
 # ---------------------------------------------------------------------------
@@ -191,6 +190,14 @@ def test_multi_turn_handles_tool_call_loop() -> None:
                     "model": "test",
                     "adapter": {"kind": "scripted_multi"},
                     "system_prompt": "be helpful",
+                    # Register a real Python tool so the registry can dispatch.
+                    "tools": [
+                        {
+                            "name": "search",
+                            "type": "python",
+                            "config": {"timeout_seconds": 1},
+                        }
+                    ],
                 }
             },
             "session": {"mode": "multi-turn", "agent": "primary"},
@@ -213,7 +220,12 @@ def test_multi_turn_handles_tool_call_loop() -> None:
     assert tool_calls[0]["payload"]["input"] == {"q": "orders"}
     assert len(tool_results) == 1
     assert tool_results[0]["payload"]["tool_call_id"] == "tc-1"
-    assert tool_results[0]["payload"]["output"]["stub"] is True
+    # W3.3: the registry actually ran the Python tool with the LLM's
+    # input; result is empty because the input wasn't valid Python, but
+    # the call landed (ok=False, structured error) rather than the old
+    # stub. Either way, no stub=True.
+    assert tool_results[0]["payload"]["name"] == "search"
+    assert "stub" not in tool_results[0]["payload"]["output"]
     assert len(final_texts) == 1
     assert final_texts[0]["payload"]["content"] == "Found 3 orders."
 
@@ -246,7 +258,7 @@ def test_multi_turn_respects_max_turns() -> None:
 
     turns_started = [o for o in obs if o["kind"] == "turn_start"]
     assert len(turns_started) == 3, f"expected 3 turns, got {len(turns_started)}"
-    final_texts = [o for o in obs if o["kind"] == "agent_text"]
+    _ = [o for o in obs if o["kind"] == "agent_text"]
     last_final = [o for o in obs if o["kind"] == "agent_text" and o["payload"].get("truncated")]
     assert last_final, "expected a truncated final agent_text observation"
 
