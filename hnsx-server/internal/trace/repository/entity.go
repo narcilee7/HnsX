@@ -19,6 +19,7 @@ type ObservationRecord struct {
 	AgentID          string         `gorm:"column:agent_id;type:varchar(255)"`
 	Kind             string         `gorm:"column:kind;type:varchar(64);not null"`
 	Payload          datatypes.JSON `gorm:"column:payload;type:jsonb"`
+	Metadata         datatypes.JSON `gorm:"column:metadata;type:jsonb"`
 	CostUSD          float64        `gorm:"column:cost_usd;type:decimal(12,6)"`
 	PromptTokens     int            `gorm:"column:prompt_tokens;type:integer"`
 	CompletionTokens int            `gorm:"column:completion_tokens;type:integer"`
