@@ -71,9 +71,8 @@ jobs:
         run: make vet
 
       - name: gofmt check
-        working-directory: hnsx-server
         run: |
-          diff_out=$(gofmt -l .)
+          diff_out=$(gofmt -l hnsx-server sdk/go)
           if [ -n "$diff_out" ]; then echo "Need gofmt:"; echo "$diff_out"; exit 1; fi
 
       - name: go test
@@ -86,13 +85,11 @@ jobs:
         run: ./scripts/smoke.sh
 
   # ---------------------------------------------------------------------------
-  # Console: install + type-check + build (driven by the frontend owner).
-  # Currently stubbed: PRs that touch hnsx-console/ should keep this in sync.
+  # TypeScript workspace: install + lint + type-check + build + test
   # ---------------------------------------------------------------------------
-  console:
-    name: Console
+  ts:
+    name: TypeScript workspace
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -105,37 +102,66 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
 
       - name: pnpm install
-        working-directory: hnsx-console
         run: pnpm install --frozen-lockfile
 
+      - name: lint
+        run: pnpm -r lint
+
       - name: type-check
-        working-directory: hnsx-console
-        run: pnpm type-check
+        run: pnpm -r type-check
+
+      - name: test
+        run: pnpm -r test
 
       - name: build
-        working-directory: hnsx-console
-        run: pnpm build
+        run: pnpm -r build
 
   # ---------------------------------------------------------------------------
-  # Final aggregation — backend must be green; console is informational.
+  # Python worker: install + test
+  # ---------------------------------------------------------------------------
+  worker:
+    name: Python worker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: install worker
+        run: make worker-install
+
+      - name: generate python proto stubs
+        run: make proto-py
+
+      - name: pytest
+        run: make worker-test
+
+  # ---------------------------------------------------------------------------
+  # Final aggregation — all jobs must be green.
   # ---------------------------------------------------------------------------
   final:
     name: Final
     runs-on: ubuntu-latest
-    needs: [proto, go, console]
+    needs: [proto, go, ts, worker]
     if: always()
     steps:
-      - name: Backend green?
+      - name: All green?
         run: |
-          if [ "${{ needs.proto.result }}" != "success" ] || \
-             [ "${{ needs.go.result }}"    != "success" ]; then
-            echo "Upstream backend job failed:"
+          if [ "${{ needs.proto.result }}"   != "success" ] || \
+             [ "${{ needs.go.result }}"      != "success" ] || \
+             [ "${{ needs.ts.result }}"      != "success" ] || \
+             [ "${{ needs.worker.result }}"  != "success" ]; then
+            echo "A required job failed:"
             echo "  proto   : ${{ needs.proto.result }}"
             echo "  go      : ${{ needs.go.result }}"
-            echo "  console : ${{ needs.console.result }} (informational only)"
+            echo "  ts      : ${{ needs.ts.result }}"
+            echo "  worker  : ${{ needs.worker.result }}"
             exit 1
           fi
-          echo "All required (backend) jobs succeeded ✓"
+          echo "All required jobs succeeded ✓"
           echo "  proto   : ${{ needs.proto.result }}"
           echo "  go      : ${{ needs.go.result }}"
-          echo "  console : ${{ needs.console.result }} (informational only — see console job log)"
+          echo "  ts      : ${{ needs.ts.result }}"
+          echo "  worker  : ${{ needs.worker.result }}"

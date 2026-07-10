@@ -52,3 +52,9 @@ hnsx-worker/hnsx_worker/proto/gen/**/*_pb2.pyi
 hnsx-worker/.pytest_cache/
 hnsx-worker/.mypy_cache/
 hnsx-worker/.ruff_cache/
+
+# --- TypeScript workspace ---
+node_modules/
+
+# --- Build outputs ---
+bin/

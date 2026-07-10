@@ -1,21 +1,23 @@
 """WorkerService — the parent process that talks to the Go control plane.
 
-Threading model (Step 2):
+Threading model:
 
-  - main thread:    ``_pull_loop`` — long-polls ``PullSession`` and forks
+  - main thread:    ``_pull_loop`` — long-polls the server and forks
                     one subprocess per assigned session.
   - heartbeat:      ``_heartbeat_loop`` — every ``heartbeat_interval_seconds``
                     sends a Heartbeat RPC.
   - stream producer:``_stream_producer_loop`` — opens the bidi
-                    ``StreamChannel`` and feeds observations from
+                    StreamChannel and feeds outbound messages from
                     ``_obs_queue`` to the server.
   - per-subprocess: ``_pump_subprocess_stdout`` — one daemon thread per
                     session subprocess, parsing JSONL observations and
                     pushing them into ``_obs_queue``.
 
 The parent process NEVER executes the session itself — that's the subprocess's
-job. This keeps the harness "session = subprocess" invariant from
-``design/Tech/V1/Architecture.md`` §10.3.
+job. This keeps the harness "session = subprocess" invariant.
+
+This module is wire-format agnostic: all gRPC types live behind
+``ControlPlaneClient`` in :mod:`hnsx_worker.proto_client`.
 """
 
 from __future__ import annotations
@@ -34,35 +36,71 @@ import uuid
 from collections.abc import Iterator
 from typing import Any
 
-import grpc
-
 from hnsx_worker.config import WorkerConfig
-from hnsx_worker.proto.gen.hnsx.v1 import observation_pb2, worker_pb2, worker_pb2_grpc
+from hnsx_worker.logging import worker_id_var
+from hnsx_worker.proto_client import (
+    AckRequest,
+    ControlPlaneClient,
+    HeartbeatRequest,
+    NackRequest,
+    Observation,
+    OutboundMessage,
+    ResourceCapacity,
+    ResourceUsage,
+    ServerEvent,
+    SessionFinalResult,
+    SessionStatusUpdate,
+    WorkerHealth,
+    WorkerHealthStatus,
+    WorkerInfo,
+)
 
 log = logging.getLogger("hnsx_worker.worker_service")
 
 # how long to wait for an in-flight subprocess when the worker is shutting down
 _SHUTDOWN_GRACE_SECONDS = 5.0
 
+# W9: observation batching and backpressure
+_OBS_BATCH_SIZE = 32
+_OBS_BATCH_DELAY_SECONDS = 0.05
+_OBS_DEGRADED_THRESHOLD = 1000
+
 
 class WorkerService:
     def __init__(self, config: WorkerConfig) -> None:
         self.config = config
-        self.channel = grpc.insecure_channel(config.server_addr)
-        self.worker_stub = worker_pb2_grpc.WorkerServiceStub(self.channel)
-        self.scheduler_stub = worker_pb2_grpc.SchedulerServiceStub(self.channel)
+        self.client = ControlPlaneClient(
+            config.server_addr, auth_token=config.auth_token
+        )
         self.worker_id: str = config.worker_id  # server may overwrite on Register
-        self._obs_queue: queue.Queue[worker_pb2.StreamChannelRequest] = queue.Queue()
+        self._obs_queue: queue.Queue[OutboundMessage] = queue.Queue()
         self._running: dict[str, _SessionHandle] = {}
         self._stop_event = threading.Event()
+        self._drain_event = threading.Event()  # W7: set when server asks for drain
         self._lock = threading.Lock()
+
+        # W7: pre-fork pool of idle session_runtime processes.
+        self._pool_size = max(0, int(getattr(config, "pool_size", 0)))
+        self._pool: queue.Queue[subprocess.Popen] = queue.Queue()
+
+        # W7: domain spec cache, invalidated by server push.
+        self._domain_cache: dict[str, Any] = {}
+        self._domain_cache_lock = threading.Lock()
 
     # ------------------------------------------------------------------ public
 
     def run(self) -> None:
         """Block until the worker is asked to stop."""
+        worker_id_var.set(self.worker_id)
         self._install_signal_handlers()
         self._register()
+
+        # W7: pre-warm the subprocess pool in the background.
+        if self._pool_size > 0:
+            threading.Thread(
+                target=self._warm_pool, name="pool-warmer", daemon=True
+            ).start()
+
         threading.Thread(target=self._heartbeat_loop, name="heartbeat", daemon=True).start()
         threading.Thread(
             target=self._stream_producer_loop, name="stream-producer", daemon=True
@@ -90,25 +128,38 @@ class WorkerService:
             except subprocess.TimeoutExpired:
                 handle.proc.kill()
                 handle.proc.wait()
-        try:
-            self.channel.close()
-        except Exception:  # noqa: BLE001
-            pass
+
+        # W7: terminate any idle pooled processes.
+        while True:
+            try:
+                pooled = self._pool.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                pooled.terminate()
+                pooled.wait(timeout=1.0)
+            except Exception:  # noqa: BLE001
+                pass
+
+        self.client.close()
 
     # ------------------------------------------------------------------ lifecycle
 
     def _register(self) -> None:
-        info = worker_pb2.WorkerInfo(
+        info = WorkerInfo(
             worker_id=self.config.worker_id,
             tenant_id="local",  # V1.1: single-tenant local dev
-            version="0.1.0",
+            version="0.2.0",
             region=self.config.region,
             hostname=socket.gethostname(),
             pid=str(os.getpid()),
-            capacity=self.config.capacity,
+            capacity=ResourceCapacity(
+                max_concurrent_sessions=self.config.capacity.max_concurrent_sessions,
+                providers=list(self.config.capacity.providers),
+                models=list(self.config.capacity.models),
+            ),
         )
-        req = worker_pb2.RegisterRequest(info=info, auth_token=self.config.auth_token)
-        resp = self.worker_stub.Register(req, timeout=10.0)
+        resp = self.client.register(info)
         self.worker_id = resp.worker_id or self.worker_id or f"w-{uuid.uuid4().hex[:8]}"
         log.info(
             "registered as %s (heartbeat every %ds)",
@@ -118,82 +169,112 @@ class WorkerService:
 
     def _heartbeat_loop(self) -> None:
         interval = self.config.heartbeat_interval_seconds
+        backoff = 2.0
         while not self._stop_event.is_set():
             try:
                 with self._lock:
                     running_ids = list(self._running.keys())
-                usage = worker_pb2.ResourceUsage(
-                    running_sessions=len(running_ids),
-                    free_slots=max(
-                        0, self.config.capacity.max_concurrent_sessions - len(running_ids)
-                    ),
+                queue_size = self._obs_queue.qsize()
+                health_status = (
+                    WorkerHealthStatus.DEGRADED
+                    if queue_size > _OBS_DEGRADED_THRESHOLD
+                    else WorkerHealthStatus.HEALTHY
                 )
-                req = worker_pb2.HeartbeatRequest(
+                req = HeartbeatRequest(
                     worker_id=self.worker_id,
                     timestamp_ms=int(time.time() * 1000),
-                    usage=usage,
+                    usage=ResourceUsage(
+                        running_sessions=len(running_ids),
+                        free_slots=max(
+                            0,
+                            self.config.capacity.max_concurrent_sessions
+                            - len(running_ids),
+                        ),
+                    ),
                     running_session_ids=running_ids,
-                    health=worker_pb2.WorkerHealth(
-                        status=worker_pb2.WorkerHealth.STATUS_HEALTHY,
+                    health=WorkerHealth(
+                        status=health_status,
+                        message=f"obs_queue_size={queue_size}",
                     ),
                 )
-                self.worker_stub.Heartbeat(req, timeout=5.0)
-            except grpc.RpcError as e:
-                log.warning("heartbeat failed: %s", e.code().name)
+                self.client.heartbeat(req)
+                backoff = 2.0
+            except Exception as e:  # noqa: BLE001 — network blips shouldn't kill the loop
+                log.warning("heartbeat failed: %s; retrying in %.1fs", e, backoff)
+                self._stop_event.wait(backoff)
+                backoff = min(backoff * 2, interval)
+                continue
             self._stop_event.wait(interval)
 
     # ------------------------------------------------------------------ pull
 
     def _pull_loop(self) -> None:
         max_wait = 30  # seconds; server may hold the call up to this long
+        backoff = 2.0
         while not self._stop_event.is_set():
+            # W7: stop accepting new work once drain is requested.
+            if self._drain_event.is_set():
+                log.info("worker draining; waiting for running sessions to finish")
+                self._drain_sessions()
+                return
+
             try:
-                req = worker_pb2.PullSessionRequest(
+                assignment = self.client.pull_session(
                     worker_id=self.worker_id,
                     max_wait_seconds=max_wait,
                 )
-                resp = self.scheduler_stub.PullSession(req, timeout=max_wait + 10.0)
-            except grpc.RpcError as e:
-                if e.code() == grpc.StatusCode.CANCELLED:
+                backoff = 2.0
+            except Exception as e:  # noqa: BLE001 — channel-level errors
+                if self._stop_event.is_set():
                     return
-                log.warning("pull failed: %s; retrying", e.code().name)
-                self._stop_event.wait(2.0)
+                log.warning("pull failed: %s; retrying in %.1fs", e, backoff)
+                self._stop_event.wait(backoff)
+                backoff = min(backoff * 2, 30.0)
                 continue
-            if not resp.session_id:
+            if assignment.is_empty():
                 continue  # empty result == no work; loop again
-            self._on_session(resp)
+            self._on_session(assignment)
 
-    def _on_session(self, resp: worker_pb2.PullSessionResponse) -> None:
+    def _on_session(self, assignment: Any) -> None:
         with self._lock:
             if len(self._running) >= self.config.capacity.max_concurrent_sessions:
                 # no slot; requeue
-                self._nack(resp, reason="no_free_slots", requeue=True, error_code="CAPACITY")
+                self._nack(assignment, reason="no_free_slots", requeue=True, error_code="CAPACITY")
                 return
-        log.info("assigned session %s (domain=%s)", resp.session_id, resp.domain_id)
-        try:
-            proc = subprocess.Popen(
-                [sys.executable, "-m", "hnsx_worker.session_runtime"],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-            )
-        except OSError as e:
-            log.error("failed to spawn subprocess: %s", e)
-            self._nack(resp, reason=f"spawn_failed: {e}", requeue=False, error_code="SPAWN")
-            return
+        log.info("assigned session %s (domain=%s)", assignment.session_id, assignment.domain_id)
+
+        proc = self._take_from_pool()
+        if proc is None:
+            try:
+                proc = subprocess.Popen(
+                    [sys.executable, "-m", "hnsx_worker.session_runtime"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    env=self._build_subprocess_env(),
+                )
+            except OSError as e:
+                log.error("failed to spawn subprocess: %s", e)
+                self._nack(
+                    assignment,
+                    reason=f"spawn_failed: {e}",
+                    requeue=False,
+                    error_code="SPAWN",
+                )
+                return
 
         payload = json.dumps(
             {
-                "session_id": resp.session_id,
-                "correlation_id": resp.correlation_id,
-                "domain_id": resp.domain_id,
-                "domain_version": resp.domain_version,
-                "trace_id": resp.trace_id,
-                "domain_spec_json": resp.domain_spec_json,
-                "trigger_payload_json": resp.trigger_payload_json,
-                "session_timeout_seconds": resp.session_timeout_seconds,
+                "session_id": assignment.session_id,
+                "correlation_id": assignment.correlation_id,
+                "domain_id": assignment.domain_id,
+                "domain_version": assignment.domain_version,
+                "trace_id": assignment.trace_id,
+                "domain_spec_json": assignment.domain_spec_json,
+                "trigger_payload_json": assignment.trigger_payload_json,
+                "session_timeout_seconds": assignment.session_timeout_seconds,
             }
         )
         assert proc.stdin is not None
@@ -201,35 +282,134 @@ class WorkerService:
             proc.stdin.write(payload)
             proc.stdin.close()
         except BrokenPipeError:
-            pass
+            # W7: pooled process died before we could use it; spawn fresh.
+            log.warning("broken pipe to pooled process for %s; respawning", assignment.session_id)
+            try:
+                proc.kill()
+            except Exception:  # noqa: BLE001
+                pass
+            self._on_session(assignment)
+            return
 
         handle = _SessionHandle(
-            proc=proc, session_id=resp.session_id, correlation_id=resp.correlation_id
+            proc=proc,
+            session_id=assignment.session_id,
+            correlation_id=assignment.correlation_id,
         )
         with self._lock:
-            self._running[resp.session_id] = handle
+            self._running[assignment.session_id] = handle
 
         threading.Thread(
             target=self._pump_subprocess_stdout,
             args=(handle,),
-            name=f"pump-{resp.session_id[:8]}",
+            name=f"pump-{assignment.session_id[:8]}",
             daemon=True,
         ).start()
 
         try:
-            self.scheduler_stub.AckSession(
-                worker_pb2.AckSessionRequest(
+            self.client.ack_session(
+                AckRequest(
                     worker_id=self.worker_id,
-                    session_id=resp.session_id,
+                    session_id=assignment.session_id,
+                    correlation_id=assignment.correlation_id,
                     acknowledged_at_ms=int(time.time() * 1000),
-                    correlation_id=resp.correlation_id,
-                ),
-                timeout=5.0,
+                )
             )
-        except grpc.RpcError as e:
-            log.warning("ack failed for %s: %s", resp.session_id, e.code().name)
+        except Exception as e:  # noqa: BLE001
+            log.warning("ack failed for %s: %s", assignment.session_id, e)
 
-    def _pump_subprocess_stdout(self, handle: "_SessionHandle") -> None:
+    def _build_subprocess_env(self) -> dict[str, str]:
+        """Return the environment for the session subprocess.
+
+        Inherits the worker's environment and forwards any ``HNSX_SECRET_*``
+        variables so the session runtime can resolve ``{secret.X}`` placeholders
+        without the values passing through the gRPC payload.
+        """
+        env = dict(os.environ)
+        for key, value in os.environ.items():
+            if key.startswith("HNSX_SECRET_"):
+                env[key] = value
+        return env
+
+    # ------------------------------------------------------------------ W7 pool
+
+    def _warm_pool(self) -> None:
+        """Keep ``pool_size`` idle session_runtime processes ready."""
+        while not self._stop_event.is_set():
+            needed = self._pool_size - self._pool.qsize()
+            if needed <= 0:
+                self._stop_event.wait(0.5)
+                continue
+            for _ in range(needed):
+                if self._stop_event.is_set():
+                    return
+                try:
+                    proc = subprocess.Popen(
+                        [sys.executable, "-m", "hnsx_worker.session_runtime"],
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        bufsize=1,
+                        env=self._build_subprocess_env(),
+                    )
+                    self._pool.put(proc)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("pool warm failed: %s", e)
+                    self._stop_event.wait(0.5)
+                    break
+            self._stop_event.wait(0.5)
+
+    def _take_from_pool(self) -> subprocess.Popen | None:
+        """Return an idle process or None if the pool is empty."""
+        if self._pool_size <= 0:
+            return None
+        try:
+            return self._pool.get_nowait()
+        except queue.Empty:
+            return None
+
+    def _drain_sessions(self) -> None:
+        """W7: wait for running sessions to finish, then return.
+
+        Called after the server requests drain. Uses the shutdown grace period
+        as the deadline.
+        """
+        deadline = time.monotonic() + _SHUTDOWN_GRACE_SECONDS
+        while True:
+            with self._lock:
+                remaining = list(self._running.keys())
+            if not remaining:
+                return
+            if time.monotonic() >= deadline:
+                log.warning("drain deadline reached; %s sessions still running", len(remaining))
+                return
+            time.sleep(0.2)
+
+    # ------------------------------------------------------------------ W7 domain cache
+
+    def _get_domain_spec(self, domain_id: str, domain_spec_json: str) -> dict[str, Any]:
+        """Return the parsed domain spec, using the local cache if available."""
+        with self._domain_cache_lock:
+            cached = self._domain_cache.get(domain_id)
+            if cached is not None:
+                return cached
+        try:
+            spec = json.loads(domain_spec_json)
+        except json.JSONDecodeError:
+            spec = {}
+        with self._domain_cache_lock:
+            self._domain_cache[domain_id] = spec
+        return spec
+
+    def _invalidate_domain(self, domain_id: str, version: str) -> None:
+        """W7: drop a domain from the local cache."""
+        with self._domain_cache_lock:
+            removed = self._domain_cache.pop(domain_id, None) is not None
+        if removed:
+            log.info("invalidated domain %s/%s from local cache", domain_id, version)
+
+    def _pump_subprocess_stdout(self, handle: _SessionHandle) -> None:
         assert handle.proc.stdout is not None
         try:
             for line in handle.proc.stdout:
@@ -259,36 +439,52 @@ class WorkerService:
                 self._running.pop(handle.session_id, None)
             log.info("session %s exited rc=%d", handle.session_id, rc)
 
-    def _enqueue_observation(self, handle: "_SessionHandle", obs: dict[str, Any]) -> None:
+    def _enqueue_observation(self, handle: _SessionHandle, obs: dict[str, Any]) -> None:
         # All observations from the subprocess are batched through the
-        # ``observations`` oneof arm. Session end events are special: they
-        # are both forwarded as an observation (so SSE clients see the
-        # terminal event) and as a status update (so the scheduler can
-        # update its bookkeeping and the API session state).
-        base = observation_pb2.Observation(
+        # ``observations`` envelope. Session end events are special: they are
+        # also forwarded as a status update so the scheduler can update its
+        # bookkeeping and the API session state.
+        observation = Observation(
             session_id=handle.session_id,
             domain_id=obs.get("domain_id", ""),
+            domain_version=obs.get("domain_version", ""),
             step_id=obs.get("step_id", ""),
             agent_id=obs.get("agent_id", ""),
             kind=obs.get("kind", ""),
-            payload=json.dumps(obs.get("payload", {}), default=str),
+            payload=dict(obs.get("payload", {}) or {}),
             created_at_ms=int(obs.get("created_at_ms") or time.time() * 1000),
+            trace_id=obs.get("trace_id", ""),
         )
         self._obs_queue.put(
-            worker_pb2.StreamChannelRequest(
-                worker_id=self.worker_id,
-                observations=worker_pb2.ObservationBatch(observations=[base]),
-            )
+            OutboundMessage(kind="observations", observations=[observation])
         )
 
         if obs.get("kind") == "session_end":
+            payload = obs.get("payload") or {}
+            result_dict = payload.get("result")
+            if isinstance(result_dict, dict):
+                self._obs_queue.put(
+                    OutboundMessage(
+                        kind="result",
+                        result=SessionFinalResult(
+                            session_id=handle.session_id,
+                            result=result_dict,
+                            total_cost_usd=float(result_dict.get("cost_usd", 0.0)),
+                            total_prompt_tokens=int(result_dict.get("prompt_tokens", 0)),
+                            total_completion_tokens=int(
+                                result_dict.get("completion_tokens", 0)
+                            ),
+                            duration_ms=int(result_dict.get("duration_ms", 0)),
+                        ),
+                    )
+                )
             self._obs_queue.put(
-                worker_pb2.StreamChannelRequest(
-                    worker_id=self.worker_id,
-                    status=worker_pb2.SessionStatusUpdate(
+                OutboundMessage(
+                    kind="status",
+                    status=SessionStatusUpdate(
                         session_id=handle.session_id,
                         state=obs.get("state", "completed"),
-                        message=json.dumps(obs.get("payload", {})),
+                        message=json.dumps(obs.get("payload", {}), default=str),
                         timestamp_ms=int(obs.get("created_at_ms") or time.time() * 1000),
                     ),
                 )
@@ -296,71 +492,90 @@ class WorkerService:
 
     def _nack(
         self,
-        resp: worker_pb2.PullSessionResponse,
+        assignment: Any,
         *,
         reason: str,
         requeue: bool,
         error_code: str,
     ) -> None:
         try:
-            self.scheduler_stub.NackSession(
-                worker_pb2.NackSessionRequest(
+            self.client.nack_session(
+                NackRequest(
                     worker_id=self.worker_id,
-                    session_id=resp.session_id,
+                    session_id=assignment.session_id,
+                    correlation_id=assignment.correlation_id,
                     reason=reason,
                     error_code=error_code,
                     requeue=requeue,
-                ),
-                timeout=5.0,
+                )
             )
-        except grpc.RpcError as e:
-            log.warning("nack failed for %s: %s", resp.session_id, e.code().name)
+        except Exception as e:  # noqa: BLE001
+            log.warning("nack failed for %s: %s", assignment.session_id, e)
 
     # ------------------------------------------------------------------ stream
 
     def _stream_producer_loop(self) -> None:
-        """Open the bidi StreamChannel and forward observations to the server.
+        """Open the bidi StreamChannel and forward outbound messages to the server.
 
-        Server-pushed messages (Cancel / Drain / DomainInvalidation) are
-        received here too. Step 2 just logs them; full handling is #9+#11.
+        W9: observation messages are batched for efficiency; status/result are
+        sent immediately. On shutdown the queue is flushed before returning.
+
+        Server-pushed events (Cancel / Drain / DomainInvalidation) are received
+        here too.
         """
         backoff = 0.5
         while not self._stop_event.is_set():
             try:
-                stream = self.scheduler_stub.StreamChannel(
-                    _outbound_iter(self._obs_queue, self._stop_event)
+                events = self.client.open_stream(
+                    _outbound_iter(
+                        self._obs_queue,
+                        self._stop_event,
+                        max_batch_size=_OBS_BATCH_SIZE,
+                        max_batch_delay=_OBS_BATCH_DELAY_SECONDS,
+                    ),
+                    timeout=None,
                 )
                 backoff = 0.5
-                for server_event in stream:
+                for server_event in events:
                     if self._stop_event.is_set():
                         break
                     self._handle_server_event(server_event)
-            except grpc.RpcError as e:
+            except Exception as e:  # noqa: BLE001 — channel-level errors
                 if self._stop_event.is_set():
-                    return
+                    break
                 log.warning(
-                    "stream channel error: %s; reconnecting in %.1fs", e.code().name, backoff
+                    "stream channel error: %s; reconnecting in %.1fs", e, backoff
                 )
                 self._stop_event.wait(backoff)
                 backoff = min(backoff * 2, 10.0)
 
-    def _handle_server_event(self, event: worker_pb2.StreamChannelResponse) -> None:
-        kind = event.WhichOneof("payload")
-        if kind == "cancel":
+        # Graceful shutdown: flush any observations still queued.
+        remaining = list(_drain_queue(self._obs_queue))
+        if remaining:
+            log.info("flushing %d queued outbound messages on shutdown", len(remaining))
+            try:
+                for _ in self.client.open_stream(iter(remaining), timeout=5.0):
+                    pass
+            except Exception as e:  # noqa: BLE001
+                log.warning("shutdown flush failed: %s", e)
+
+    def _handle_server_event(self, event: ServerEvent) -> None:
+        if event.kind == "cancel" and event.cancel is not None:
             self._cancel_session(event.cancel.session_id, reason=event.cancel.reason)
-        elif kind == "drain":
-            log.info("server requested drain: %s", event.drain.reason)
-            # Step 2: log only; full drain handling is #9.
-        elif kind == "invalidate":
+        elif event.kind == "drain" and event.drain is not None:
             log.info(
-                "server invalidated domain %s/%s",
-                event.invalidate.domain_id,
-                event.invalidate.version,
+                "server requested drain: %s (deadline=%ds)",
+                event.drain.reason,
+                event.drain.deadline_seconds,
             )
-        elif kind == "ping":
+            self._drain_event.set()
+        elif event.kind == "invalidate" and event.invalidate is not None:
+            inv = event.invalidate
+            self._invalidate_domain(inv.domain_id, inv.version)
+        elif event.kind == "ping":
             log.debug("server ping")
         else:
-            log.debug("server event: %r", event)
+            log.debug("server event: kind=%s", event.kind)
 
     def _cancel_session(self, session_id: str, *, reason: str) -> None:
         with self._lock:
@@ -398,12 +613,65 @@ class _SessionHandle:
 
 
 def _outbound_iter(
-    q: "queue.Queue[worker_pb2.StreamChannelRequest]", stop_event: threading.Event
-) -> Iterator[worker_pb2.StreamChannelRequest]:
-    """Bridge a queue.Queue into a generator for gRPC client-streaming."""
+    q: queue.Queue[OutboundMessage],
+    stop_event: threading.Event,
+    *,
+    max_batch_size: int = 1,
+    max_batch_delay: float = 0.0,
+) -> Iterator[OutboundMessage]:
+    """Bridge a queue.Queue into a generator for the bidi stream.
+
+    Observation messages are batched up to ``max_batch_size`` within
+    ``max_batch_delay`` seconds. Status and result messages are sent
+    immediately.
+    """
+
+    def _batch_observations(first: list[Observation]) -> Iterator[OutboundMessage]:
+        batch = list(first)
+        deadline = time.monotonic() + max_batch_delay
+        while len(batch) < max_batch_size:
+            remaining = max(0.0, deadline - time.monotonic())
+            if remaining <= 0:
+                break
+            try:
+                item = q.get(timeout=min(remaining, 0.05))
+            except queue.Empty:
+                continue
+            if item.kind == "observations":
+                batch.extend(item.observations)
+            else:
+                # Send the accumulated batch first, then the urgent message.
+                yield OutboundMessage(kind="observations", observations=batch)
+                yield item
+                return
+        yield OutboundMessage(kind="observations", observations=batch)
+
     while not stop_event.is_set():
         try:
-            item = q.get(timeout=0.5)
+            item = q.get(timeout=0.05)
         except queue.Empty:
             continue
-        yield item
+        if item.kind == "observations":
+            yield from _batch_observations(item.observations)
+        else:
+            yield item
+
+    # Shutdown flush: drain the queue completely.
+    while True:
+        try:
+            item = q.get_nowait()
+        except queue.Empty:
+            return
+        if item.kind == "observations":
+            yield from _batch_observations(item.observations)
+        else:
+            yield item
+
+
+def _drain_queue(q: queue.Queue[OutboundMessage]) -> Iterator[OutboundMessage]:
+    """Yield every remaining message in ``q`` without blocking."""
+    while True:
+        try:
+            yield q.get_nowait()
+        except queue.Empty:
+            return

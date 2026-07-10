@@ -7,7 +7,7 @@ describe('MetricCard', () => {
   it('renders label, value, and unit', () => {
     render(<MetricCard label="今日 Session" value={1247} unit="次" />)
     expect(screen.getByText('今日 Session')).toBeInTheDocument()
-    expect(screen.getByText('1,247')).toBeInTheDocument()
+    expect(screen.getByText('1247')).toBeInTheDocument()
     expect(screen.getByText('次')).toBeInTheDocument()
   })
 

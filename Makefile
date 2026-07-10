@@ -27,7 +27,7 @@ VERSION ?= 0.2.0
 # ---------------------------------------------------------------------------
 # Version stamping
 # ---------------------------------------------------------------------------
-VERSION_PKG := github.com/hnsx-io/hnsx/core/version
+VERSION_PKG := github.com/hnsx-io/hnsx/server/pkg/version
 
 LDFLAGS := -s -w \
   -X '$(VERSION_PKG).Version=$(VERSION)' \
@@ -40,28 +40,36 @@ LDFLAGS := -s -w \
 .PHONY: help
 help:
 	@echo "HnsX top-level make targets:"
-	@echo "  build           - build CLI + server + console"
+	@echo "  build           - build CLI + server + TypeScript workspace"
 	@echo "  proto           - run buf lint + buf generate (Go only)"
 	@echo "  proto-py        - regenerate Python proto stubs (worker)"
 	@echo "  proto-all       - regenerate Go + Python proto stubs"
-	@echo "  test            - go vet + go test (server)"
-	@echo "  type-check      - tsc --noEmit (console)"
-	@echo "  lint            - go vet + console eslint"
+	@echo "  test            - go vet + go test + TS tests"
+	@echo "  type-check      - tsc --noEmit (all TS packages)"
+	@echo "  lint            - go vet + eslint (all TS packages)"
+	@echo "  ts-build        - pnpm -r build"
+	@echo "  ts-lint         - pnpm -r lint"
+	@echo "  ts-test         - pnpm -r test"
+	@echo "  ts-type-check   - pnpm -r type-check"
 	@echo "  worker-install  - create venv + pip install hnsx-worker editable"
 	@echo "  worker-test     - run hnsx-worker pytest"
+	@echo "  changeset       - add a changeset (pnpm changeset)"
+	@echo "  version         - version packages from changesets"
+	@echo "  release         - publish versioned packages"
+	@echo "  ci              - lint + type-check + test + worker-test (no smoke)"
 	@echo "  db-up/db-down   - local Postgres (deployments/local)"
 	@echo "  smoke           - end-to-end smoke (requires db-up)"
 	@echo "  clean           - remove build artifacts"
 
 .PHONY: build
-build: build-cli build-server build-console
+build: build-cli build-server ts-build
 
 # ---------------------------------------------------------------------------
 # Go build
 # ---------------------------------------------------------------------------
 .PHONY: build-cli
 build-cli:
-	cd hnsx && go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/hnsx ./cmd/hnsx
+	cd $(SERVER_DIR) && go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/hnsx ./cmd/hnsx
 
 .PHONY: build-server
 build-server:
@@ -71,35 +79,51 @@ build-server:
 build-go: build-cli build-server
 
 # ---------------------------------------------------------------------------
-# Console
+# TypeScript workspace
 # ---------------------------------------------------------------------------
+.PHONY: ts-install
+ts-install:
+	cd $(ROOT) && pnpm install --frozen-lockfile
+
+.PHONY: ts-build
+ts-build:
+	cd $(ROOT) && pnpm -r build
+
+.PHONY: ts-lint
+ts-lint:
+	cd $(ROOT) && pnpm -r lint
+
+.PHONY: ts-test
+ts-test:
+	cd $(ROOT) && pnpm -r test
+
+.PHONY: ts-type-check
+ts-type-check:
+	cd $(ROOT) && pnpm -r type-check
+
+# Legacy per-package aliases (kept for muscle memory).
 .PHONY: build-console
-build-console:
-	cd $(CONSOLE_DIR) && pnpm install --frozen-lockfile && pnpm build
+build-console: ts-build
 
 .PHONY: dev-console
 dev-console:
 	cd $(CONSOLE_DIR) && pnpm dev
 
 .PHONY: type-check-console
-type-check-console:
-	cd $(CONSOLE_DIR) && pnpm type-check
+type-check-console: ts-type-check
 
 # ---------------------------------------------------------------------------
 # Tests / lint
 # ---------------------------------------------------------------------------
 .PHONY: test
-test: vet test-go
+test: vet test-go ts-test
 
 .PHONY: test-go
 test-go:
-	cd hnsx-core && go test ./...
-	cd hnsx && go test ./...
 	cd $(SERVER_DIR) && go test ./...
 
 .PHONY: vet
 vet:
-	cd hnsx-core && go vet ./...
 	cd $(SERVER_DIR) && go vet ./...
 
 .PHONY: fmt
@@ -107,8 +131,10 @@ fmt:
 	cd $(SERVER_DIR) && gofmt -w .
 
 .PHONY: lint
-lint: vet
-	cd $(CONSOLE_DIR) && pnpm lint || true
+lint: vet ts-lint
+
+.PHONY: ci
+ci: proto-lint vet test-go ts-lint ts-type-check ts-test worker-test
 
 # ---------------------------------------------------------------------------
 # Proto
@@ -150,6 +176,24 @@ worker-import-check:
 	   assert len(worker_pb2.DESCRIPTOR.services_by_name) == 2, 'expected WorkerService + SchedulerService'; \
 	   print('ok')"
 
+# ---------------------------------------------------------------------------
+# Changesets (TypeScript workspace versioning)
+# ---------------------------------------------------------------------------
+.PHONY: changeset
+changeset:
+	cd $(ROOT) && pnpm exec changeset
+
+.PHONY: version
+version:
+	cd $(ROOT) && pnpm exec changeset version
+
+.PHONY: release
+release:
+	cd $(ROOT) && pnpm exec changeset publish
+
+# ---------------------------------------------------------------------------
+# Python worker proto generation
+# ---------------------------------------------------------------------------
 .PHONY: proto-py
 proto-py:
 	mkdir -p $(WORKER_DIR)/hnsx_worker/proto/gen
@@ -210,3 +254,9 @@ smoke: build-cli build-server
 .PHONY: clean
 clean:
 	rm -rf $(BIN_DIR) $(PROTO_DIR)/gen $(SERVER_DIR)/coverage.out
+	rm -rf $(ROOT)/node_modules $(ROOT)/pnpm-lock.yaml
+	rm -rf $(CONSOLE_DIR)/node_modules $(CONSOLE_DIR)/dist $(CONSOLE_DIR)/.vite
+	rm -rf $(ROOT)/observability/node_modules $(ROOT)/observability/dist
+	rm -rf $(ROOT)/sdk/node/node_modules $(ROOT)/sdk/node/dist
+	find $(ROOT) -name 'tsconfig.tsbuildinfo' -delete
+	find $(ROOT) -name 'tsconfig.node.tsbuildinfo' -delete
