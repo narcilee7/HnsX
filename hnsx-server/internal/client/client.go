@@ -3,17 +3,34 @@
 package client
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
 // DefaultBaseURL is the local hnsx-server HTTP endpoint.
 const DefaultBaseURL = "http://127.0.0.1:50051"
+
+// APIError mirrors the canonical server error envelope.
+type APIError struct {
+	Code    string         `json:"code"`
+	Message string         `json:"message"`
+	Details map[string]any `json:"details,omitempty"`
+}
+
+func (e *APIError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s: %s", e.Code, e.Message)
+}
 
 // DomainListItem mirrors the API list view.
 type DomainListItem struct {
@@ -58,6 +75,12 @@ type Session struct {
 	StartedAt     string         `json:"started_at"`
 	CompletedAt   string         `json:"completed_at"`
 	Result        map[string]any `json:"result"`
+}
+
+// Event is one Server-Sent Event received from /sessions/:id/events.
+type Event struct {
+	Name    string
+	Payload []byte
 }
 
 // Client talks to the HnsX REST API.
@@ -197,6 +220,100 @@ func (c *Client) TriggerSession(domainID string, trigger map[string]any) (*Sessi
 	return &s, nil
 }
 
+// CancelSession cancels a session by ID.
+func (c *Client) CancelSession(id string) (*Session, error) {
+	resp, err := c.post("/api/v1/sessions/"+id+"/cancel", nil, "")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if err := checkStatus(resp); err != nil {
+		return nil, err
+	}
+	var s Session
+	if err := json.NewDecoder(resp.Body).Decode(&s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// RerunSession reruns an existing session by ID.
+func (c *Client) RerunSession(id string) (*Session, error) {
+	resp, err := c.post("/api/v1/sessions/"+id+"/rerun", nil, "")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if err := checkStatus(resp); err != nil {
+		return nil, err
+	}
+	var s Session
+	if err := json.NewDecoder(resp.Body).Decode(&s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// SessionEvents opens the SSE stream for a session and returns a channel of
+// events. The channel closes when the server sends a "done" event or when the
+// context is cancelled. Callers should drain the channel.
+func (c *Client) SessionEvents(ctx context.Context, id string) (<-chan Event, <-chan error, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/sessions/"+id+"/events", nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Header.Set("Accept", "text/event-stream")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := checkStatus(resp); err != nil {
+		_ = resp.Body.Close()
+		return nil, nil, err
+	}
+
+	events := make(chan Event)
+	errCh := make(chan error, 1)
+
+	go func() {
+		defer close(events)
+		defer close(errCh)
+		defer resp.Body.Close()
+
+		scanner := bufio.NewScanner(resp.Body)
+		var current Event
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line == "" {
+				if current.Name != "" {
+					select {
+					case events <- current:
+					case <-ctx.Done():
+						errCh <- ctx.Err()
+						return
+					}
+				}
+				current = Event{}
+				continue
+			}
+			if strings.HasPrefix(line, "event: ") {
+				current.Name = strings.TrimPrefix(line, "event: ")
+				continue
+			}
+			if strings.HasPrefix(line, "data: ") {
+				current.Payload = append(current.Payload, []byte(strings.TrimPrefix(line, "data: "))...)
+				continue
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			errCh <- err
+		}
+	}()
+
+	return events, errCh, nil
+}
+
 func (c *Client) get(path string) (*http.Response, error) {
 	return c.HTTPClient.Get(c.BaseURL + path)
 }
@@ -215,6 +332,10 @@ func (c *Client) post(path string, body io.Reader, contentType string) (*http.Re
 func checkStatus(resp *http.Response) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
+		var apiErr APIError
+		if err := json.Unmarshal(body, &apiErr); err == nil && apiErr.Code != "" {
+			return &apiErr
+		}
 		return fmt.Errorf("%s: %s", resp.Status, string(body))
 	}
 	return nil
