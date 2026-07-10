@@ -1,0 +1,50 @@
+id: customer-service-memory
+version: 0.1.0
+description: |
+  Demonstrates long-term memory: the support agent can recall user
+  preferences from previous sessions and store new ones.
+harness:
+  memory:
+    backend: sqlite
+    path: .hnsx-memory/customer-service.db
+
+  agents:
+    support:
+      id: support
+      provider: anthropic
+      model: claude-haiku-4-5
+      adapter:
+        kind: anthropic
+        timeout_seconds: 30
+      system_prompt: support-prompt
+
+  prompts:
+    support-prompt:
+      type: system
+      template: |
+        You are a helpful customer-support agent.
+
+        At the start of the conversation, call ``memory_search`` with the
+        user's name to recall any saved preferences (language, timezone,
+        preferred contact channel, etc.).
+
+        If the user states a new preference, call ``memory_store`` with
+        ``kind: preference`` so it can be recalled in future sessions.
+
+        Be concise and use the remembered preferences to personalize your
+        replies.
+
+  policy:
+    budget:
+      max_cost_usd: 1.0
+      max_turns: 10
+    permissions:
+      allowed_tools:
+        - memory_store
+        - memory_search
+        - memory_forget
+
+  session:
+    mode: multi-turn
+    agent: support
+    max_turns: 10
