@@ -17,139 +17,138 @@ import (
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
 
-// ListTraces handles GET /api/v1/traces — returns the per-session trace index
-// enriched with cost/token/invocation rollups from the observation store.
-//
-// In the current model a trace is 1:1 with a session, so trace_id == session_id.
+// ListTraces handles GET /api/v1/traces — page of TraceSummary records
+// computed directly from the observations table. The shape is the
+// authoritative wire contract for the console Traces page; trace_id and
+// session_id are kept distinct even though today's worker convention
+// keeps them equal 1:1.
 func (s *Server) ListTraces(c *gin.Context) {
-	domainFilter := c.Query("domain")
-	sessionFilter := c.Query("session")
 	limit := intQueryGin(c, "limit", 50)
 	offset := intQueryGin(c, "offset", 0)
 	if limit <= 0 {
 		limit = 50
 	}
+	if limit > 500 {
+		limit = 500
+	}
 	from, hasFrom := parseTimeQuery(c.Query("from"))
 	to, hasTo := parseTimeQuery(c.Query("to"))
 
-	items := s.Queries.ListSessions(tenantFromGin(c))
-	filtered := make([]queries.SessionListItem, 0, len(items))
-	for _, sess := range items {
-		if domainFilter != "" && sess.DomainID != domainFilter {
-			continue
-		}
-		if sessionFilter != "" && sess.ID != sessionFilter {
-			continue
-		}
-		if hasFrom && sess.StartedAt.Before(from) {
-			continue
-		}
-		if hasTo && sess.StartedAt.After(to) {
-			continue
-		}
-		filtered = append(filtered, sess)
+	filter := tracemodel.TraceListFilter{
+		TenantID:  string(tenantFromGin(c)),
+		DomainID:  c.Query("domain"),
+		SessionID: c.Query("session"),
+		AgentID:   c.Query("agent"),
+		Limit:     limit,
+		Offset:    offset,
+	}
+	if hasFrom {
+		filter.From = from
+	}
+	if hasTo {
+		filter.To = to
 	}
 
-	total := len(filtered)
-	if offset > total {
-		offset = total
-	}
-	end := offset + limit
-	if end > total {
-		end = total
-	}
-	page := filtered[offset:end]
-
-	// Batch-aggregate the page in a single query to avoid N+1.
-	pageIDs := make([]string, 0, len(page))
-	for _, sess := range page {
-		pageIDs = append(pageIDs, sess.ID)
-	}
-	aggByID := map[string]tracemodel.Aggregate{}
-	if s.TraceService != nil && len(pageIDs) > 0 {
-		if m, err := s.TraceService.AggregateBySession(pageIDs); err == nil {
-			aggByID = m
-		}
-	}
-
-	out := make([]map[string]any, 0, len(page))
-	for _, sess := range page {
-		agg := aggByID[sess.ID]
-		out = append(out, map[string]any{
-			"trace_id":          sess.ID,
-			"session_id":        sess.ID,
-			"domain_id":         sess.DomainID,
-			"domain_version":    sess.DomainVersion,
-			"status":            sess.State,
-			"started_at":        queries.FormatTimeValue(sess.StartedAt),
-			"duration_ms":       durationMs(sess),
-			"total_cost_usd":    agg.TotalCostUSD,
-			"prompt_tokens":     agg.TotalPromptTokens,
-			"completion_tokens": agg.TotalCompletionTokens,
-			"agent_invocations": agg.AgentInvocations,
-			"tool_invocations":  agg.ToolInvocations,
+	if s.TraceService == nil {
+		writeJSON(c, http.StatusOK, map[string]any{
+			"items":  []map[string]any{},
+			"total":  0,
+			"limit":  limit,
+			"offset": offset,
 		})
+		return
+	}
+	res, err := s.TraceService.ListSummaries(filter)
+	if err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+	out := make([]map[string]any, 0, len(res.Summaries))
+	for _, sum := range res.Summaries {
+		out = append(out, traceSummaryToJSON(sum))
 	}
 	writeJSON(c, http.StatusOK, map[string]any{
 		"items":  out,
-		"total":  total,
+		"total":  res.Total,
 		"limit":  limit,
 		"offset": offset,
 	})
 }
 
-// GetTrace handles GET /api/v1/traces/:traceId — returns the trace envelope with
-// the full observation list and a rolled-up summary.
+// GetTrace handles GET /api/v1/traces/:traceId — returns the trace envelope
+// with the full observation list and a per-trace rollup. 404 with the
+// stable TRACE_NOT_FOUND code when the trace_id has no observations.
 func (s *Server) GetTrace(c *gin.Context) {
 	id := c.Param("traceId")
-	sess, ok := s.Queries.GetSession(tenantFromGin(c), id)
-	if !ok {
+	if s.TraceService == nil {
 		writeError(c, &APIError{
 			Code:    "TRACE_NOT_FOUND",
 			Message: fmt.Sprintf("trace '%s' not found", id),
 		})
 		return
 	}
-
-	observations := []map[string]any{}
-	var agg tracemodel.Aggregate
-	if s.TraceService != nil {
-		records, err := s.TraceService.ByTrace(id)
-		if err != nil {
-			writeError(c, NewInternal(err))
+	detail, err := s.TraceService.Detail(id)
+	if err != nil {
+		if errors.Is(err, tracemodel.ErrTraceNotFound) {
+			writeError(c, &APIError{
+				Code:    "TRACE_NOT_FOUND",
+				Message: fmt.Sprintf("trace '%s' not found", id),
+			})
 			return
 		}
-		if len(records) == 0 {
-			// trace_id == session_id in the current 1:1 model; fall back so a
-			// trace looked up by session id still resolves its observations.
-			records, _ = s.TraceService.BySession(id)
-		}
-		for _, rec := range records {
-			observations = append(observations, observationToMap(rec))
-		}
-		if a, err := s.TraceService.Aggregate([]string{id}); err == nil {
-			agg = a
-		}
+		writeError(c, NewInternal(err))
+		return
 	}
 
-	summary := registeredSessionSummary(sess)
-	summary["total_cost_usd"] = agg.TotalCostUSD
-	summary["prompt_tokens"] = agg.TotalPromptTokens
-	summary["completion_tokens"] = agg.TotalCompletionTokens
-	summary["agent_invocations"] = agg.AgentInvocations
-	summary["tool_invocations"] = agg.ToolInvocations
+	observations := make([]map[string]any, 0, len(detail.Observations))
+	for _, rec := range detail.Observations {
+		observations = append(observations, observationToMap(rec))
+	}
 
 	writeJSON(c, http.StatusOK, map[string]any{
-		"trace_id":      id,
-		"session_id":    id,
-		"domain_id":     sess.DomainID,
-		"orchestration": sess.Orchestration,
-		"status":        sess.State,
-		"started_at":    sess.StartedAt,
-		"completed_at":  sess.CompletedAt,
-		"summary":       summary,
-		"observations":  observations,
+		"trace_id":      detail.TraceID,
+		"session_id":    detail.SessionID,
+		"domain_id":     detail.DomainID,
+		"domain_version": detail.DomainVersion,
+		"status":        detail.Status,
+		"started_at":    formatTimePtr(detail.StartedAt),
+		"completed_at":  formatTimePtr(detail.CompletedAt),
+		"duration_ms":   detail.DurationMs,
+		"observation_count":     detail.ObservationCount,
+		"total_cost_usd":        detail.TotalCostUSD,
+		"prompt_tokens":         detail.TotalPromptTokens,
+		"completion_tokens":     detail.TotalCompletionTokens,
+		"agent_invocations":     detail.AgentInvocations,
+		"tool_invocations":      detail.ToolInvocations,
+		"observations":          observations,
 	})
+}
+
+func traceSummaryToJSON(sum tracemodel.TraceSummary) map[string]any {
+	out := map[string]any{
+		"trace_id":          sum.TraceID,
+		"session_id":        sum.SessionID,
+		"domain_id":         sum.DomainID,
+		"domain_version":    sum.DomainVersion,
+		"status":            sum.Status,
+		"started_at":        formatTimePtr(sum.StartedAt),
+		"completed_at":      formatTimePtr(sum.CompletedAt),
+		"duration_ms":       sum.DurationMs,
+		"observation_count": sum.ObservationCount,
+		"total_cost_usd":    sum.TotalCostUSD,
+		"prompt_tokens":     sum.TotalPromptTokens,
+		"completion_tokens": sum.TotalCompletionTokens,
+		"agent_invocations": sum.AgentInvocations,
+		"tool_invocations":  sum.ToolInvocations,
+	}
+	return out
+}
+
+func formatTimePtr(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t.UTC().Format(time.RFC3339Nano)
 }
 
 // ListApprovals handles GET /api/v1/approvals.
