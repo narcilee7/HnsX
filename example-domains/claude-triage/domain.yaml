@@ -1,9 +1,10 @@
 id: claude-triage
-version: 0.3.0
+version: 0.4.0
 description: |
   Supervisor-based triage flow. A triage agent classifies the question and the
   harness routes to a billing or technical specialist. Demonstrates W5
-  multi-agent orchestration.
+  multi-agent orchestration, W12 reflection, and W13 EvalSet + self-check
+  + improvement loop.
 harness:
   agents:
     triage:
@@ -41,12 +42,26 @@ harness:
       type: system
       template: |
         You are the billing specialist. Answer the user's billing question
-        concisely.
+        concisely. Before responding, call `eval_self_check` to verify your
+        draft answer meets the billing rubric.
     technical-prompt:
       type: system
       template: |
         You are the technical specialist. Diagnose and answer the user's
         technical question concisely.
+  tools:
+    eval_self_check:
+      type: self_check
+      name: eval_self_check
+      description: |
+        Score the candidate billing answer against the rubric. Returns
+        {score, passed, details}.
+      config:
+        judge_adapter: anthropic
+        rubric: |
+          Answer must (a) cite the relevant billing policy section,
+          (b) state the user's next action, (c) be under 80 words.
+        threshold: 0.7
   policy:
     budget:
       max_cost_usd: 1.0
@@ -64,3 +79,58 @@ harness:
         - condition: output.to == 'other'
           state: completed
           reason: question routed to other channel
+# W13 EvalSet — drives batch evaluation + improvement loop.
+# Triggered when the control plane injects `eval_set` into the SessionRequest.
+eval:
+  eval_set_id: triage-baseline
+  max_cost_usd: 0.50
+  cases:
+    - case_id: billing-refund
+      input:
+        content: How do I get a refund for last month's invoice?
+      expected:
+        to: billing
+        reason: refund
+      scorers:
+        - name: contains
+          contains: refund
+    - case_id: billing-upgrade
+      input:
+        content: Can I upgrade from Pro to Enterprise mid-cycle?
+      expected:
+        to: billing
+      scorers:
+        - name: contains
+          contains: upgrade
+    - case_id: tech-login
+      input:
+        content: I cannot log in, getting "invalid credentials".
+      expected:
+        to: technical
+      scorers:
+        - name: contains
+          contains: technical
+    - case_id: tech-slow
+      input:
+        content: The dashboard has been very slow today.
+      expected:
+        to: technical
+      scorers:
+        - name: contains
+          contains: technical
+    - case_id: other-feedback
+      input:
+        content: I love the new UI!
+      expected:
+        to: other
+      scorers:
+        - name: contains
+          contains: other
+# W13 Eval self-improvement config. The control plane reads this block when
+# invoking `evolve_prompt` against the latest eval_report.
+improvement:
+  target_prompt: triage-prompt
+  judge_adapter: anthropic
+  n_variants: 3
+  min_improvement: 0.02
+  baseline_label: claude-triage-main
