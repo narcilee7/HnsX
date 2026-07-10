@@ -90,30 +90,35 @@
 ```text
 hnsx-server/
   cmd/
-    hnsx/             # CLI 入口：validate / run / version / eval（共用 app/commands）
+    hnsx/             # CLI 入口：本地命令 + Server 远程命令的 client
     hnsx-server/      # Server 入口：HTTP/gRPC 服务
   pkg/
-    spec/             # DomainSpec 模型 + loader（原 hnsx-core/domain + loader，无重依赖）
-    runtime/          # Adapter 接口 + Runner + Observation（原 hnsx-core/runtime + observation）
-    adapter/          # 内置 adapter：noop / echo（原 hnsx-core/adapter）
-    api/              # HTTP handler：协议转换，调用 app/commands 和 app/queries
+    spec/             # DomainSpec 模型 + loader（CLI 与 Server 共享，无重依赖）
+    runtime/          # Adapter 接口 + Runner + Observation（CLI 与 Server 共享）
+    adapter/          # 内置 adapter：noop / echo（CLI 与 Server 共享）
+    local/            # 纯本地命令：ValidateDomain / RunLocalSession / PickAdapter（CLI 专用，无 DB/HTTP 依赖）
+    api/              # HTTP handler：协议转换，调用 internal/app/commands 和 queries
     controlplane/     # gRPC WorkerService / SchedulerService
     db/               # Postgres 连接与迁移
     worker/           # Worker registry + session queue（逐步迁入 internal/worker）
     telemetry/        # OTel + sink（逐步迁入 internal/telemetry）
-    session/          # Executor / broadcaster（ broadcaster 已迁入 internal/session）
+    session/          # Executor / broadcaster（broadcaster 已迁入 internal/session）
   internal/
     config/           # 配置加载
     domain/           # Domain 聚合：model / repository / service
     session/          # Session 聚合：model / repository / service / broadcaster
-    worker/           # Worker 聚合（待建）
-    evaluation/       # Eval 聚合（待建）
-    telemetry/        # Telemetry 聚合（待建）
-    policy/           # Policy 聚合（待建）
-    secret/           # Secret 聚合（待建）
+    worker/           # Worker 聚合
+    evaluation/       # Eval 聚合
+    telemetry/        # Telemetry 聚合
+    policy/           # Policy 聚合
+    secret/           # Secret 聚合
+    audit/            # AuditLog 聚合
+    trace/            # Trace 聚合
     app/
-      commands/       # ValidateDomain / RegisterDomain / TriggerSession / CancelSession / RunLocalSession
-      queries/        # ListSessions / GetTrace / ListDomains
+      application.go  # Server 依赖组合器：DB + repos + services + queue + executor
+      commands/       # Server-side use cases：RegisterDomain / TriggerSession / CancelSession / RunLocalSession
+      queries/        # Server-side read models：ListDomains / ListSessions / GetTrace
+    client/           # CLI 远程命令的 HTTP client：domains / sessions / evals / approvals
     infrastructure/
       postgres/       # 各领域 repository 的 Postgres 实现
       grpcserver/     # gRPC 服务实现
@@ -123,8 +128,11 @@ hnsx-server/
 
 每个领域内包含自己的 model、repository（或按 Go 习惯叫 store）、service/usecase。当前 `pkg/` 下的实现逐步迁移到对应领域，最终 `pkg/` 只保留真正跨进程复用的库：
 
-- `pkg/spec`、`pkg/runtime`、`pkg/adapter`：给 CLI 和 Server 共享的纯领域契约，**严禁引入 chi/pgx/grpc/otel 等基础设施依赖**。
+- `pkg/spec`、`pkg/runtime`、`pkg/adapter`、`pkg/local`：给 CLI 和 Server 共享的纯领域运行时，**严禁引入 chi/pgx/grpc/otel 等基础设施依赖**。
+  - `pkg/local` 只包含不依赖 DB/HTTP 的本地命令（`validate`、`run`）。
+  - CLI 的远程命令（`domains list`、`sessions trigger` 等）通过 `internal/client` 访问 Server API，而不是直接复用 `internal/app/commands`。
 - `pkg/api`、`pkg/controlplane`、`pkg/db`：基础设施层，未来迁入 `internal/infrastructure/`。
+- `internal/app/commands` 与 `internal/app/queries` 是 **Server-side use cases**，依赖 repository/service，不暴露给 CLI。
 
 | 领域 | 职责 | 当前状态 | 下一步 |
 |---|---|---|---|
@@ -135,7 +143,8 @@ hnsx-server/
 | `telemetry` | Observation/Trace/Metric/AuditLog | `pkg/telemetry` | 统一 observation → trace/metric/audit 转换 |
 | `policy` | 规则存储、编译期校验、运行时决策点 | `pkg/policy` 空壳 | 实现 allowed/denied/budget/human-approval |
 | `secret` | Secret 存储、运行时注入、访问审计 | 缺失 | 新增 |
-| `app` | 编排各领域完成 Trigger / Cancel / Eval / RunLocal 用例 | 已规划 | 把 `pkg/api/domains.go`、`pkg/api/sessions.go` 业务逻辑迁入 |
+| `app` | Server-side use cases：编排各领域完成 Trigger / Cancel / Eval / RunLocal | 已规划 | 把 `pkg/api/domains.go`、`pkg/api/sessions.go` 业务逻辑迁入；明确为 Server 独占，CLI 不直接调用 |
+| `client` | CLI 远程命令的 HTTP client | 缺失 | 新增，供 `cmd/hnsx` 的 `domains`/`sessions`/`eval` 子命令使用 |
 | `infrastructure` | HTTP/gRPC/Postgres/OTel 具体实现 | `pkg/api` / `pkg/controlplane` / `pkg/db` | 作为基础设施接入各领域 |
 
 ### 2. Runtime Worker（Python）
@@ -341,12 +350,13 @@ store:
 ```text
 hnsx-server/
   cmd/
-    hnsx/              # CLI 入口：validate / run / version
+    hnsx/              # CLI 入口：本地命令（validate / run / version）+ 远程命令 client（domains / sessions / eval）
     hnsx-server/       # Server 入口：HTTP + gRPC 服务
   pkg/
     spec/              # DomainSpec 模型 + loader（CLI 与 Server 共享，无重依赖）
     runtime/           # Adapter 接口 + Runner + Observation 模型
     adapter/           # noop / echo 等内置 adapter
+    local/             # 纯本地命令：ValidateDomain / RunLocalSession / PickAdapter
     api/               # HTTP handler（逐步变薄，只负责协议转换）
     controlplane/      # gRPC 服务
     db/                # Postgres 连接
@@ -357,14 +367,18 @@ hnsx-server/
     config/
     domain/{model,repository,service}
     session/{model,repository,service,broadcaster}
-    worker/            # 待建
-    evaluation/        # 待建
-    telemetry/         # 待建
-    policy/            # 待建
-    secret/            # 待建
+    worker/            # Worker 聚合
+    evaluation/        # Eval 聚合
+    telemetry/         # Telemetry 聚合
+    policy/            # Policy 聚合
+    secret/            # Secret 聚合
+    audit/             # AuditLog 聚合
+    trace/             # Trace 聚合
     app/
-      commands/        # 复用：CLI 和 HTTP 共用同一套命令实现
-      queries/         # 复用：CLI 和 HTTP 共用同一套查询实现
+      application.go   # Server 依赖组合器
+      commands/        # Server-side use cases：RegisterDomain / TriggerSession / CancelSession / RunLocalSession
+      queries/         # Server-side read models
+    client/            # CLI 远程命令的 HTTP client
     infrastructure/
       postgres/
       grpcserver/
@@ -374,15 +388,20 @@ hnsx-server/
 
 **关键约束**：
 
-- `pkg/spec`、`pkg/runtime`、`pkg/adapter` 只放纯领域契约，**不能依赖 chi、pgx、grpc、otel**。
-- `cmd/hnsx` 只 import `pkg/spec`、`pkg/runtime`、`pkg/adapter`、`internal/app/commands`，保证 CLI 二进制精简。
+- `pkg/spec`、`pkg/runtime`、`pkg/adapter`、`pkg/local` 只放纯领域运行时契约，**不能依赖 chi、pgx、grpc、otel**。
+- `internal/app/commands` 与 `internal/app/queries` 是 **Server-side use cases**，依赖 repository/service，**不暴露给 CLI**。
+- `cmd/hnsx` import：
+  - `pkg/spec`、`pkg/runtime`、`pkg/adapter`、`pkg/local` —— 本地命令。
+  - `internal/client` —— 远程命令（`domains`、`sessions`、`eval`）。
 - `cmd/hnsx-server` 可以 import 所有基础设施包。
 
 **迁移路径**：
 
 1. 把 `hnsx-core/` 中的 model、loader、runtime、adapter、observation 迁入 `hnsx-server/pkg/spec`、`pkg/runtime`、`pkg/adapter`。
 2. 删除独立 `hnsx-core` module 和 `hnsx/` CLI module，合并到 `hnsx-server`。
-3. 在 `internal/app/` 新建 `commands/` 和 `queries/`，把 `pkg/api/domains.go`、`pkg/api/sessions.go` 中的业务逻辑迁进去。
+3. 新建 `pkg/local`，把 CLI 真正需要的本地命令（`ValidateDomain`、`RunLocalSession`、`PickAdapter`）从 `internal/app/commands` 拆出。
+4. 在 `internal/app/` 新建 `commands/` 和 `queries/`，把 `pkg/api/domains.go`、`pkg/api/sessions.go` 中的业务逻辑迁进去；明确为 Server 独占。
+5. 新增 `internal/client/`，供 CLI 远程子命令使用。
 4. 把 `pkg/worker`、`pkg/session`、`pkg/telemetry` 逐步迁入对应 `internal/` 领域。
 5. `pkg/` 最终只保留与 CLI / SDK 共享的运行时库。
 

@@ -1,10 +1,5 @@
 // hnsx-server is the HnsX control plane daemon. It hosts the HTTP/REST API
-// and (in future PRs) the gRPC control plane. Phase 1 focuses on:
-//
-//   - Loading configuration (env+yaml).
-//   - Optionally connecting Postgres and running migrations.
-//   - Initialising OTel (stdout / otlp / none).
-//   - Starting the HTTP API + SSE handler on the configured address.
+// and the gRPC control plane for Python Runtime Workers.
 //
 // Usage:
 //
@@ -24,31 +19,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/redis/go-redis/v9"
-
+	"github.com/hnsx-io/hnsx/server/internal/app"
+	"github.com/hnsx-io/hnsx/server/internal/config"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	"github.com/hnsx-io/hnsx/server/pkg/adapter"
+	"github.com/hnsx-io/hnsx/server/pkg/api"
+	"github.com/hnsx-io/hnsx/server/pkg/controlplane"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/pkg/version"
-	"github.com/hnsx-io/hnsx/server/internal/audit/model"
-	auditrepository "github.com/hnsx-io/hnsx/server/internal/audit/repository"
-	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
-	"github.com/hnsx-io/hnsx/server/internal/config"
-	evalrepository "github.com/hnsx-io/hnsx/server/internal/evaluation/repository"
-	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
-	policyrepository "github.com/hnsx-io/hnsx/server/internal/policy/repository"
-	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
-	"github.com/hnsx-io/hnsx/server/internal/worker"
-	"github.com/hnsx-io/hnsx/server/internal/worker/repository"
-	"github.com/hnsx-io/hnsx/server/internal/worker/service"
-	"github.com/hnsx-io/hnsx/server/pkg/api"
-	"github.com/hnsx-io/hnsx/server/pkg/controlplane"
-	"github.com/hnsx-io/hnsx/server/pkg/db"
-	hsxruntime "github.com/hnsx-io/hnsx/server/pkg/session"
-	"github.com/hnsx-io/hnsx/server/internal/telemetry"
-	tracerepository "github.com/hnsx-io/hnsx/server/internal/trace/repository"
-	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
 
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
@@ -109,60 +87,17 @@ func cmdServer(args []string) int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	otelProv, err := telemetry.Init(ctx, telemetry.OTelOptions{
-		ServiceName:  cfg.OTel.ServiceName,
-		Exporter:     cfg.OTel.Exporter,
-		OTLPEndpoint: cfg.OTel.OTLPEndpoint,
-	})
+	application, err := app.NewApplication(ctx, cfg)
 	if err != nil {
-		log.Fatalf("otel: %v", err)
+		log.Fatalf("application: %v", err)
 	}
-
-	var store *db.DB
-	if cfg.PostgresEnabled() {
-		store, err = db.Open(ctx, cfg.DatabaseURL)
-		if err != nil {
-			log.Printf("[hnsx-server] WARNING: database unavailable: %v", err)
-			store = db.NoDB()
-		} else {
-			defer store.Close()
-			if err := db.Migrate(ctx, store.SQL, cfg.MigrationsDir); err != nil {
-				log.Fatalf("migrate: %v", err)
-			}
-			log.Printf("[hnsx-server] migrations applied from %s", cfg.MigrationsDir)
+	defer func() {
+		shutdownCtx, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel2()
+		if err := application.Close(shutdownCtx); err != nil {
+			log.Printf("[hnsx-server] application close: %v", err)
 		}
-	} else {
-		store = db.NoDB()
-		log.Printf("[hnsx-server] running in no-db mode (set HNSX_DATABASE_URL to enable)")
-	}
-
-	sinks := []runtime.Sink{telemetry.NewStdoutSink()}
-	if store != nil && !store.IsNoDB() {
-		sinks = append(sinks, telemetry.NewDBSink(store.Pool))
-	}
-	if cfg.OTel.Exporter != "none" {
-		sinks = append(sinks, telemetry.NewTracerSink())
-	}
-
-	// Policy + audit + trace services are backed by in-memory repositories in
-	// Phase 1. Future PRs will add Postgres-backed repositories once the
-	// domain/tenant mapping is stable.
-	policySvc := policyservice.NewService(policyrepository.NewInMemoryRepository())
-	auditSvc := auditservice.NewService(auditrepository.NewInMemoryRepository())
-	traceSvc := traceservice.NewService(tracerepository.NewInMemoryRepository())
-	evalSvc := evalservice.NewService(evalrepository.NewInMemoryRepository())
-
-	traceSink := &funcSink{
-		name: "trace",
-		record: func(ctx context.Context, obs runtime.Observation) error {
-			return traceSvc.Record(ctx, obs)
-		},
-	}
-	sinks = append(sinks, traceSink)
-
-	exec := hsxruntime.NewExecutor(adapter.NewNoopAdapter(), sinks...).
-		WithPolicyProvider(policySvc).
-		WithAuditRecorder(&auditRecorder{svc: auditSvc})
+	}()
 
 	build := api.BuildInfo{
 		Version:   version.Version,
@@ -171,49 +106,15 @@ func cmdServer(args []string) int {
 		GoVersion: stdruntime.Version(),
 	}
 
-	// V1.1: worker pool is only enabled when a gRPC address is configured.
-	// When nil, the REST API falls back to the in-process executor.
-	var workerSvc *service.Service
-	var workerReg *worker.Registry
-	var sessionQ worker.SessionQueue
-	if cfg.GRPCAddr != "" {
-		if cfg.RedisEnabled() {
-			rdb := redis.NewClient(&redis.Options{
-				Addr:     cfg.Redis.Addr,
-				Password: cfg.Redis.Password,
-				DB:       cfg.Redis.DB,
-			})
-			defer func() {
-				_ = rdb.Close()
-			}()
-			sessionQ = worker.NewRedisSessionQueue(rdb, cfg.Redis.QueueKeyPrefix)
-			log.Printf("[hnsx-server] session queue: redis=%s prefix=%s", cfg.Redis.Addr, cfg.Redis.QueueKeyPrefix)
-		} else {
-			sessionQ = worker.NewSessionQueue()
-			log.Printf("[hnsx-server] session queue: in-memory")
-		}
-		workerSvc = service.NewServiceWithQueue(repository.NewInMemoryRepository(), sessionQ)
-		workerReg = workerSvc.Registry()
-	}
-
-	srv := api.NewServerWithWorkerPool(build, store, exec, workerReg, sessionQ).
-		WithPolicyService(policySvc).
-		WithAuditService(auditSvc).
-		WithTraceService(traceSvc).
-		WithEvalService(evalSvc)
+	srv := api.NewServerWithWorkerPool(build, application)
 
 	if *seedFrom != "" {
 		seedFromDir(srv, *seedFrom)
 	}
 
-	// Stale-worker GC: every 30s, evict workers that haven't heartbeat
-	// in over 60s and log how many were reaped. Only runs when worker pool
-	// is enabled.
-	stopGC := make(chan struct{})
-
 	var grpcSrv *controlplane.Server
 	if cfg.GRPCAddr != "" {
-		grpcSrv = controlplane.NewServer(cfg.GRPCAddr).WithWorkerServices(workerReg, sessionQ)
+		grpcSrv = controlplane.NewServer(cfg.GRPCAddr).WithWorkerServices(application.WorkerRegistry, application.SessionQueue)
 		if grpcSrv.Sched != nil {
 			grpcSrv.Sched.OnObservation = func(tid tenant.ID, sessionID string, obs *pb.Observation) {
 				payload := map[string]any{}
@@ -238,7 +139,11 @@ func cmdServer(args []string) int {
 		}
 	}
 
-	if workerSvc != nil {
+	// Stale-worker GC: every 30s, evict workers that haven't heartbeat
+	// in over 60s and log how many were reaped. Only runs when worker pool
+	// is enabled.
+	stopGC := make(chan struct{})
+	if application.WorkerService != nil {
 		go func() {
 			ticker := time.NewTicker(30 * time.Second)
 			defer ticker.Stop()
@@ -247,7 +152,7 @@ func cmdServer(args []string) int {
 				case <-stopGC:
 					return
 				case <-ticker.C:
-					if evicted := workerSvc.EvictStale(60 * time.Second); len(evicted) > 0 {
+					if evicted := application.WorkerService.EvictStale(60 * time.Second); len(evicted) > 0 {
 						log.Printf("[hnsx-server] evicted %d stale worker(s): %v", len(evicted), evicted)
 						if grpcSrv != nil && grpcSrv.Sched != nil {
 							for _, wid := range evicted {
@@ -282,7 +187,7 @@ func cmdServer(args []string) int {
 	select {
 	case <-ctx.Done():
 		log.Println("[hnsx-server] shutting down")
-		if workerReg != nil {
+		if application.WorkerService != nil {
 			close(stopGC)
 		}
 		shutdownCtx, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
@@ -292,11 +197,6 @@ func cmdServer(args []string) int {
 		}
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			log.Printf("[hnsx-server] api shutdown: %v", err)
-		}
-		if otelProv != nil {
-			if err := otelProv.Shutdown(shutdownCtx); err != nil {
-				log.Printf("[hnsx-server] otel shutdown: %v", err)
-			}
 		}
 		return 0
 	case err := <-serveErr:
@@ -338,38 +238,3 @@ func seedFromDir(s *api.Server, dir string) {
 		log.Printf("[seed] registered %d domain(s) from %s", registered, dir)
 	}
 }
-
-// auditRecorder adapts the internal audit service to the pkg/session
-// AuditRecorder interface used by the executor.
-type auditRecorder struct {
-	svc *auditservice.Service
-}
-
-func (r *auditRecorder) Record(ctx context.Context, entry hsxruntime.AuditEntry) error {
-	return r.svc.Record(ctx, &model.Entry{
-		SessionID: entry.SessionID,
-		DomainID:  entry.DomainID,
-		Action:    entry.Action,
-		Actor:     "executor",
-		ActorType: model.ActorTypeSystem,
-		Resource:  entry.Resource,
-		Decision:  entry.Decision,
-		Reason:    entry.Reason,
-		Details:   entry.Details,
-	})
-}
-
-// funcSink adapts a function to the runtime.Sink interface.
-type funcSink struct {
-	name   string
-	record func(context.Context, runtime.Observation) error
-}
-
-func (s *funcSink) Name() string { return s.name }
-
-func (s *funcSink) Record(ctx context.Context, obs runtime.Observation) error {
-	return s.record(ctx, obs)
-}
-
-func (s *funcSink) Flush(context.Context) error  { return nil }
-func (s *funcSink) Close(context.Context) error  { return nil }

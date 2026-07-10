@@ -84,6 +84,8 @@ hnsx-server/internal/
 - [ ] `internal/secret/{model,repository,service}`：新增。
 - [ ] `internal/evaluation/{model,repository,service}`：新增。
 - [ ] `internal/app/commands` + `internal/app/queries`：把 `pkg/api/domains.go`、`pkg/api/sessions.go` 里的业务逻辑抽到应用层，handler 只做协议转换。
+  - **明确为 Server-side use cases**：依赖 repository/service，不直接暴露给 CLI。
+  - CLI 的远程命令（`domains`、`sessions`、`eval`）通过新增 `internal/client` 访问 Server API，而不是直接复用 `internal/app/commands`。
 
 ---
 
@@ -247,7 +249,7 @@ HTTP/REST + SSE  ──▶  HnsX Control Plane（Go）
 - [x] `go test ./...` 通过。
 - [x] `internal/{domain,session}` 目录结构符合 DDD 约定。
 - [x] `pkg/api` 和 `pkg/session` 不再直接引用旧 `internal/session` 大包，而是引用 `internal/session/broadcaster`。
-- [ ] 后续 PR：handler 逻辑迁入 `internal/app`，`pkg/api` 只剩路由和协议转换。
+- [ ] 后续 PR：handler 逻辑迁入 `internal/app`，`pkg/api` 只剩路由和协议转换；明确 `internal/app/commands` 为 Server 独占，CLI 通过 `internal/client` 调用远程 API。
 
 ---
 

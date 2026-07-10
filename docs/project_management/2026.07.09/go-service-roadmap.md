@@ -55,7 +55,7 @@
 | **InMemoryRepository** | 仅用于测试和 no-db 快速启动。生产永远注入 Postgres 实现。DDD 领域层只依赖 `Repository` 接口。 |
 | **Worker 拉取 vs 推送** | 采用 **Pull（long-poll）**。Worker 主动拉任务，Control Plane 无状态、易扩缩容；Cancel 通过独立控制通道下发。 |
 | **Session = subprocess** | 参考 Ray，一个 Session 一个独立进程，崩溃只影响当前 Session，资源隔离清晰。 |
-| **两个 cmd 共用一套 handler** | `cmd/hnsx`（CLI）和 `cmd/hnsx-server`（HTTP）共用 `internal/app/commands` + `queries`，只是入口不同：一个走 `os.Args`，一个走 `chi.Router`。 |
+| **两个 cmd 的边界** | `cmd/hnsx-server`（HTTP/gRPC）独占 `internal/app/commands` + `queries`（Server-side use cases，依赖 repository/service）。`cmd/hnsx` 只共享纯本地运行时（`pkg/spec`、`pkg/runtime`、`pkg/adapter`、`pkg/local`），远程命令通过 `internal/client` 访问 Server API。 |
 
 ---
 
@@ -84,27 +84,30 @@
 
 ### Phase 2：应用层与 API 重构（1–2 周）
 
-把 `pkg/api/domains.go`、`pkg/api/sessions.go` 里的业务逻辑抽到应用层，handler 只做协议转换。
+把 `pkg/api/domains.go`、`pkg/api/sessions.go` 里的业务逻辑抽到 Server-side 应用层，handler 只做协议转换。
 
 ```text
 internal/app/
+  application.go        # Server 依赖组合器：DB + repos + services + queue + executor
   commands/
-    validate_domain.go    # ValidateDomain
-    register_domain.go    # RegisterDomain
-    update_domain.go      # UpdateDomain
-    trigger_session.go    # TriggerSession
-    cancel_session.go     # CancelSession
-    run_local.go          # hnsx run 本地执行
+    validate_domain.go  # ValidateDomain（Server 端校验入口）
+    register_domain.go  # RegisterDomain
+    update_domain.go    # UpdateDomain
+    trigger_session.go  # TriggerSession
+    cancel_session.go   # CancelSession
+    run_local.go        # 本地 executor 兜底（Server 的 no-worker 模式）
   queries/
-    list_domains.go       # ListDomains / GetDomain
-    list_sessions.go      # ListSessions / GetSession
-    get_trace.go          # GetSessionTrace / Replay
+    list_domains.go     # ListDomains / GetDomain
+    list_sessions.go    # ListSessions / GetSession
+    get_trace.go        # GetSessionTrace / Replay
+internal/client/        # CLI 远程命令的 HTTP client（domains / sessions / eval / approvals）
 ```
 
 **验收标准**：
 - `pkg/api` handler 平均行数 < 30，只负责 decode/encode/route。
-- CLI 和 HTTP 调用同一套 command/query。
-- `cmd/hnsx` 支持 `hnsx domains register`、`hnsx sessions trigger` 等子命令。
+- `internal/app/commands` 依赖 repository/service，是 Server 独占，不暴露给 CLI。
+- CLI 本地命令（`validate`、`run`、`version`）使用 `pkg/local`。
+- CLI 远程命令（`hnsx domains`、`hnsx sessions`、`hnsx eval`）使用 `internal/client` 访问 Server API。
 
 ---
 

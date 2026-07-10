@@ -1,19 +1,12 @@
-// hnsx is the operator-facing CLI for HnsX. It shares the same domain
-// commands as the HTTP API (see internal/app/commands) but exposes them
-// through a local command-line interface.
+// hnsx is the operator-facing CLI for HnsX. It exposes local commands that
+// do not require a running control plane (validate / run / version) and, in
+// later phases, remote subcommands that talk to the server API.
 //
 // Subcommands in this build:
 //
 //   - validate  : parse + structural-validate a DomainSpec YAML.
 //   - run       : execute a single session locally (no control plane).
 //   - version   : print version info.
-//
-// Subcommands planned for later phases:
-//
-//   - eval       : run an EvalSet against a DomainSpec.
-//   - traces     : query local Session telemetry.
-//   - domains    : register / list DomainSpecs in a Domain Registry.
-//   - login      : authenticate against a remote Control Plane.
 package main
 
 import (
@@ -22,8 +15,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hnsx-io/hnsx/server/pkg/adapter"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/local"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/pkg/version"
 )
@@ -88,24 +80,27 @@ func cmdValidate(args []string) int {
 		return 1
 	}
 
-	summary := map[string]any{
-		"valid":       true,
-		"id":          s.ID,
-		"version":     s.Version,
-		"mode":        s.Harness.Session.Mode,
-		"agent_count": len(s.Harness.Agents),
-	}
+	count := len(s.Harness.Agents)
+	steps := 0
 	if s.Harness.Session.Workflow != nil {
-		summary["step_count"] = len(s.Harness.Session.Workflow.Steps)
+		steps = len(s.Harness.Session.Workflow.Steps)
 	}
+
 	if *jsonOutput {
-		printJSON(summary)
+		printJSON(map[string]any{
+			"valid":       true,
+			"id":          s.ID,
+			"version":     s.Version,
+			"mode":        s.Harness.Session.Mode,
+			"agent_count": count,
+			"step_count":  steps,
+		})
 	} else {
 		fmt.Printf("✓ domain '%s' v%s is valid\n", s.ID, s.Version)
 		fmt.Printf("  mode:    %s\n", s.Harness.Session.Mode)
-		fmt.Printf("  agents:  %d\n", len(s.Harness.Agents))
-		if s.Harness.Session.Workflow != nil {
-			fmt.Printf("  steps:   %d\n", len(s.Harness.Session.Workflow.Steps))
+		fmt.Printf("  agents:  %d\n", count)
+		if steps > 0 {
+			fmt.Printf("  steps:   %d\n", steps)
 		}
 	}
 	return 0
@@ -138,14 +133,13 @@ func cmdRun(args []string) int {
 		return 1
 	}
 
-	a, err := pickAdapter(*adapterKind)
+	a, err := local.PickAdapter(*adapterKind)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
-	runner := runtime.NewRunner(a)
-	result, err := runner.Run(nil, s, payload)
+	result, err := local.RunLocalSession(nil, s, payload, a)
 	if err != nil {
 		if *jsonOutput {
 			b, _ := json.MarshalIndent(result, "", "  ")
@@ -167,17 +161,6 @@ func cmdRun(args []string) int {
 		fmt.Printf("[hnsx] output:\n%s\n", string(b))
 	}
 	return 0
-}
-
-func pickAdapter(kind string) (runtime.Adapter, error) {
-	switch kind {
-	case "noop", "":
-		return adapter.NewNoopAdapter(), nil
-	case "echo":
-		return adapter.NewEchoAdapter(), nil
-	default:
-		return nil, fmt.Errorf("unknown adapter: %s (built-in: noop, echo)", kind)
-	}
 }
 
 func printJSON(v any) {
