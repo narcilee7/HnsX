@@ -51,6 +51,7 @@ import io
 import json
 import logging
 import signal
+import sys
 import threading
 import time
 from collections.abc import Mapping
@@ -182,6 +183,84 @@ class PythonTool(Tool):
         if self._config.echo_code:
             log.debug("python tool %s: %s", self._name, code[:512])
 
+        sandbox = getattr(ctx, "sandbox", None)
+        if sandbox is not None and getattr(sandbox, "name", "none") != "none":
+            return self._invoke_in_sandbox(ctx, code, locals_in)
+
+        return self._invoke_in_process(code, locals_in)
+
+    def _invoke_in_sandbox(
+        self, ctx: ToolContext, code: str, locals_in: dict[str, Any]
+    ) -> ToolResult:
+        """Delegate execution to the configured sandbox backend."""
+        sandbox = ctx.sandbox
+        assert sandbox is not None
+        payload = json.dumps(
+            {
+                "code": code,
+                "locals": locals_in,
+                "config": {
+                    "timeout_seconds": self._config.timeout_seconds,
+                    "max_output_bytes": self._config.max_output_bytes,
+                    "allow_network": self._config.allow_network,
+                    "echo_code": self._config.echo_code,
+                },
+            },
+            ensure_ascii=False,
+            default=str,
+        )
+        command = [sys.executable, "-m", "hnsx_worker.tools.python_runner"]
+        sandbox_result = sandbox.run(
+            command,
+            input=payload,
+            timeout_seconds=self._config.timeout_seconds,
+        )
+        if not sandbox_result.ok:
+            self._emit_sandbox_violation(ctx, sandbox_result.error or "sandbox failed")
+            return ToolResult(
+                error=f"python tool: {sandbox_result.error}",
+                metadata={
+                    "stdout": sandbox_result.stdout,
+                    "stderr": sandbox_result.stderr,
+                    "sandbox": sandbox.name,
+                },
+            )
+        try:
+            data = json.loads(sandbox_result.stdout)
+        except json.JSONDecodeError as e:
+            return ToolResult(
+                error=f"python tool: sandbox output is not valid JSON: {e}",
+                metadata={
+                    "stdout": sandbox_result.stdout,
+                    "stderr": sandbox_result.stderr,
+                    "sandbox": sandbox.name,
+                },
+            )
+        if data.get("ok"):
+            return ToolResult(
+                output=data.get("output"),
+                metadata={**data.get("metadata", {}), "sandbox": sandbox.name},
+            )
+        return ToolResult(
+            error=data.get("error", "unknown sandbox error"),
+            metadata={**data.get("metadata", {}), "sandbox": sandbox.name},
+        )
+
+    def _emit_sandbox_violation(self, ctx: ToolContext, reason: str) -> None:
+        if ctx.emit is None:
+            return
+        ctx.emit(
+            {
+                "kind": "sandbox_violation",
+                "session_id": ctx.session_id,
+                "domain_id": ctx.domain_id,
+                "agent_id": ctx.agent_id,
+                "payload": {"tool": self._name, "reason": reason},
+            }
+        )
+
+    def _invoke_in_process(self, code: str, locals_in: dict[str, Any]) -> ToolResult:
+        """Run the code in the current process (legacy fast path)."""
         try:
             namespace = _build_namespace(
                 locals_in, allow_network=self._config.allow_network
