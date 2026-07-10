@@ -80,6 +80,10 @@ type Server struct {
 	// Queries exposes read-only application queries.
 	Queries *queries.Queries
 
+	// ConnectHandler serves the Connect-RPC control plane on /hnsx.v1.* paths.
+	// When nil the HTTP server exposes only the REST API.
+	ConnectHandler http.Handler
+
 	shutdownOnce   sync.Once
 	httpServer     *http.Server
 	activeRequests sync.WaitGroup
@@ -113,6 +117,13 @@ func NewServer(build BuildInfo, application *app.Application) *Server {
 		SessionCommands: commands.NewSessionCommands(application.SessionService, application.DomainService, application.WorkerService, application.Executor, application.State),
 		Queries:         queries.NewQueries(application.DomainService, application.SessionService),
 	}
+}
+
+// WithConnectHandler attaches the Connect-RPC handler mux to the HTTP server.
+// It returns the same *Server for chaining.
+func (s *Server) WithConnectHandler(h http.Handler) *Server {
+	s.ConnectHandler = h
+	return s
 }
 
 // LoadDomainPolicy persists the policy for the named domain.
