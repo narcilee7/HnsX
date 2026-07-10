@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
+	evalrunner "github.com/hnsx-io/hnsx/server/internal/evaluation/runner"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	tracemodel "github.com/hnsx-io/hnsx/server/internal/trace/model"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
@@ -357,10 +360,38 @@ func (s *Server) RunEval(c *gin.Context) {
 		return
 	}
 
-	// Phase 1 skeleton: mark the run completed with a neutral score. The actual
-	// eval execution loop will be implemented once the worker pipeline can run
-	// sessions in batch.
-	_ = s.EvalService.FinishRun(run.ID, 0.0, 0, run.TotalCases, 0, 0)
+	// The eval runner drives one synchronous session per case via the local
+	// executor. When the server runs in pure worker-pool mode (no executor),
+	// batch eval is not yet available.
+	if s.Executor == nil {
+		writeError(c, &APIError{
+			Code:    "ADAPTER_NOT_IMPLEMENTED",
+			Message: "eval runner requires the local executor in this build",
+		})
+		return
+	}
+
+	specForRun := domain.Spec
+	budget := 0.0
+	if specForRun != nil {
+		budget = specForRun.Harness.Policy.Budget.MaxCostUSD
+	}
+	traceSvc := s.TraceService
+	er := evalrunner.New(s.Executor, s.EvalService, evalrunner.WithCostFunc(func(sessionID string) float64 {
+		if traceSvc == nil {
+			return 0
+		}
+		agg, err := traceSvc.Aggregate([]string{sessionID})
+		if err != nil {
+			return 0
+		}
+		return agg.TotalCostUSD
+	}))
+	tenantID := tenantFromGin(c)
+	go func() {
+		ctx := tenant.NewContext(context.Background(), tenantID)
+		_ = er.Run(ctx, run, set, specForRun, budget)
+	}()
 
 	c.Header("Location", fmt.Sprintf("/api/v1/evals/%s/runs/%s", set.ID, run.ID))
 	writeJSON(c, http.StatusAccepted, map[string]any{
@@ -393,6 +424,20 @@ func (s *Server) GetEvalRun(c *gin.Context) {
 		return
 	}
 
+	cases := make([]map[string]any, 0, len(run.Results))
+	for _, res := range run.Results {
+		cases = append(cases, map[string]any{
+			"case_id":     res.CaseID,
+			"session_id":  res.SessionID,
+			"score":       res.Score,
+			"passed":      res.Passed,
+			"actual":      res.Actual,
+			"details":     res.Details,
+			"duration_ms": res.DurationMs,
+			"cost_usd":    res.CostUSD,
+		})
+	}
+
 	writeJSON(c, http.StatusOK, map[string]any{
 		"id":             run.ID,
 		"eval_set_id":    run.EvalSetID,
@@ -405,6 +450,7 @@ func (s *Server) GetEvalRun(c *gin.Context) {
 		"passed_cases":   run.PassedCases,
 		"total_cost_usd": run.TotalCostUSD,
 		"duration_ms":    run.DurationMs,
+		"cases":          cases,
 		"created_at":     queries.FormatTimeValue(run.CreatedAt),
 		"completed_at":   queries.FormatTime(run.CompletedAt),
 	})
