@@ -155,13 +155,17 @@ def main() -> int:
             timer.daemon = True
             timer.start()
 
-        execute_session(spec, trigger, config, stop_event=stop_event, emit=emit)
+        result = execute_session(spec, trigger, config, stop_event=stop_event, emit=emit)
+        end_payload: dict[str, Any] = {}
+        if isinstance(result, dict):
+            end_payload["result"] = result
         emit(
             {
                 "kind": "session_end",
                 "session_id": session_id,
                 "domain_id": domain_id,
                 "state": "completed",
+                "payload": end_payload,
             }
         )
         if timer is not None:
