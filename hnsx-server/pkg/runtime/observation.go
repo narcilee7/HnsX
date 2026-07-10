@@ -20,6 +20,7 @@ type Observation struct {
 	ParentID  string         `json:"parent_id,omitempty"`
 	TraceID   string         `json:"trace_id,omitempty"`
 	Payload   map[string]any `json:"payload,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 	Cost      *Cost          `json:"cost,omitempty"`
 	Timestamp time.Time      `json:"timestamp"`
 }

@@ -24,6 +24,19 @@ func newRouter(s *Server) *gin.Engine {
 	r.GET("/healthz", s.Health)
 	r.GET("/readyz", s.Readiness)
 
+	// Connect-RPC control plane (served before /api/v1 so it gets middleware).
+	if s.ConnectHandler != nil {
+		for _, svc := range []string{
+			"DomainRegistryService",
+			"SessionSchedulerService",
+			"RuntimeDiscoveryService",
+			"TelemetryService",
+			"EvalService",
+		} {
+			r.Any("/hnsx.v1."+svc+"/*path", gin.WrapH(s.ConnectHandler))
+		}
+	}
+
 	// Versioned API.
 	v1 := r.Group("/api/v1")
 	{
@@ -39,6 +52,7 @@ func newRouter(s *Server) *gin.Engine {
 				d.GET("/versions", s.ListDomainVersions)
 				d.POST("/validate", s.ValidateDomain)
 				d.POST("/run", s.TriggerDomain)
+				d.POST("/policies", s.BindPolicy)
 			}
 		}
 
@@ -79,7 +93,10 @@ func newRouter(s *Server) *gin.Engine {
 			e := evals.Group("/:setId")
 			{
 				e.GET("", s.GetEvalSet)
+				e.PUT("", s.UpdateEvalSet)
+				e.DELETE("", s.DeleteEvalSet)
 				e.POST("/run", s.RunEval)
+				e.GET("/runs", s.ListEvalRuns)
 				e.GET("/runs/:runId", s.GetEvalRun)
 			}
 		}
@@ -100,6 +117,12 @@ func newRouter(s *Server) *gin.Engine {
 		}
 
 		v1.GET("/policies", s.ListPolicies)
+		policies := v1.Group("/policies")
+		{
+			policies.POST("", s.CreatePolicy)
+			policies.PUT("/:id", s.UpdatePolicy)
+			policies.DELETE("/:id", s.DeletePolicy)
+		}
 	}
 
 	return r

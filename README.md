@@ -2,214 +2,129 @@
 
 > **Don't build weaker agents. Harness stronger ones.**
 
-HnsX is a platform for safely running the strongest available agents
-(Claude Code, Codex, OpenAI, Anthropic, Ollama, …) inside enterprise
-constraints — declarative Harness configurations, fine-grained observability,
-budgets, audit, evaluations, and a control plane for production deployments.
-
-This repository contains Phase 1 of HnsX: the foundational CLI + control
-plane + REST/SSE API + observation pipeline + proto contracts that every
-subsequent phase builds on.
-
-> Phase 1 deliberately **does not** ship a low-code Workflow editor, a
-> self-hosted model runtime, or a SaaS control plane. Those are later
-> phases. See [`docs/tech_overview.md`](docs/tech_overview.md) for the
-> full roadmap.
+HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI、Anthropic、Ollama 等最强 Agent。它不是又一个 Agent 底座，而是一层**声明式 Harness**：把领域知识、约束策略、执行沙箱、观测审计、评估体系整合在一起，让 Agent 在明确边界内为企业工作。
 
 ---
 
-## Repository layout
+## 一句话定位
 
-```
-hnsx/
-├── docs/                            Design docs (vision, API, schema, orchestration, evaluation, observation)
-├── proto/                           Protobuf source — single source of truth for the API contract
-│   ├── hnsx/v1/                     .proto files (domain, control_plane, observation, runtime)
-│   └── buf.{yaml,gen.yaml}          buf config — `make proto` regenerates everything
-├── go/migrations/                   Postgres migrations (goose format)
-├── hnsx-server/                     Go server: control plane, REST+SSE API, runtime, telemetry
-│   ├── cmd/
-│   │   ├── hnsx/                    Operator CLI (validate / run / version)
-│   │   └── hnsx-server/             Control-plane daemon (server / version)
-│   ├── internal/{config,version}    Internal helpers (config loading, build info)
-│   ├── pkg/
-│   │   ├── api/                     REST handlers + chi router + SSE + error envelope
-│   │   ├── adapter/                 Provider adapters (Noop, Echo; Anthropic/OpenAI in Phase 2)
-│   │   ├── core/domain/             DomainSpec v2 model
-│   │   ├── core/loader/             YAML loader + structural validator
-│   │   ├── controlplane/            gRPC control plane server (Phase 2 service impls)
-│   │   ├── db/                      pgx wrapper + goose migration runner
-│   │   ├── observation/             Cross-package Observation event type
-│   │   ├── policy/                  Budget / permission / guardrail engine
-│   │   ├── runtime/                 Runner + Executor + Broadcaster + Supervisor + Workflow
-│   │   ├── telemetry/               OTel + stdout + DB sinks
-│   │   └── proto/gen/go/hnsx/v1/    buf-generated Go code (DO NOT EDIT)
-│   ├── go.mod
-│   └── *_test.go                    Unit tests (loader, runtime, api, config, observation, adapter)
-├── hnsx-worker/                     Python capability execution plane (V1.1+)
-│   ├── pyproject.toml               PEP 621 packaging, grpcio + click + protobuf
-│   ├── hnsx_worker/                 Package source (CLI + worker + runtime + proto gen)
-│   └── tests/                       Pytest suite (Step 1: import smoke)
-├── hnsx-console/                    React 19 + Vite + Shadcn-style UI (built by a separate stream)
-├── example-domains/                 4 v2 DomainSpec YAMLs (customer-service / claude-triage / code-review / financial-analysis)
-├── bin/                             Built artifacts (hnsx, hnsx-server)
-├── scripts/                         build.sh / test.sh / smoke.sh
-├── deployments/local/               docker-compose (Postgres + Tempo + Grafana)
-├── Makefile                         Top-level targets
-└── .github/workflows/ci.yml         CI: proto lint+gen / go vet+test+smoke / console type-check+build
-```
+**Agent 是燃料，Harness 是引擎和方向盘。**
+
+HnsX 不自己造 Agent，而是把最好的 Agent 接入企业场景，用 YAML/JSON 声明：
+
+- 这个业务场景需要哪些 Agent、Prompt、Skill、Tool
+- 什么能做什么不能做（Policy / Sandbox / Guardrail）
+- 谁在什么情况下必须人工审批（Human-in-the-loop）
+- 每次调用花了多少 token、成本、延迟
+- 如何在真实业务数据上持续评估和进化 Harness
 
 ---
 
-## Quick start
+## 核心能力
+
+| 能力 | 说明 |
+|---|---|
+| **Domain 管理** | 用声明式 YAML 定义业务领域（Harness），支持注册、版本化、评估 |
+| **Session 编排** | 细粒度执行会话：Trigger → Session → Turn → Observation |
+| **策略与治理** | Budget（预算）、Permission（权限）、Guardrail（护栏）、Approval（人工审批） |
+| **可观测性** | 每个 token、每次工具调用、每次成本消耗，都进入 Trace / Metric / Audit |
+| **评估体系** | EvalSet + EvalRun，量化 Harness 与 Agent 在真实场景下的表现 |
+| **多 Agent 接入** | 统一 Adapter 接入 Claude Code、Codex、OpenAI、Anthropic、Ollama 等 |
+| **部署渐进** | 本地 CLI → Docker Compose → 团队托管 → 企业 SaaS |
+
+---
+
+## 适用场景
+
+- **客服分诊**：把用户问题路由到正确的专家 Agent，自动处理常见问题，敏感操作进人工审批。
+- **代码评审**：用 Harness 约束 Review Agent 的检查范围、输出格式、成本上限。
+- **金融分析**：让 Agent 读取财报、调用工具、生成报告，同时审计每一步并控制预算。
+- **内部运维**：把 SRE 知识沉淀为 Skill 和 Rule，让 Agent 在受限沙箱内执行诊断脚本。
+
+---
+
+## 快速开始
 
 ```bash
-# 1. Build the CLI + server.
-make build
+# 1. 启动完整本地环境（Postgres + Server + Worker + Tempo + Grafana）
+docker compose -f deployments/local/docker-compose.yaml up -d
 
-# 2. Validate the bundled domains.
-./bin/hnsx validate --domain example-domains/customer-service/domain.yaml --json
-
-# 3. Run a session directly from the CLI (no server needed).
-./bin/hnsx run \
-  --domain example-domains/customer-service/domain.yaml \
-  --adapter  noop \
-  --trigger  '{"question":"why was I billed twice?"}' \
-  --json
-
-# 4. Start the control-plane daemon (REST + SSE on 127.0.0.1:50051 by default).
-HNSX_HTTP_ADDR=127.0.0.1:51001 ./bin/hnsx-server server
-
-# 5. Trigger a session via REST and watch it stream back via SSE.
-SID=$(curl -fsS -X POST :51001/api/v1/sessions \
+# 2. 触发一个 customer-service 会话
+SID=$(curl -fsS -X POST http://127.0.0.1:50052/api/v1/sessions \
   -H 'Content-Type: application/json' \
-  -d '{"domain_id":"customer-service","trigger":{"question":"hi"}}' | jq -r .id)
-curl -N :51001/api/v1/sessions/$SID/events
+  -d '{"domain_id":"customer-service","trigger":{"question":"hello"}}' | jq -r .id)
+
+# 3. 实时观看 Observation 流
+curl -N http://127.0.0.1:50052/api/v1/sessions/$SID/events
+
+# 4. 打开 Grafana 看 Trace 大盘
+open http://127.0.0.1:3002
 ```
 
-The server boots in **DB-less mode** by default. To enable Postgres-backed
-session storage + automatic migrations:
-
-```bash
-docker compose -f deployments/local/docker-compose.yaml up -d postgres
-HNSX_DATABASE_URL='postgres://hnsx:hnsx@127.0.0.1:5432/hnsx?sslmode=disable' \
-HNSX_OTEL_EXPORTER=otlp \
-HNSX_OTEL_OTLP_ENDPOINT=127.0.0.1:4317 \
-./bin/hnsx-server server
-```
+本地默认使用 `noop` adapter，无需真实 LLM API Key 即可跑通完整链路。
 
 ---
 
-## REST API surface (Phase 1)
+## 产品架构一览
 
-| Method | Path                                 | Description                  |
-|--------|--------------------------------------|------------------------------|
-| GET    | `/healthz`                           | Liveness                     |
-| GET    | `/readyz`                            | Readiness (DB ping)          |
-| GET    | `/api/v1/domains`                    | List registered domains      |
-| POST   | `/api/v1/domains`                    | Register a new domain        |
-| GET    | `/api/v1/domains/{id}`               | Domain detail                |
-| PUT    | `/api/v1/domains/{id}`               | Update domain                |
-| DELETE | `/api/v1/domains/{id}`               | Delete domain                |
-| POST   | `/api/v1/domains/{id}/validate`      | Validate a DomainSpec body   |
-| POST   | `/api/v1/domains/{id}/run`           | Trigger a session for domain |
-| GET    | `/api/v1/sessions`                   | List sessions                |
-| POST   | `/api/v1/sessions`                   | Trigger a session            |
-| GET    | `/api/v1/sessions/{id}`              | Session detail + summary     |
-| GET    | `/api/v1/sessions/{id}/trace`        | Trace summary (Phase 1: stub)|
-| GET    | `/api/v1/sessions/{id}/events`       | **SSE** live observation     |
-| POST   | `/api/v1/sessions/{id}/cancel`       | Cancel a running session     |
-| POST   | `/api/v1/sessions/{id}/rerun`        | Re-trigger a session         |
-| GET    | `/api/v1/traces`                     | List traces                  |
-| GET    | `/api/v1/traces/{traceId}`           | Trace detail                 |
-| GET    | `/api/v1/audit`                      | Audit log                    |
-| GET    | `/api/v1/metrics`                    | Aggregate metrics            |
-| GET    | `/api/v1/runtimes`                   | Runtime workers              |
-| GET    | `/api/v1/secrets`                    | Secret registry (read-mask)  |
-| GET    | `/api/v1/policies`                   | Policy registry              |
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                        用户与消费层                               │
+│   CLI / Web Console / SDK → REST + SSE / gRPC                   │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │
+┌─────────────────────────────▼───────────────────────────────────┐
+│                     Control Plane（Go）                          │
+│  Domain Registry · Session Scheduler · Secret/Policy Store      │
+│  Eval Runner · Telemetry Aggregation · Audit Log                │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │
+┌─────────────────────────────▼───────────────────────────────────┐
+│                   Harness Runtime Worker                         │
+│  Loader → Validator → Runner → Adapter → Agent                   │
+│  Tool · Skill · MCP · Sandbox · Policy · Memory                  │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-OpenAPI / generated TS types land in the **`hnsx-console/`** workspace
-once proto generation is wired into pnpm.
-
-See [`docs/server-design/api-design.md`](docs/server-design/api-design.md)
-for the full contract including the standard error envelope.
+- **Control Plane**：治理中心，所有 Domain、Session、Policy、Secret、Eval、Telemetry 的归集点。
+- **Runtime Worker**：执行 Harness 的无状态工作节点，可被 Scheduler 调度。
+- **Adapter**：把统一运行时请求翻译为具体 Agent 调用，负责认证、流式、重试、成本采集。
+- **Observation**：Agent 产生的可被审计的中间产物，文本、工具调用、错误、成本、延迟一视同仁。
 
 ---
 
-## Architecture in one picture
+## 关键概念
 
-```
-┌──────────────────────────────────────────────────────┐
-│  hnsx-server                                         │
-│  ┌────────────┐  ┌─────────────┐  ┌──────────────┐    │
-│  │ API Layer  │  │   Runtime   │  │  Telemetry   │    │
-│  │  chi + SSE │──│  Executor + │──│  StdoutSink  │    │
-│  │            │  │ Broadcaster │  │ OtlpGRPCSink │    │
-│  └─────┬──────┘  └─────┬───────┘  └──────┬───────┘    │
-│        │               │               │            │
-│        └─────┬─────────┴─────────┬─────┘            │
-│              │         ┌─────────┴───────┐          │
-│              │         │     DB          │          │
-│              │         │   pgx + goose   │          │
-│              │         └────────┬────────┘          │
-└──────────────┼──────────────────┼──────────────────┘
-               │                  │
-        ┌──────┴──────┐    ┌──────┴───────┐
-        │ hnsx (CLI)  │    │ hnsx-console │
-        │   validate  │    │  (Phase 1+)  │
-        │   run       │    └──────────────┘
-        └─────────────┘
-```
-
-The **observation** type is shared between runtime, telemetry, and SSE so
-the same JSON shape is emitted everywhere (stdout, OTLP span attributes,
-DB row payload, SSE event data).
+| 概念 | 说明 |
+|---|---|
+| **Domain** | 一个业务领域配置包，包含 Harness 定义，是管理、版本化、评估的最小单元 |
+| **Harness** | 驾驭体系：Agent、Prompt、Skill、Tool、MCP、Sandbox、Policy、Memory、Eval |
+| **Session** | 一次用户触发产生的运行会话，有完整生命周期和状态机 |
+| **Turn** | Session 内的一次交互轮次 |
+| **Observation** | 可被审计的中间产物，统一进入 Trace / Metric / Audit |
+| **Eval** | 评测集与评估运行器，驱动 Harness 持续进化 |
 
 ---
 
-## Development
+## 为什么不是又一个 Agent 平台
 
-```bash
-make proto           # buf lint + buf generate  (regenerates Go proto)
-make proto-py        # regenerate Python proto stubs (worker)
-make proto-all       # regenerate Go + Python proto stubs
-make build           # build CLI + server
-make vet             # go vet
-make test-go         # go test ./...
-make worker-install  # create venv + pip install hnsx-worker editable
-make worker-test     # run hnsx-worker pytest
-./scripts/smoke.sh   # end-to-end smoke against in-process server
-```
+- ❌ 不造 Agent 底座
+- ❌ 不做低代码 Workflow 编辑器
+- ❌ 不做模型训练平台
+- ✅ 造 Harness 约束层 + 控制面 + 运维控制台
+- ✅ 让企业把最好的 Agent 装进安全、可控、可评估的框架
 
-### Python worker changes (V1.1+)
+---
 
-The Python worker (`hnsx-worker/`) is a separate package with its own
-`pyproject.toml` and venv. Editing flow:
+## 了解更多
 
-1. Edit `proto/hnsx/v1/*.proto` and/or `hnsx-worker/hnsx_worker/`.
-2. Run `make proto-all` to regenerate both Go and Python stubs.
-3. Run `make worker-install` once (creates `.venv/`, installs deps).
-4. Run `make worker-test` to execute the pytest suite.
-5. Smoke-check the wire contract: `hnsx-worker check-proto`.
-
-### Proto changes
-
-1. Edit `proto/hnsx/v1/*.proto`.
-2. Run `make proto` (regenerates `proto/gen/go/hnsx/v1/`).
-3. Update the API handlers in `pkg/api/` to match.
-4. Update the `pkg/core/domain/` model if the changes touch DomainSpec.
-
-### Database changes
-
-1. Add a new `NNNN_*.up.sql` (and matching `.down.sql`) under `go/migrations/`.
-2. The server applies them automatically on boot via `pkg/db.Migrate`.
-
-### Configuration
-
-All runtime knobs come from `internal/config` and resolve in this order:
-`flag` → `HNSX_*` env vars → YAML file (`--config`) → defaults.
-
-See [`scripts/smoke.sh`](scripts/smoke.sh) for the canonical env contract.
+| 文档 | 内容 |
+|---|---|
+| [`docs/vision.md`](docs/vision.md) | 项目愿景与产品方向 |
+| [`docs/tech_overview.md`](docs/tech_overview.md) | 技术总览、架构与阶段规划 |
+| [`docs/server-design/api-design.md`](docs/server-design/api-design.md) | REST API 完整契约 |
+| [`docs/web-console-design/整体设计.md`](docs/web-console-design/整体设计.md) | Web Console 设计定位与页面 |
+| [`docs/know-how/`](docs/know-how/) | 建模、编排、观测、评测四篇 know-how |
 
 ---
 

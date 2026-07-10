@@ -89,7 +89,7 @@ func Default() *Config {
 		DatabaseURL:   "",
 		MigrationsDir: "go/migrations",
 		OTel: OTelConfig{
-			Exporter:     "stdout",
+			Exporter:     "otlp",
 			OTLPEndpoint: "127.0.0.1:4317",
 			ServiceName:  "hnsx-server",
 		},
@@ -156,8 +156,8 @@ func applyEnv(cfg *Config) {
 	if v := os.Getenv("HNSX_LOG_LEVEL"); v != "" {
 		cfg.Log.Level = v
 	}
-	if v := os.Getenv("HNSX_REDIS_ADDR"); v != "" {
-		cfg.Redis.Addr = v
+	if _, ok := os.LookupEnv("HNSX_REDIS_ADDR"); ok {
+		cfg.Redis.Addr = os.Getenv("HNSX_REDIS_ADDR")
 	}
 	if v := os.Getenv("HNSX_REDIS_PASSWORD"); v != "" {
 		cfg.Redis.Password = v

@@ -19,6 +19,8 @@ func TestCapabilitiesFromInfo(t *testing.T) {
 	want := map[string]bool{
 		"provider:anthropic":    true,
 		"provider:openai":       true,
+		"adapter:anthropic":     true,
+		"adapter:openai":        true,
 		"model:claude-haiku-4-5": true,
 		"sandbox:process":       true,
 		"label:zone:a":          true,
