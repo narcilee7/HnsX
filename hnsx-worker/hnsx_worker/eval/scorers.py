@@ -10,6 +10,7 @@ run through :func:`score`.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections.abc import Callable
@@ -20,6 +21,8 @@ try:
     import jmespath
 except ImportError:  # pragma: no cover
     jmespath = None  # type: ignore[assignment]
+
+from hnsx_worker.adapters import AdapterRegistry
 
 log = logging.getLogger("hnsx_worker.eval.scorers")
 
@@ -203,17 +206,38 @@ def structured_match(expected: Any, actual: Any, **_: Any) -> Score:
     )
 
 
-def llm_judge(expected: Any, actual: Any, *, model: str = "claude-haiku-4-5", **_: Any) -> Score:
-    """Stub for LLM-as-judge scoring.
+def llm_judge(
+    expected: Any,
+    actual: Any,
+    *,
+    model: str = "claude-haiku-4-5",
+    adapter: str | None = None,
+    **_: Any,
+) -> Score:
+    """LLM-as-judge scorer with a deterministic fallback.
 
-    W8 ships the interface and a deterministic fallback so the eval pipeline
-    is wired end-to-end. A real implementation would call the configured
-    adapter with a judge prompt and parse the verdict.
+    If ``adapter`` is provided and registered, the scorer invokes that adapter
+    with a judge prompt and parses the returned verdict JSON. Otherwise it
+    falls back to a keyword-presence heuristic so the eval pipeline stays
+    runnable without external API calls.
+
+    Expected verdict shape::
+
+        {"verdict": "pass" | "partial" | "fail", "score": 0.0..1.0, "reason": "..."}
     """
-    # Deterministic fallback: if criteria is a string, treat presence of any
-    # keyword as a positive signal.
     criteria_str = str(expected)
     actual_str = str(actual)
+
+    if adapter:
+        try:
+            return _llm_judge_with_adapter(
+                criteria_str, actual_str, adapter_kind=adapter, model=model
+            )
+        except Exception as e:  # noqa: BLE001
+            log.warning("llm_judge adapter call failed: %s; falling back", e)
+
+    # Deterministic fallback: if criteria is a string, treat presence of any
+    # keyword as a positive signal.
     keywords = [w for w in re.findall(r"\w+", criteria_str.lower()) if len(w) > 3]
     if keywords:
         matches = sum(1 for kw in keywords if kw in actual_str.lower())
@@ -228,6 +252,66 @@ def llm_judge(expected: Any, actual: Any, *, model: str = "claude-haiku-4-5", **
         score=0.0,
         passed=False,
         details={"model": model, "criteria": criteria_str, "note": "no keywords"},
+    )
+
+
+def _llm_judge_with_adapter(
+    criteria: str,
+    actual: str,
+    *,
+    adapter_kind: str,
+    model: str,
+) -> Score:
+    """Call the configured adapter and parse a verdict JSON."""
+    adapter = AdapterRegistry.get(adapter_kind)
+    prompt = (
+        "You are an evaluator. Given the criteria and the actual output, "
+        'return a JSON object with exactly these keys: '
+        '{"verdict": "pass" | "partial" | "fail", "score": 0.0..1.0, "reason": "..."}.\n\n'
+        f"Criteria: {criteria}\n\nActual output: {actual}\n\nVerdict JSON:"
+    )
+    agent = {
+        "id": "llm-judge",
+        "adapter": {"kind": adapter_kind},
+        "model": model,
+        "system_prompt": prompt,
+    }
+    result = adapter.invoke(agent, prompt, {"content": ""})
+    return _parse_judge_verdict(result.text, model=model, criteria=criteria)
+
+
+def _parse_judge_verdict(text: str, *, model: str, criteria: str) -> Score:
+    """Best-effort parse the verdict JSON returned by a judge model."""
+    # Try to extract a fenced JSON block first, then fall back to the raw text.
+    block_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    raw = block_match.group(1) if block_match else text
+    raw = raw.strip()
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        # Last resort: grab the first JSON-ish object in the text.
+        obj_match = re.search(r"\{.*?\}", raw, re.DOTALL)
+        if not obj_match:
+            raise ValueError(f"judge returned non-JSON verdict: {text!r}") from None
+        data = json.loads(obj_match.group(0))
+
+    verdict = str(data.get("verdict", "")).lower()
+    score = float(data.get("score", 0.0))
+    reason = str(data.get("reason", ""))
+
+    if verdict == "pass":
+        passed = True
+        score = max(score, 1.0)
+    elif verdict == "partial":
+        passed = score >= 0.5
+    else:
+        passed = False
+
+    return Score(
+        score=max(0.0, min(1.0, score)),
+        passed=passed,
+        details={"model": model, "criteria": criteria, "verdict": verdict, "reason": reason},
     )
 
 
