@@ -51,6 +51,7 @@ type activeSession struct {
 	workerID  string
 	tenantID  tenant.ID
 	startedAt time.Time
+	req       *worker.SessionRequest
 }
 
 // NewSchedulerServiceServer wires the registry + queue into a server.
@@ -106,7 +107,12 @@ func (s *SchedulerServiceServer) PullSession(ctx context.Context, req *pb.PullSe
 	}
 
 	s.mu.Lock()
-	s.active[got.SessionID] = &activeSession{workerID: req.GetWorkerId(), tenantID: tid, startedAt: time.Now()}
+	s.active[got.SessionID] = &activeSession{
+		workerID:  req.GetWorkerId(),
+		tenantID:  tid,
+		startedAt: time.Now(),
+		req:       got,
+	}
 	s.mu.Unlock()
 
 	if s.Registry != nil {
@@ -162,6 +168,14 @@ func (s *SchedulerServiceServer) NackSession(ctx context.Context, req *pb.NackSe
 func (s *SchedulerServiceServer) StreamChannel(stream pb.SchedulerService_StreamChannelServer) error {
 	ctx := stream.Context()
 	workerID := ""
+	defer func() {
+		if workerID == "" {
+			return
+		}
+		if requeued := s.RequeueSessions(workerID); len(requeued) > 0 {
+			s.logf("controlplane: worker=%s disconnected; requeued sessions=%v", workerID, requeued)
+		}
+	}()
 
 	// Discover this worker's inbound channel by reading the first
 	// observation whose WorkerId tells us who they are. We accept a
@@ -296,4 +310,28 @@ func (s *SchedulerServiceServer) ActiveSessions() map[string]string {
 		out[k] = v.workerID
 	}
 	return out
+}
+
+// RequeueSessions puts all in-flight sessions assigned to workerID back onto
+// the scheduling queue. This is called when a worker is evicted or its
+// StreamChannel ends unexpectedly. It returns the requeued session IDs.
+func (s *SchedulerServiceServer) RequeueSessions(workerID string) []string {
+	if s.Queue == nil || workerID == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var requeued []string
+	for sid, act := range s.active {
+		if act.workerID != workerID {
+			continue
+		}
+		if act.req != nil {
+			s.Queue.Enqueue(act.req)
+			requeued = append(requeued, sid)
+		}
+		delete(s.active, sid)
+	}
+	return requeued
 }
