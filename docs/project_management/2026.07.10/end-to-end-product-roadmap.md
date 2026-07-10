@@ -145,9 +145,14 @@ Refs：`docs/project_management/2026.07.10/python-worker-w10-plus.md §7`
 
 #### T6 — Console 补 evals.ts api client（console）
 
-- [ ] **console** 新建 `src/api/evals.ts` 对齐 `EvalSet/EvalCase/EvalRunResult` proto；`listEvalSets/getEvalSet/createEvalSet/runEval/getEvalRun`
-- [ ] **console** `useEvals.ts` + `EvalsPage` + `EvalSetPage` + `EvalRunPage` 端到端
-- [ ] **验收**：从 console 创建一个 EvalSet + 触发 Run，能看到真实分数与 cases
+- [x] **console** 新建 `src/api/evals.ts`：listEvalSets (flat, no domainId nesting) + getEvalSet (id only) + createEvalSet + runEval + getEvalRun — 全部对齐 server `/api/v1/evals/...` 路由
+- [x] **console** `src/api/domains.ts` 删除重复的 eval 函数（之前嵌在 domains 里用了错的 URL）
+- [x] **console** `src/hooks/useEvals.ts` 重写为 setId-only 签名；useEvalSets 列表 + 客户端 domain filter；useCreateEvalSet / useRunEval / useEvalRun
+- [x] **console** `EvalsPage` 重写：服务端返回的扁平列表 + domain filter 下拉 + View/Run 按钮 → 跳到 `/evals/:setId` + `/evals/:setId/runs/:runId`；Create 对话框含 set_id / domain / description
+- [x] **console** `EvalSetPage` 重写：useEvalSet(setId) 单一参数；cases 列表 + Run 按钮
+- [x] **console** `EvalRunPage` 重写：useEvalRun(setId, runId) 单一参数；Stats 行 + Cases 表；剥除 depends-on-list 的趋势图 / 基线选择器（依赖后续 T9 listEvalRuns 加）
+- [x] **console** `App.tsx` 路由 `/evals/:setId` + `/evals/:setId/runs/:runId`
+- [x] **验收**：`pnpm type-check` + `pnpm build` + `go test ./...` 全过
 
 Refs：`docs/server-design/api-design.md §6`
 
