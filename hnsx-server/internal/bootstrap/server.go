@@ -112,6 +112,9 @@ func NewServerFromArgs(args []string) (*Server, error) {
 				if apiServer.TraceService != nil {
 					_ = apiServer.TraceService.Record(context.Background(), ro)
 				}
+				if application.Executor != nil {
+					application.Executor.ForwardObservation(context.Background(), ro)
+				}
 			}
 			grpcSrv.Sched.OnSessionStatus = func(tid tenant.ID, sessionID, state string) {
 				if application.SessionService != nil {

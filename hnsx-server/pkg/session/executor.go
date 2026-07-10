@@ -261,6 +261,23 @@ func (e *Executor) publish(ctx context.Context, obs runtime.Observation) {
 	}
 }
 
+// ForwardObservation routes an observation that originated outside the
+// executor (e.g. from a worker over the gRPC control plane) into the same
+// telemetry sinks used by locally-executed sessions. It does NOT broadcast
+// to the per-session SSE channel; callers that need SSE should do so
+// separately.
+func (e *Executor) ForwardObservation(ctx context.Context, obs runtime.Observation) {
+	e.mu.Lock()
+	sinks := e.sinks
+	e.mu.Unlock()
+
+	for _, s := range sinks {
+		go func(s runtime.Sink) {
+			_ = s.Record(ctx, obs)
+		}(s)
+	}
+}
+
 func (e *Executor) auditObservation(ctx context.Context, audit AuditRecorder, obs runtime.Observation) {
 	decision := AuditDecisionAllow
 	if obs.Kind == "error" {
