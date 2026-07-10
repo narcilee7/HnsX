@@ -86,13 +86,19 @@
 
 Refs：`docs/server-design/go-refactor-plan.md §2 Track A`
 
-#### T2 — Secret CRUD 闭 loop（server）
+#### T2 — Secret CRUD 闭 loop（server + console）
 
-- [ ] **server** `auxiliary.go:574-604` 全部接 `secret.Service`；`List/Get` 只返 `id+created_at+masked_preview`，绝不回显 value
-- [ ] **server** value 落库前 AES-GCM 加密，key 来自 `HNSX_SECRET_KEY` env
-- [ ] **server** `Create` 返 201 不含 value
-- [ ] **console** `src/api/settings.ts` + `SettingsPage` Secret tab 端到端
-- [ ] **验收**：CLI / Console 创建后能 list 但看不到 value；任意 domain 用 `{secret.XXX}` 能注入（不在本票范围，做到接口齐全即可）
+- [x] **crypto** `internal/secret/crypto`：AES-256-GCM envelope，加 nonce 前缀，`HNSX_SECRET_KEY` < 16 字符 fail-fast
+- [x] **application.go** 启动时 `secretcrypto.New()` 装载 cipher，缺失则拒绝启动；log.Info 标记加密启用
+- [x] **model** `internal/secret/model`：Secret 区分 `Value`（envelope）/ `PlainValue`（仅创建期）；新增 `ListItem` 不带 value
+- [x] **repository** 增加 `List()`，InMemory 与 Postgres 双实现；entity 不动，靠 service 层加密
+- [x] **service** `Save` 走 cipher.Encrypt → envelope + fingerprint；`List` 返 ListItem；`Delete` 幂等；`Resolve` 走 cipher.Decrypt
+- [x] **handler** `auxiliary.go` ListSecrets 真接 service（含 nil service → 503 SECRETS_UNAVAILABLE）；Create/UpdateSecret 接受 plaintext value，返 201/200 + fingerprint（绝不含 value）；DeleteSecret 真接 service + 204
+- [x] **errors.go** `SECRETS_UNAVAILABLE` → 503
+- [x] **server tests** `pkg/api/secrets_test.go` 4 条：CRUD 不回显 plaintext + Resolve 解码回 plaintext + 缺 value 返 400 + nil service 返 503
+- [x] **console** Secret 类型对齐 server 字段（name/description/kind/fingerprint/created_at/updated_at）
+- [x] **console** SettingsPage.SecretsTab — Create 对话框含 kind dropdown + description；SecretTable 改 name/kind chip/fingerprint；hardcoded stub warning 替换为 try/catch 错误条
+- [x] **验收**：`go test ./...` + `pnpm type-check` 全过
 
 Refs：`docs/server-design/go-refactor-plan.md §4 D1`
 
