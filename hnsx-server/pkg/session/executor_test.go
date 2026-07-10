@@ -19,7 +19,7 @@ func TestExecutor_Execute_Permissive(t *testing.T) {
 			Agents: map[string]spec.AgentSpec{
 				"a": {Provider: "echo", Adapter: spec.AdapterConfig{Kind: "echo"}},
 			},
-			Session: spec.SessionSpec{Mode: "single", Agent: "a"},
+			Session: spec.SessionSpec{Mode: spec.Single, Agent: "a"},
 		},
 	}
 
@@ -50,7 +50,7 @@ func TestExecutor_Execute_BudgetTurnsBlocks(t *testing.T) {
 			Agents: map[string]spec.AgentSpec{
 				"a": {Provider: "echo", Adapter: spec.AdapterConfig{Kind: "echo"}},
 			},
-			Session: spec.SessionSpec{Mode: "single", Agent: "a"},
+			Session: spec.SessionSpec{Mode: spec.Single, Agent: "a"},
 		},
 	}
 
@@ -96,7 +96,7 @@ func TestExecutor_Execute_PermissionDenied(t *testing.T) {
 			Tools: map[string]spec.ToolConfig{
 				"writer": {Kind: "file_write"},
 			},
-			Session: spec.SessionSpec{Mode: "single", Agent: "a"},
+			Session: spec.SessionSpec{Mode: spec.Single, Agent: "a"},
 		},
 	}
 

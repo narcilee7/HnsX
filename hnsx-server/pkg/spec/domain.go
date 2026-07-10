@@ -174,16 +174,15 @@ type MemoryConfig = StoreConfig
 
 // SessionSpec defines the session/orchestration mode.
 type SessionSpec struct {
-	Mode          string        `json:"mode" yaml:"mode"`
-	Agent         string        `json:"agent,omitempty" yaml:"agent,omitempty"`
-	Skill         string        `json:"skill,omitempty" yaml:"skill,omitempty"`
-	TriggerSchema any           `json:"trigger_schema,omitempty" yaml:"trigger_schema,omitempty"`
-	OutputSchema  string        `json:"output_schema,omitempty" yaml:"output_schema,omitempty"`
-	Workflow      *WorkflowSpec `json:"workflow,omitempty" yaml:"workflow,omitempty"`
+	Mode          HarnessSessionMode `json:"mode" yaml:"mode"`
+	Agent         string             `json:"agent,omitempty" yaml:"agent,omitempty"`
+	Skill         string             `json:"skill,omitempty" yaml:"skill,omitempty"`
+	TriggerSchema any                `json:"trigger_schema,omitempty" yaml:"trigger_schema,omitempty"`
+	OutputSchema  string             `json:"output_schema,omitempty" yaml:"output_schema,omitempty"`
+	Workflow      *WorkflowSpec      `json:"workflow,omitempty" yaml:"workflow,omitempty"`
 }
 
-// WorkflowSpec is the deterministic DAG (legacy) or supervisor's static
-// fallback list.
+// WorkflowSpec is the deterministic DAG or supervisor's static fallback list.
 type WorkflowSpec struct {
 	Entry       string     `json:"entry" yaml:"entry"`
 	Steps       []StepSpec `json:"steps" yaml:"steps"`
@@ -213,3 +212,15 @@ type TelemetryReporter struct {
 	Type string `json:"type" yaml:"type"`
 	Addr string `json:"addr,omitempty" yaml:"addr,omitempty"`
 }
+
+type HarnessSessionMode string
+
+const (
+	SingleTask   HarnessSessionMode = "single-task"
+	Single       HarnessSessionMode = "single"
+	MultiTurn    HarnessSessionMode = "multi-turn"
+	Supervisor   HarnessSessionMode = "supervisor"
+	Hierarchical HarnessSessionMode = "hierarchical"
+	Autonomous   HarnessSessionMode = "autonomous"
+	Workflow     HarnessSessionMode = "workflow"
+)

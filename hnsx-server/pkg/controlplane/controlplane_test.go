@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hnsx-io/hnsx/server/internal/worker"
 	workerrepository "github.com/hnsx-io/hnsx/server/internal/worker/repository"
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
-	"github.com/hnsx-io/hnsx/server/pkg/worker"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 

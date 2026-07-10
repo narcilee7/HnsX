@@ -9,9 +9,8 @@ import (
 	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	iworker "github.com/hnsx-io/hnsx/server/internal/worker"
+	"github.com/hnsx-io/hnsx/server/internal/worker"
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
-	"github.com/hnsx-io/hnsx/server/pkg/worker"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
@@ -21,9 +20,10 @@ import (
 //     matches the worker's required capabilities or the call's max_wait
 //     elapses.
 //   - AckSession: worker confirms it has spawned the subprocess; server
-//     removes the session from the queue and stamps worker_id on the
-//     session row (V1.1: in-memory only; DB integration is in #13).
-//   - NackSession: worker reports a pickup failure; requeue or fail.
+//     removes the session from the queue and records the assignment in the
+//     in-memory active bookkeeping (used for requeue/cancel routing).
+//   - NackSession: worker reports a pickup failure; unassign and drop from
+//     active bookkeeping.
 //   - StreamChannel: bidi. Worker streams observations up; server pushes
 //     cancel / drain / ping down.
 type SchedulerServiceServer struct {
@@ -98,7 +98,7 @@ func (s *SchedulerServiceServer) PullSession(ctx context.Context, req *pb.PullSe
 	required := req.GetRequiredCapabilities()
 	if len(required) == 0 {
 		if snap, ok := s.WorkerSvc.Get(req.GetWorkerId()); ok {
-			required = iworker.CapabilitiesFromInfo(snap.Info)
+			required = worker.CapabilitiesFromInfo(snap.Info)
 		}
 	}
 
@@ -161,9 +161,10 @@ func (s *SchedulerServiceServer) NackSession(ctx context.Context, req *pb.NackSe
 
 // StreamChannel implements the bidi stream. Server side:
 //
-//   - Reads worker events: observations / status / result. Logs them and
-//     stores the latest status per session in “active“ so the API can
-//     serve /sessions/{id} without DB.
+//   - Reads worker events: observations / status / result. Status updates are
+//     forwarded through OnSessionStatus so the session service can persist
+//     them to Postgres. Observations are forwarded through OnObservation for
+//     SSE fan-out and trace persistence.
 //   - Writes server-initiated events: per-session cancel commands, drain
 //     commands, periodic pings. The cancel is fed by the worker registry's
 //     inbound channel; we forward those events to the stream as long as the
@@ -214,7 +215,7 @@ func (s *SchedulerServiceServer) StreamChannel(stream pb.SchedulerService_Stream
 		// replacement channel if the worker is evicted and re-registered.
 		var workerInbound <-chan *pb.StreamChannelResponse
 		if workerID != "" && s.WorkerSvc != nil {
-			workerInbound = s.WorkerSvc.Registry().Inbound(workerID)
+			workerInbound = s.WorkerSvc.InboundChannel(workerID)
 		}
 
 		select {
@@ -273,7 +274,8 @@ func (s *SchedulerServiceServer) handleWorkerEvent(req *pb.StreamChannelRequest)
 		if st := p.Status; st != nil {
 			if act, ok := s.active[st.GetSessionId()]; ok {
 				tid = act.tenantID
-				// Update bookkeeping; future PRs persist to DB.
+				// Assignment bookkeeping only; authoritative state lives in
+				// the session service and is persisted to Postgres.
 			}
 			if st.GetState() == "completed" || st.GetState() == "failed" || st.GetState() == "cancelled" {
 				delete(s.active, st.GetSessionId())
@@ -334,6 +336,7 @@ func (s *SchedulerServiceServer) RequeueSessions(workerID string) []string {
 		}
 		delete(s.active, sid)
 	}
+	s.WorkerSvc.RemoveWorkerSessions(workerID)
 	return requeued
 }
 

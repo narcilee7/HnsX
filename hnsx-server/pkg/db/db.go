@@ -2,11 +2,10 @@
 //
 // Phase 1 exposes:
 //
-//   - Open(ctx, dsn): returns a *DB with both a *pgxpool.Pool (for runtime
-//     reads/writes) and a stdlib *sql.DB (for goose migrations and
-//     compatibility).
+//   - Open(ctx, dsn): returns a *DB with a stdlib *sql.DB (for goose migrations)
+//     and a GORM *gorm.DB (for repositories and telemetry sinks).
 //   - NoDB(): sentinel for environments with no DB configured.
-//   - Close: releases the pool + stdlib connection.
+//   - Close: releases the stdlib connection.
 //
 // All exported names are safe for concurrent use.
 package db
@@ -14,97 +13,64 @@ package db
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-// DB holds pgxpool, stdlib, and gorm connections against the same DSN.
+// DB holds stdlib and gorm connections against the same DSN.
 type DB struct {
-	Pool   *pgxpool.Pool
 	SQL    *sql.DB
 	GormDB *gorm.DB
 	DSN    string
 }
 
-// Open establishes a Postgres connection pool and stdlib *sql.DB. If dsn is
+// Open establishes a Postgres connection pool and GORM session. If dsn is
 // empty, returns (NoDB(), nil) so the server can boot in DB-less mode.
 func Open(ctx context.Context, dsn string) (*DB, error) {
 	if dsn == "" {
 		return NoDB(), nil
 	}
-	cfg, err := pgxpool.ParseConfig(dsn)
-	if err != nil {
-		return nil, fmt.Errorf("db: parse dsn: %w", err)
-	}
-	cfg.MaxConns = 16
-	cfg.MinConns = 2
-	cfg.MaxConnLifetime = 30 * time.Minute
-	cfg.MaxConnIdleTime = 5 * time.Minute
 
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	// GORM opens the connection using the Postgres driver (pgx under the hood).
+	gormDB, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		return nil, fmt.Errorf("db: new pool: %w", err)
-	}
-
-	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if err := pool.Ping(probeCtx); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("db: ping: %w", err)
-	}
-
-	// stdlib *sql.DB for goose / general compatibility. The connection
-	// string returned by stdlib.RegisterConnConfig is registered against
-	// the "pgx" driver and can be used with sql.Open.
-	connStr := stdlib.RegisterConnConfig(cfg.ConnConfig)
-	sqlDB, err := sql.Open("pgx", connStr)
-	if err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("db: open stdlib: %w", err)
-	}
-	sqlDB.SetMaxOpenConns(int(cfg.MaxConns))
-	sqlDB.SetMaxIdleConns(int(cfg.MinConns))
-	sqlDB.SetConnMaxLifetime(cfg.MaxConnLifetime)
-	sqlDB.SetConnMaxIdleTime(cfg.MaxConnIdleTime)
-
-	// GORM uses the same stdlib *sql.DB so we don't open a third physical pool.
-	gormDB, err := gorm.Open(postgres.New(postgres.Config{
-		Conn: sqlDB,
-	}), &gorm.Config{})
-	if err != nil {
-		pool.Close()
-		sqlDB.Close()
 		return nil, fmt.Errorf("db: open gorm: %w", err)
 	}
 
-	return &DB{Pool: pool, SQL: sqlDB, GormDB: gormDB, DSN: dsn}, nil
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return nil, fmt.Errorf("db: get underlying sql db: %w", err)
+	}
+	sqlDB.SetMaxOpenConns(16)
+	sqlDB.SetMaxIdleConns(2)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+
+	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := sqlDB.PingContext(probeCtx); err != nil {
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("db: ping: %w", err)
+	}
+
+	return &DB{SQL: sqlDB, GormDB: gormDB, DSN: dsn}, nil
 }
 
 // NoDB returns a sentinel DB with no underlying connections.
 func NoDB() *DB { return &DB{} }
 
-// IsNoDB reports whether the receiver has no underlying pool/sql.DB/gormDB.
-func (d *DB) IsNoDB() bool { return d == nil || d.Pool == nil || d.SQL == nil || d.GormDB == nil }
+// IsNoDB reports whether the receiver has no underlying sql.DB/gormDB.
+func (d *DB) IsNoDB() bool { return d == nil || d.SQL == nil || d.GormDB == nil }
 
 // Close releases all connections. Safe to call on NoDB.
 func (d *DB) Close() {
 	if d == nil {
 		return
 	}
-	if d.Pool != nil {
-		d.Pool.Close()
-	}
 	if d.SQL != nil {
 		_ = d.SQL.Close()
 	}
 }
-
-// ErrNoRows is a convenience re-export so callers don't have to import
-// pgx directly just to compare against pgx.ErrNoRows.
-var ErrNoRows = errors.New("db: no rows in result set")
