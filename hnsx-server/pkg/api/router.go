@@ -3,124 +3,162 @@ package api
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/gin-gonic/gin"
+
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 )
 
-// newRouter mounts the full API surface onto a chi router. Routes follow the
-// contract documented in docs/server-design/api-design.md.
-func newRouter(s *Server) http.Handler {
-	r := chi.NewRouter()
+// newRouter mounts the full API surface onto a gin engine.
+func newRouter(s *Server) *gin.Engine {
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
 
-	// Middleware stack.
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Recoverer)
-	r.Use(corsMiddleware)
-	r.Use(metricsMiddleware)
+	// Global middleware.
+	r.Use(gin.Recovery())
+	r.Use(corsMiddleware())
+	r.Use(tenantMiddleware())
+	r.Use(metricsMiddleware())
+	r.Use(drainMiddleware(s))
 
 	// Health (no /api/v1 prefix per convention).
-	r.Get("/healthz", s.Health)
-	r.Get("/readyz", s.Readiness)
+	r.GET("/healthz", s.Health)
+	r.GET("/readyz", s.Readiness)
 
 	// Versioned API.
-	r.Route("/api/v1", func(r chi.Router) {
-		r.Route("/domains", func(r chi.Router) {
-			r.Get("/", s.ListDomains)
-			r.Post("/", s.RegisterDomain)
-			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", s.GetDomain)
-				r.Put("/", s.UpdateDomain)
-				r.Delete("/", s.DeleteDomain)
-				r.Get("/versions", s.ListDomainVersions)
-				r.Post("/validate", s.ValidateDomain)
-				r.Post("/run", s.TriggerDomain)
-			})
-		})
+	v1 := r.Group("/api/v1")
+	{
+		domains := v1.Group("/domains")
+		{
+			domains.GET("", s.ListDomains)
+			domains.POST("", s.RegisterDomain)
+			d := domains.Group("/:id")
+			{
+				d.GET("", s.GetDomain)
+				d.PUT("", s.UpdateDomain)
+				d.DELETE("", s.DeleteDomain)
+				d.GET("/versions", s.ListDomainVersions)
+				d.POST("/validate", s.ValidateDomain)
+				d.POST("/run", s.TriggerDomain)
+			}
+		}
 
-		r.Route("/sessions", func(r chi.Router) {
-			r.Get("/", s.ListSessions)
-			r.Post("/", s.TriggerSession)
-			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", s.GetSession)
-				r.Get("/trace", s.GetSessionTrace)
-				r.Get("/events", s.StreamSessionEvents)
-				r.Post("/cancel", s.CancelSession)
-				r.Post("/rerun", s.RerunSession)
-			})
-		})
+		sessions := v1.Group("/sessions")
+		{
+			sessions.GET("", s.ListSessions)
+			sessions.POST("", s.TriggerSession)
+			sg := sessions.Group("/:id")
+			{
+				sg.GET("", s.GetSession)
+				sg.GET("/trace", s.GetSessionTrace)
+				sg.GET("/events", s.StreamSessionEvents)
+				sg.POST("/cancel", s.CancelSession)
+				sg.POST("/rerun", s.RerunSession)
+			}
+		}
 
-		r.Route("/traces", func(r chi.Router) {
-			r.Get("/", s.ListTraces)
-			r.Get("/{traceId}", s.GetTrace)
-		})
+		traces := v1.Group("/traces")
+		{
+			traces.GET("", s.ListTraces)
+			traces.GET("/:traceId", s.GetTrace)
+		}
 
-		r.Route("/approvals", func(r chi.Router) {
-			r.Get("/", s.ListApprovals)
-			r.Route("/{id}", func(r chi.Router) {
-				r.Post("/approve", s.ApproveApproval)
-				r.Post("/reject", s.RejectApproval)
-			})
-		})
+		approvals := v1.Group("/approvals")
+		{
+			approvals.GET("", s.ListApprovals)
+			ap := approvals.Group("/:id")
+			{
+				ap.POST("/approve", s.ApproveApproval)
+				ap.POST("/reject", s.RejectApproval)
+			}
+		}
 
-		r.Route("/evals", func(r chi.Router) {
-			r.Get("/", s.ListEvalSets)
-			r.Route("/{setId}", func(r chi.Router) {
-				r.Get("/", s.GetEvalSet)
-				r.Post("/run", s.RunEval)
-				r.Route("/runs/{runId}", func(r chi.Router) {
-					r.Get("/", s.GetEvalRun)
-				})
-			})
-		})
+		evals := v1.Group("/evals")
+		{
+			evals.GET("", s.ListEvalSets)
+			evals.POST("", s.CreateEvalSet)
+			e := evals.Group("/:setId")
+			{
+				e.GET("", s.GetEvalSet)
+				e.POST("/run", s.RunEval)
+				e.GET("/runs/:runId", s.GetEvalRun)
+			}
+		}
 
-		r.Route("/audit", func(r chi.Router) {
-			r.Get("/", s.ListAudit)
-		})
+		v1.GET("/audit", s.ListAudit)
+		v1.GET("/metrics", s.GetMetrics)
+		v1.GET("/runtimes", s.ListRuntimes)
 
-		r.Route("/metrics", func(r chi.Router) {
-			r.Get("/", s.GetMetrics)
-		})
+		secrets := v1.Group("/secrets")
+		{
+			secrets.GET("", s.ListSecrets)
+			secrets.POST("", s.CreateSecret)
+			sc := secrets.Group("/:id")
+			{
+				sc.PUT("", s.UpdateSecret)
+				sc.DELETE("", s.DeleteSecret)
+			}
+		}
 
-		r.Route("/runtimes", func(r chi.Router) {
-			r.Get("/", s.ListRuntimes)
-		})
-
-		r.Route("/secrets", func(r chi.Router) {
-			r.Get("/", s.ListSecrets)
-			r.Post("/", s.CreateSecret)
-			r.Route("/{id}", func(r chi.Router) {
-				r.Put("/", s.UpdateSecret)
-				r.Delete("/", s.DeleteSecret)
-			})
-		})
-
-		r.Route("/policies", func(r chi.Router) {
-			r.Get("/", s.ListPolicies)
-		})
-	})
+		v1.GET("/policies", s.ListPolicies)
+	}
 
 	return r
 }
 
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Authorization, X-HnsX-Api-Key")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
+func corsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Authorization, X-HnsX-Api-Key, X-Tenant-ID")
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
-		next.ServeHTTP(w, r)
-	})
+		c.Next()
+	}
 }
 
-// metricsMiddleware is a placeholder for future per-route Prometheus metrics.
-// Phase 1 keeps it cheap — it just stamps a header so callers can verify.
-func metricsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-HnsX-Route", r.URL.Path)
-		next.ServeHTTP(w, r)
-	})
+func tenantMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := tenant.ID(c.GetHeader(tenant.HeaderName))
+		if id == "" {
+			id = tenant.DefaultID
+		}
+		c.Set(tenantContextKey, id)
+		c.Next()
+	}
+}
+
+func tenantFromGin(c *gin.Context) tenant.ID {
+	if v, ok := c.Get(tenantContextKey); ok {
+		if id, ok := v.(tenant.ID); ok {
+			return id
+		}
+	}
+	return tenant.DefaultID
+}
+
+const tenantContextKey = "hnsx-tenant-id"
+
+func metricsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("X-HnsX-Route", c.Request.URL.Path)
+		c.Next()
+	}
+}
+
+func drainMiddleware(s *Server) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if s.IsDraining() {
+			c.Header("Retry-After", "0")
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, APIError{
+				Code:    "SERVICE_UNAVAILABLE",
+				Message: "server is shutting down",
+			})
+			return
+		}
+		s.TrackRequest()
+		defer s.DoneRequest()
+		c.Next()
+	}
 }

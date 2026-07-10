@@ -15,7 +15,7 @@ export function formatNumber(value: number | null | undefined, opts: Intl.Number
 
 export function formatCompact(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '—'
-  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value)
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value)
 }
 
 export function formatPercent(value: number | null | undefined, digits = 1): string {

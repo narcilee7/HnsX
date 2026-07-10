@@ -2,18 +2,20 @@ package api
 
 import (
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 // Health is the GET /healthz handler — process is alive.
-func (s *Server) Health(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+func (s *Server) Health(c *gin.Context) {
+	writeJSON(c, http.StatusOK, map[string]any{
 		"status": "ok",
 		"build":  s.BuildInfo,
 	})
 }
 
 // Readiness is the GET /readyz handler — DB is reachable (when configured).
-func (s *Server) Readiness(w http.ResponseWriter, r *http.Request) {
+func (s *Server) Readiness(c *gin.Context) {
 	type check struct {
 		Name   string `json:"name"`
 		Status string `json:"status"`
@@ -25,11 +27,11 @@ func (s *Server) Readiness(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.DB != nil && !s.DB.IsNoDB() {
-		probeCtx, cancel := s.timeoutCtx(r)
+		probeCtx, cancel := s.timeoutCtx(c.Request)
 		defer cancel()
 		if err := s.DB.Pool.Ping(probeCtx); err != nil {
 			checks = append(checks, check{Name: "database", Status: "down", Error: err.Error()})
-			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			writeJSON(c, http.StatusServiceUnavailable, map[string]any{
 				"status": "not_ready",
 				"checks": checks,
 			})
@@ -38,7 +40,7 @@ func (s *Server) Readiness(w http.ResponseWriter, r *http.Request) {
 		checks = append(checks, check{Name: "database", Status: "ok"})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(c, http.StatusOK, map[string]any{
 		"status": "ready",
 		"checks": checks,
 	})

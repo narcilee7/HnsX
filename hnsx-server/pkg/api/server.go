@@ -2,15 +2,26 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/hnsx-io/hnsx/core/domain"
-	"github.com/hnsx-io/hnsx/core/observation"
-	hsxcore "github.com/hnsx-io/hnsx/core/runtime"
+	"github.com/gin-gonic/gin"
+
+	"github.com/hnsx-io/hnsx/server/internal/app"
+	"github.com/hnsx-io/hnsx/server/internal/app/commands"
+	"github.com/hnsx-io/hnsx/server/internal/app/queries"
+	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
+	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
+	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
+	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
-	hsxsession "github.com/hnsx-io/hnsx/server/pkg/session"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	pkgexecutor "github.com/hnsx-io/hnsx/server/pkg/session"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
 )
 
@@ -22,93 +33,108 @@ type BuildInfo struct {
 	GoVersion string `json:"go_version"`
 }
 
-// Server is the API layer. It owns the in-process domain registry, the
-// session registry, the live Session broadcasters, and a reference to the
-// database (which may be NoDB). In V1.1 it also holds the worker registry and
-// session queue so REST session creation can enqueue work for Python workers.
+// Server is the API layer. It delegates all business state to the app layer
+// (internal/app) and only handles HTTP protocol concerns: routing, decoding,
+// encoding, and SSE streaming.
 type Server struct {
+	// App is the composed server-side application.
+	App *app.Application
+
 	BuildInfo BuildInfo
 	DB        *db.DB
-	Executor  *hsxsession.Executor
+	Executor  *pkgexecutor.Executor
+	AppState  *app.State
 
 	// V1.1 worker pool. May be nil when the server is started without the
 	// gRPC control plane (legacy local-executor mode).
 	WorkerRegistry *worker.Registry
-	SessionQueue   *worker.SessionQueue
+	SessionQueue   worker.SessionQueue
 
-	mu           sync.RWMutex
-	domains      map[string]*registeredDomain // keyed by domain_id
-	sessions     map[string]*registeredSession
-	bsessions    map[string]*hsxsession.Broadcaster
-	shutdownOnce sync.Once
-	httpServer   *http.Server
+	// PolicyService loads domain policy into the policy repository.
+	PolicyService *policyservice.Service
+
+	// AuditService records and queries immutable audit entries.
+	AuditService *auditservice.Service
+
+	// TraceService records and queries observation traces.
+	TraceService *traceservice.Service
+
+	// EvalService manages eval sets and runs.
+	EvalService *evalservice.Service
+
+	// DomainCommands exposes domain lifecycle use cases.
+	DomainCommands *commands.DomainCommands
+
+	// SessionCommands exposes session lifecycle use cases.
+	SessionCommands *commands.SessionCommands
+
+	// Queries exposes read-only application queries.
+	Queries *queries.Queries
+
+	shutdownOnce   sync.Once
+	httpServer     *http.Server
+	activeRequests sync.WaitGroup
+	draining       atomic.Bool
 }
 
-// registeredDomain wraps a parsed DomainSpec with metadata.
-type registeredDomain struct {
-	ID          string             `json:"id"`
-	Version     string             `json:"version"`
-	Description string             `json:"description"`
-	Spec        *domain.DomainSpec `json:"-"`
-	Harness     any                `json:"harness,omitempty"`
-	CreatedAt   time.Time          `json:"created_at"`
-	UpdatedAt   time.Time          `json:"updated_at"`
-}
+// ErrDomainNotFound is returned when a requested domain is not registered.
+var ErrDomainNotFound = errors.New("domain not found")
 
 // Domain is a re-export alias used by Sessions results so callers can avoid
-// importing pkg/core/domain everywhere.
-type Domain = registeredDomain
+// importing internal/app everywhere.
+type Domain = app.RegisteredDomain
 
-// registeredSession is the runtime metadata for one Session run.
-type registeredSession struct {
-	ID            string          `json:"id"`
-	DomainID      string          `json:"domain_id"`
-	DomainVersion string          `json:"domain_version"`
-	Orchestration string          `json:"orchestration"`
-	State         string          `json:"state"`
-	Trigger       map[string]any  `json:"trigger,omitempty"`
-	Result        *hsxcore.Result `json:"result,omitempty"`
-	StartedAt     time.Time       `json:"started_at"`
-	CompletedAt   *time.Time      `json:"completed_at,omitempty"`
-}
-
-// NewServer constructs an API Server. The BuildInfo should be supplied by
-// the main package; pass an empty struct for tests.
-func NewServer(build BuildInfo, database *db.DB, executor *hsxsession.Executor) *Server {
-	return NewServerWithWorkerPool(build, database, executor, nil, nil)
+// NewServer constructs an API Server wired to the supplied Application.
+func NewServer(build BuildInfo, application *app.Application) *Server {
+	return NewServerWithWorkerPool(build, application)
 }
 
 // NewServerWithWorkerPool constructs an API Server wired to the V1.1 worker
-// pool. When WorkerRegistry and SessionQueue are non-nil, session triggers
-// are enqueued for Python workers instead of executed locally.
-func NewServerWithWorkerPool(build BuildInfo, database *db.DB, executor *hsxsession.Executor, reg *worker.Registry, q *worker.SessionQueue) *Server {
+// pool through the supplied Application.
+func NewServerWithWorkerPool(build BuildInfo, application *app.Application) *Server {
 	return &Server{
-		BuildInfo:      build,
-		DB:             database,
-		Executor:       executor,
-		WorkerRegistry: reg,
-		SessionQueue:   q,
-		domains:        map[string]*registeredDomain{},
-		sessions:       map[string]*registeredSession{},
-		bsessions:      map[string]*hsxsession.Broadcaster{},
+		App:             application,
+		BuildInfo:       build,
+		DB:              application.DB,
+		Executor:        application.Executor,
+		AppState:        application.State,
+		WorkerRegistry:  application.WorkerRegistry,
+		SessionQueue:    application.SessionQueue,
+		PolicyService:   application.PolicyService,
+		AuditService:    application.AuditService,
+		TraceService:    application.TraceService,
+		EvalService:     application.EvalService,
+		DomainCommands:  commands.NewDomainCommands(application.DomainService),
+		SessionCommands: commands.NewSessionCommands(application.SessionService, application.DomainService, application.SessionQueue, application.Executor),
+		Queries:         queries.NewQueries(application.DomainService, application.SessionService),
 	}
 }
 
-// WithWorkerPool wires an existing server into the V1.1 worker pool. Used by
-// tests and by main when the gRPC control plane is enabled.
-func (s *Server) WithWorkerPool(reg *worker.Registry, q *worker.SessionQueue) *Server {
+// WithWorkerPool wires an existing server into the V1.1 worker pool.
+func (s *Server) WithWorkerPool(reg *worker.Registry, q worker.SessionQueue) *Server {
 	s.WorkerRegistry = reg
 	s.SessionQueue = q
 	return s
 }
 
-// Handler returns the http.Handler with the entire API surface mounted.
-func (s *Server) Handler() http.Handler {
+// LoadDomainPolicy persists the policy for the named domain.
+func (s *Server) LoadDomainPolicy(ctx context.Context, domainID string) error {
+	if s.PolicyService == nil {
+		return nil
+	}
+	_, d, ok := s.Queries.GetDomain(tenant.FromContext(ctx), domainID)
+	if !ok {
+		return ErrDomainNotFound
+	}
+	return s.PolicyService.LoadDomainPolicy(domainID, d.Spec)
+}
+
+// Handler returns the gin.Engine with the entire API surface mounted.
+func (s *Server) Handler() *gin.Engine {
 	return newRouter(s)
 }
 
-// Listen starts the HTTP server on addr. Blocks until Shutdown is called or
-// the listener fails.
+// Listen starts the HTTP server on addr. Blocks until Shutdown is called.
 func (s *Server) Listen(addr string) error {
 	s.httpServer = &http.Server{
 		Addr:              addr,
@@ -132,130 +158,57 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return err
 }
 
+// Drain marks the server as draining and waits for active requests to finish.
+func (s *Server) Drain(ctx context.Context) error {
+	s.draining.Store(true)
+	done := make(chan struct{})
+	go func() {
+		s.activeRequests.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// IsDraining reports whether the server is currently draining.
+func (s *Server) IsDraining() bool { return s.draining.Load() }
+
+// TrackRequest marks a request as in-flight. Callers must call Done().
+func (s *Server) TrackRequest() { s.activeRequests.Add(1) }
+
+// DoneRequest marks a request as finished.
+func (s *Server) DoneRequest() { s.activeRequests.Done() }
+
 // timeoutCtx derives a request-scoped context with the configured timeout.
 func (s *Server) timeoutCtx(r *http.Request) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(r.Context(), 30*time.Second)
 }
 
-// ----------------------------------------------------------------------------
-// helpers used by handlers
-// ----------------------------------------------------------------------------
-
-func (s *Server) registerDomain(d *registeredDomain) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.domains[d.ID] = d
-}
-
-func (s *Server) lookupDomain(id string) (*registeredDomain, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	d, ok := s.domains[id]
-	return d, ok
-}
-
-func (s *Server) listDomainItems() []*registeredDomain {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]*registeredDomain, 0, len(s.domains))
-	for _, d := range s.domains {
-		out = append(out, d)
-	}
-	return out
-}
-
-func (s *Server) registerSession(sess *registeredSession) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.sessions[sess.ID] = sess
-}
-
-func (s *Server) lookupSession(id string) (*registeredSession, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	sess, ok := s.sessions[id]
-	return sess, ok
-}
-
-func (s *Server) attachBroadcaster(sessionID string) *hsxsession.Broadcaster {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if bc, ok := s.bsessions[sessionID]; ok {
-		return bc
-	}
-	bc := hsxsession.NewBroadcaster()
-	s.bsessions[sessionID] = bc
-	return bc
-}
-
-func (s *Server) detachBroadcaster(sessionID string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if bc, ok := s.bsessions[sessionID]; ok {
-		bc.Close()
-		delete(s.bsessions, sessionID)
-	}
-}
-
-func (s *Server) listSessionItems() []*registeredSession {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]*registeredSession, 0, len(s.sessions))
-	for _, s := range s.sessions {
-		out = append(out, s)
-	}
-	return out
-}
-
 // PublishObservation forwards an observation into the named session's
-// broadcaster so SSE clients see it. It is the bridge between the gRPC
-// worker StreamChannel and the HTTP /events endpoint. Returns false if the
-// session has no broadcaster (e.g. it was triggered before V1.1 or has
-// already been cleaned up).
-func (s *Server) PublishObservation(sessionID string, obs observation.Observation) bool {
-	bc := s.attachBroadcaster(sessionID)
-	ctx := context.Background()
-	if err := bc.Publish(ctx, obs); err != nil {
+// broadcaster so SSE clients see it.
+func (s *Server) PublishObservation(sessionID string, obs runtime.Observation) bool {
+	if s.AppState == nil {
 		return false
 	}
-	return true
+	return s.AppState.PublishObservation(sessionID, obs)
 }
 
-// UpdateSessionState updates the in-memory session state. Called by the
-// scheduler when the worker reports a terminal status update.
-func (s *Server) UpdateSessionState(sessionID, state string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sess, ok := s.sessions[sessionID]
+// RegisterBootstrapDomain inserts an already-validated *spec.DomainSpec
+// into the domain registry. Intended for the `seed-from` path in main.
+func (s *Server) RegisterBootstrapDomain(tenantID tenant.ID, v any) {
+	if s.App == nil || s.App.DomainService == nil {
+		return
+	}
+	ds, ok := v.(*spec.DomainSpec)
 	if !ok {
 		return
 	}
-	sess.State = state
-	if state == "completed" || state == "failed" || state == "cancelled" || state == "canceled" {
-		now := time.Now().UTC()
-		sess.CompletedAt = &now
-	}
-}
-
-// RegisterBootstrapDomain inserts an already-validated *domain.DomainSpec
-// into the in-process registry. Intended for the `bootstrapDomains`
-// path in main, not for the public API.
-//
-// Public callers should use the POST /api/v1/domains handler instead.
-func (s *Server) RegisterBootstrapDomain(spec any) {
-	ds, ok := spec.(*domain.DomainSpec)
-	if !ok {
+	if _, err := s.App.DomainService.Register(ds); err != nil {
 		return
 	}
-	now := time.Now().UTC()
-	d := &registeredDomain{
-		ID:          ds.ID,
-		Version:     ds.Version,
-		Description: ds.Description,
-		Spec:        ds,
-		Harness:     ds.Harness,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	}
-	s.registerDomain(d)
+	_ = s.LoadDomainPolicy(tenant.NewContext(context.Background(), tenantID), ds.ID)
 }
