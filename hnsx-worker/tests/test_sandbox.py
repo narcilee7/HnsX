@@ -13,6 +13,8 @@ from hnsx_worker.sandbox import (
     ProcessSandbox,
     build_backend,
 )
+from hnsx_worker.tools.base import ToolContext
+from hnsx_worker.tools.python import PythonTool, PythonToolConfig
 
 
 def test_none_sandbox_runs_echo() -> None:
@@ -69,3 +71,25 @@ def test_build_backend_process() -> None:
 def test_build_backend_unknown_raises() -> None:
     with pytest.raises(ValueError, match="unknown sandbox backend"):
         build_backend({"backend": "vm"})
+
+
+def test_python_tool_runs_in_process_sandbox() -> None:
+    tool = PythonTool("calc", PythonToolConfig(timeout_seconds=2))
+    ctx = ToolContext(sandbox=ProcessSandbox())
+    result = tool.invoke(ctx, {"code": "print('hello from sandbox')"})
+    assert result.ok is True
+    assert "hello from sandbox" in result.output["stdout"]
+    assert result.metadata.get("sandbox") == "process"
+
+
+def test_python_tool_sandbox_timeout_emits_violation() -> None:
+    tool = PythonTool("slow", PythonToolConfig(timeout_seconds=0.1))
+    observations: list[dict] = []
+    ctx = ToolContext(
+        sandbox=ProcessSandbox(),
+        emit=lambda o: observations.append(o),
+    )
+    result = tool.invoke(ctx, {"code": "import time; time.sleep(10)"})
+    assert result.ok is False
+    assert any(o["kind"] == "sandbox_violation" for o in observations)
+    assert "timeout" in result.error.lower()

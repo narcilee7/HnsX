@@ -17,7 +17,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from hnsx_worker.sandbox.backend import SandboxBackend
 
 # ---------------------------------------------------------------------------
 # Result / decision types
@@ -106,6 +109,7 @@ class ToolContext:
     tool_call_id: str = ""
     secrets: dict[str, str] = field(default_factory=dict)
     emit: EmitFn | None = None
+    sandbox: SandboxBackend | None = None
 
 
 # ---------------------------------------------------------------------------
