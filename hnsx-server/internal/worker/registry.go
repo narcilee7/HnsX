@@ -196,6 +196,23 @@ func (r *Registry) SendCancel(workerID, sessionID, reason string, deadlineMs int
 	}
 }
 
+// Evict removes a specific worker by ID. Returns true if the worker was
+// present and evicted. The worker's inbound channel is closed so any open
+// StreamChannel terminates.
+func (r *Registry) Evict(workerID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	rec, ok := r.workers[workerID]
+	if !ok {
+		return false
+	}
+	close(rec.Inbound)
+	delete(r.workers, workerID)
+	delete(r.workerSessions, workerID)
+	return true
+}
+
 // EvictStale removes workers whose last heartbeat is older than “maxAge“.
 // Returns the list of evicted worker_ids so callers can log / re-queue
 // their in-flight sessions.
