@@ -60,6 +60,11 @@ log = logging.getLogger("hnsx_worker.worker_service")
 # how long to wait for an in-flight subprocess when the worker is shutting down
 _SHUTDOWN_GRACE_SECONDS = 5.0
 
+# W9: observation batching and backpressure
+_OBS_BATCH_SIZE = 32
+_OBS_BATCH_DELAY_SECONDS = 0.05
+_OBS_DEGRADED_THRESHOLD = 1000
+
 
 class WorkerService:
     def __init__(self, config: WorkerConfig) -> None:
@@ -169,6 +174,12 @@ class WorkerService:
             try:
                 with self._lock:
                     running_ids = list(self._running.keys())
+                queue_size = self._obs_queue.qsize()
+                health_status = (
+                    WorkerHealthStatus.DEGRADED
+                    if queue_size > _OBS_DEGRADED_THRESHOLD
+                    else WorkerHealthStatus.HEALTHY
+                )
                 req = HeartbeatRequest(
                     worker_id=self.worker_id,
                     timestamp_ms=int(time.time() * 1000),
@@ -181,7 +192,10 @@ class WorkerService:
                         ),
                     ),
                     running_session_ids=running_ids,
-                    health=WorkerHealth(status=WorkerHealthStatus.HEALTHY),
+                    health=WorkerHealth(
+                        status=health_status,
+                        message=f"obs_queue_size={queue_size}",
+                    ),
                 )
                 self.client.heartbeat(req)
                 backoff = 2.0
@@ -503,14 +517,22 @@ class WorkerService:
     def _stream_producer_loop(self) -> None:
         """Open the bidi StreamChannel and forward outbound messages to the server.
 
+        W9: observation messages are batched for efficiency; status/result are
+        sent immediately. On shutdown the queue is flushed before returning.
+
         Server-pushed events (Cancel / Drain / DomainInvalidation) are received
-        here too. Full handling lands in #9+#11.
+        here too.
         """
         backoff = 0.5
         while not self._stop_event.is_set():
             try:
                 events = self.client.open_stream(
-                    _outbound_iter(self._obs_queue, self._stop_event),
+                    _outbound_iter(
+                        self._obs_queue,
+                        self._stop_event,
+                        max_batch_size=_OBS_BATCH_SIZE,
+                        max_batch_delay=_OBS_BATCH_DELAY_SECONDS,
+                    ),
                     timeout=None,
                 )
                 backoff = 0.5
@@ -520,12 +542,22 @@ class WorkerService:
                     self._handle_server_event(server_event)
             except Exception as e:  # noqa: BLE001 — channel-level errors
                 if self._stop_event.is_set():
-                    return
+                    break
                 log.warning(
                     "stream channel error: %s; reconnecting in %.1fs", e, backoff
                 )
                 self._stop_event.wait(backoff)
                 backoff = min(backoff * 2, 10.0)
+
+        # Graceful shutdown: flush any observations still queued.
+        remaining = list(_drain_queue(self._obs_queue))
+        if remaining:
+            log.info("flushing %d queued outbound messages on shutdown", len(remaining))
+            try:
+                for _ in self.client.open_stream(iter(remaining), timeout=5.0):
+                    pass
+            except Exception as e:  # noqa: BLE001
+                log.warning("shutdown flush failed: %s", e)
 
     def _handle_server_event(self, event: ServerEvent) -> None:
         if event.kind == "cancel" and event.cancel is not None:
@@ -581,12 +613,65 @@ class _SessionHandle:
 
 
 def _outbound_iter(
-    q: queue.Queue[OutboundMessage], stop_event: threading.Event
+    q: queue.Queue[OutboundMessage],
+    stop_event: threading.Event,
+    *,
+    max_batch_size: int = 1,
+    max_batch_delay: float = 0.0,
 ) -> Iterator[OutboundMessage]:
-    """Bridge a queue.Queue into a generator for the bidi stream."""
+    """Bridge a queue.Queue into a generator for the bidi stream.
+
+    Observation messages are batched up to ``max_batch_size`` within
+    ``max_batch_delay`` seconds. Status and result messages are sent
+    immediately.
+    """
+
+    def _batch_observations(first: list[Observation]) -> Iterator[OutboundMessage]:
+        batch = list(first)
+        deadline = time.monotonic() + max_batch_delay
+        while len(batch) < max_batch_size:
+            remaining = max(0.0, deadline - time.monotonic())
+            if remaining <= 0:
+                break
+            try:
+                item = q.get(timeout=min(remaining, 0.05))
+            except queue.Empty:
+                continue
+            if item.kind == "observations":
+                batch.extend(item.observations)
+            else:
+                # Send the accumulated batch first, then the urgent message.
+                yield OutboundMessage(kind="observations", observations=batch)
+                yield item
+                return
+        yield OutboundMessage(kind="observations", observations=batch)
+
     while not stop_event.is_set():
         try:
-            item = q.get(timeout=0.5)
+            item = q.get(timeout=0.05)
         except queue.Empty:
             continue
-        yield item
+        if item.kind == "observations":
+            yield from _batch_observations(item.observations)
+        else:
+            yield item
+
+    # Shutdown flush: drain the queue completely.
+    while True:
+        try:
+            item = q.get_nowait()
+        except queue.Empty:
+            return
+        if item.kind == "observations":
+            yield from _batch_observations(item.observations)
+        else:
+            yield item
+
+
+def _drain_queue(q: queue.Queue[OutboundMessage]) -> Iterator[OutboundMessage]:
+    """Yield every remaining message in ``q`` without blocking."""
+    while True:
+        try:
+            yield q.get_nowait()
+        except queue.Empty:
+            return
