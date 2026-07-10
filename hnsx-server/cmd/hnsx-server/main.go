@@ -115,7 +115,7 @@ func cmdServer(args []string) int {
 
 	var grpcSrv *controlplane.Server
 	if cfg.GRPCAddr != "" {
-		grpcSrv = controlplane.NewServer(cfg.GRPCAddr).WithWorkerServices(application.WorkerRegistry, application.SessionQueue)
+		grpcSrv = controlplane.NewServer(cfg.GRPCAddr).WithWorkerService(application.WorkerService)
 		if grpcSrv.Sched != nil {
 			grpcSrv.Sched.OnObservation = func(tid tenant.ID, sessionID string, obs *pb.Observation) {
 				payload := map[string]any{}

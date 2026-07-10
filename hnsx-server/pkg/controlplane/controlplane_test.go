@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	workerrepository "github.com/hnsx-io/hnsx/server/internal/worker/repository"
+	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
 	"github.com/hnsx-io/hnsx/server/pkg/worker"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
@@ -14,8 +16,14 @@ func newTestServer(t *testing.T) (*SchedulerServiceServer, *worker.Registry, wor
 	reg := worker.NewRegistry()
 	reg.SetClock(func() time.Time { return time.Unix(0, 0) })
 	q := worker.NewSessionQueue()
-	s := NewSchedulerServiceServer(reg, q)
+	svc := workerservice.NewServiceWithQueue(workerrepository.NewInMemoryRepository(), q).WithRegistry(reg)
+	s := NewSchedulerServiceServer(svc)
 	return s, reg, q
+}
+
+func newTestWorkerService(t *testing.T) *workerservice.Service {
+	t.Helper()
+	return workerservice.NewServiceWithQueue(workerrepository.NewInMemoryRepository(), worker.NewSessionQueue()).WithRegistry(worker.NewRegistry())
 }
 
 func TestScheduler_PullSession_returnsEmptyWhenNoWork(t *testing.T) {
@@ -82,8 +90,8 @@ func TestScheduler_PullSession_respectsRequiredCapabilities(t *testing.T) {
 }
 
 func TestWorkerService_Register_thenHeartbeat(t *testing.T) {
-	reg := worker.NewRegistry()
-	srv := &WorkerServiceServer{Registry: reg}
+	svc := newTestWorkerService(t)
+	srv := NewWorkerServiceServer(svc)
 
 	resp, err := srv.Register(context.Background(), &pb.RegisterRequest{
 		Info: &pb.WorkerInfo{WorkerId: "w-1", Region: "local"},
