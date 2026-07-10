@@ -1,7 +1,3 @@
 go 1.25.0
 
-use (
-	./hnsx
-	./hnsx-core
-	./hnsx-server
-)
+use ./hnsx-server

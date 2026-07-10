@@ -2,18 +2,15 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SERVER_DIR="$ROOT/hnsx-server"
-
-cd "$SERVER_DIR"
 
 echo "==> go vet"
-go vet ./...
+cd "$ROOT/hnsx-server" && go vet ./...
 
 echo "==> go test"
-go test ./...
+cd "$ROOT/hnsx-server" && go test ./...
 
 echo "==> gofmt check"
-GOFMT_DIFF="$(gofmt -l .)"
+GOFMT_DIFF="$(gofmt -l "$ROOT/hnsx-server" "$ROOT/sdk/go")"
 if [[ -n "$GOFMT_DIFF" ]]; then
   echo "files need formatting:" >&2
   echo "$GOFMT_DIFF" >&2

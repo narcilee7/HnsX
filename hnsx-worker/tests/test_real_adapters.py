@@ -19,7 +19,6 @@ from hnsx_worker.adapters.anthropic import AnthropicAdapter
 from hnsx_worker.adapters.ollama import OllamaAdapter
 from hnsx_worker.adapters.openai import OpenAIAdapter
 
-
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
@@ -131,7 +130,9 @@ def test_openai_adapter_sends_expected_request(monkeypatch, patch_httpx_client) 
         {
             "id": "chatcmpl-test",
             "object": "chat.completion",
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": "hello from gpt"}}],
+            "choices": [
+                {"index": 0, "message": {"role": "assistant", "content": "hello from gpt"}}
+            ],
             "usage": {"prompt_tokens": 5, "completion_tokens": 9, "total_tokens": 14},
         }
     )
@@ -234,3 +235,168 @@ def test_registry_returns_singletons() -> None:
     a1 = AdapterRegistry.get("noop")
     a2 = AdapterRegistry.get("noop")
     assert a1 is a2
+
+
+# ---------------------------------------------------------------------------
+# Anthropic streaming + tool use
+# ---------------------------------------------------------------------------
+
+
+class _FakeStream:
+    """Context manager that yields canned SSE lines for invoke_stream tests."""
+
+    def __init__(self, lines: list[str]) -> None:
+        self._lines = lines
+
+    def __enter__(self) -> _FakeStream:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def iter_lines(self) -> Any:
+        yield from self._lines
+
+    def raise_for_status(self) -> None:
+        pass
+
+
+class _StreamingClient:
+    """Records requests and returns a fake stream context manager."""
+
+    def __init__(self, stream_lines: list[str]) -> None:
+        self.requests: list[httpx.Request] = []
+        self._stream_lines = stream_lines
+
+    def __enter__(self) -> _StreamingClient:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def stream(
+        self,
+        method: str,
+        url: Any,
+        *,
+        headers: dict[str, str] | None = None,
+        json: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> _FakeStream:
+        req = httpx.Request(method, url, headers=headers, json=json)
+        self.requests.append(req)
+        return _FakeStream(self._stream_lines)
+
+
+def test_anthropic_adapter_stream_text(monkeypatch) -> None:
+    events = [
+        {"type": "message_start", "message": {"usage": {"input_tokens": 3}}},
+        {"type": "content_block_start", "content_block": {"type": "text", "text": ""}},
+        {
+            "type": "content_block_delta",
+            "delta": {"type": "text_delta", "text": "hello "},
+        },
+        {
+            "type": "content_block_delta",
+            "delta": {"type": "text_delta", "text": "world"},
+        },
+        {"type": "message_delta", "usage": {"output_tokens": 2}},
+    ]
+    lines = ["data: " + json.dumps(e) for e in events] + ["data: [DONE]"]
+    fake = _StreamingClient(lines)
+    monkeypatch.setattr(httpx, "Client", lambda *args, **kwargs: fake)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-stream")
+
+    adapter = AnthropicAdapter()
+    agent = {"id": "a", "provider": "anthropic", "model": "claude-test"}
+    chunks = list(adapter.invoke_stream(agent, "sys", {"q": "hi"}))
+
+    text_chunks = [c for c in chunks if c.text_delta]
+    assert "".join(c.text_delta for c in text_chunks) == "hello world"
+
+    cost_chunks = [c for c in chunks if c.cost is not None]
+    assert cost_chunks
+    assert cost_chunks[-1].cost.prompt_tokens == 3
+    assert cost_chunks[-1].cost.completion_tokens == 2
+
+    assert len(fake.requests) == 1
+    body = json.loads(fake.requests[0].content)
+    assert body["stream"] is True
+    assert body["system"] == "sys"
+
+
+def test_anthropic_adapter_tool_use(monkeypatch, patch_httpx_client) -> None:
+    rec = _ClientRecorder(
+        {
+            "id": "msg_tool",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "I will look that up."},
+                {
+                    "type": "tool_use",
+                    "id": "tu_1",
+                    "name": "search_orders",
+                    "input": {"customer_id": "123"},
+                },
+            ],
+            "usage": {"input_tokens": 10, "output_tokens": 20},
+        }
+    )
+    patch_httpx_client.append(rec)  # type: ignore[attr-defined]
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-tool")
+
+    adapter = AnthropicAdapter()
+    tool_def = {
+        "name": "search_orders",
+        "description": "Search orders",
+        "input_schema": {"type": "object"},
+    }
+    agent = {
+        "id": "a",
+        "provider": "anthropic",
+        "model": "claude-test",
+        "tools": [tool_def],
+    }
+    result = adapter.invoke(agent, "sys", {"q": "status"})
+
+    assert result.text == "I will look that up."
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].name == "search_orders"
+    assert result.tool_calls[0].input == {"customer_id": "123"}
+    assert result.tool_calls[0].id == "tu_1"
+
+    body = json.loads(rec.requests[0].content)
+    assert body["tools"][0]["name"] == "search_orders"
+
+
+def test_anthropic_adapter_stream_tool_use(monkeypatch) -> None:
+    events = [
+        {
+            "type": "content_block_start",
+            "content_block": {"type": "tool_use", "id": "tu_1", "name": "search_orders"},
+        },
+        {
+            "type": "content_block_delta",
+            "delta": {"type": "input_json_delta", "partial_json": '{"customer_id": '},
+        },
+        {
+            "type": "content_block_delta",
+            "delta": {"type": "input_json_delta", "partial_json": '"123"}'},
+        },
+        {"type": "content_block_stop", "index": 1},
+        {"type": "message_delta", "usage": {"output_tokens": 5}},
+    ]
+    lines = ["data: " + json.dumps(e) for e in events] + ["data: [DONE]"]
+    fake = _StreamingClient(lines)
+    monkeypatch.setattr(httpx, "Client", lambda *args, **kwargs: fake)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-stream-tool")
+
+    adapter = AnthropicAdapter()
+    agent = {"id": "a", "provider": "anthropic", "model": "claude-test"}
+    chunks = list(adapter.invoke_stream(agent, "sys", {"q": "status"}))
+
+    tool_chunks = [c for c in chunks if c.tool_call is not None]
+    assert len(tool_chunks) == 1
+    assert tool_chunks[0].tool_call.name == "search_orders"
+    assert tool_chunks[0].tool_call.input == {"customer_id": "123"}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/hnsx-io/hnsx/server/pkg/worker"
+	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
@@ -17,18 +17,24 @@ import (
 //   - Heartbeat : every ~5s; carries resource usage + liveness signal.
 type WorkerServiceServer struct {
 	pb.UnimplementedWorkerServiceServer
-	Registry *worker.Registry
+	WorkerSvc *workerservice.Service
 	// HeartbeatIntervalSeconds is the cadence the server asks workers
 	// to honor. Defaults to 5; tests can shorten it.
 	HeartbeatIntervalSeconds int32
 }
 
+// NewWorkerServiceServer constructs a WorkerServiceServer backed by the
+// supplied worker service.
+func NewWorkerServiceServer(svc *workerservice.Service) *WorkerServiceServer {
+	return &WorkerServiceServer{WorkerSvc: svc}
+}
+
 // Register implements pb.WorkerServiceServer.
 func (s *WorkerServiceServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
-	if s.Registry == nil {
-		return nil, errNoRegistry
+	if s.WorkerSvc == nil {
+		return nil, errNoWorkerService
 	}
-	wid, err := s.Registry.Register(req.GetInfo())
+	wid, err := s.WorkerSvc.Register(req.GetInfo())
 	if err != nil {
 		return nil, err
 	}
@@ -41,10 +47,10 @@ func (s *WorkerServiceServer) Register(ctx context.Context, req *pb.RegisterRequ
 
 // Heartbeat implements pb.WorkerServiceServer.
 func (s *WorkerServiceServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
-	if s.Registry == nil {
-		return nil, errNoRegistry
+	if s.WorkerSvc == nil {
+		return nil, errNoWorkerService
 	}
-	if err := s.Registry.Heartbeat(req.GetWorkerId(), req); err != nil {
+	if err := s.WorkerSvc.Heartbeat(req.GetWorkerId(), req); err != nil {
 		return nil, err
 	}
 	return &pb.HeartbeatResponse{
@@ -59,7 +65,7 @@ func (s *WorkerServiceServer) heartbeatInterval() int32 {
 	return 5
 }
 
-var errNoRegistry = errControlplane("controlplane: registry not configured")
+var errNoWorkerService = errControlplane("controlplane: worker service not configured")
 
 type errControlplane string
 

@@ -1,0 +1,142 @@
+package session
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/hnsx-io/hnsx/server/pkg/adapter"
+	"github.com/hnsx-io/hnsx/server/pkg/policy"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
+)
+
+func TestExecutor_Execute_Permissive(t *testing.T) {
+	exec := NewExecutor(adapter.NewEchoAdapter())
+	ds := &spec.DomainSpec{
+		ID: "d-permissive",
+		Harness: spec.HarnessSpec{
+			Agents: map[string]spec.AgentSpec{
+				"a": {Provider: "echo", Adapter: spec.AdapterConfig{Kind: "echo"}},
+			},
+			Session: spec.SessionSpec{Mode: "single", Agent: "a"},
+		},
+	}
+
+	result, err := exec.Execute(context.Background(), ds, map[string]any{"msg": "hello"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.State != "completed" {
+		t.Fatalf("expected completed, got %s", result.State)
+	}
+}
+
+func TestExecutor_Execute_BudgetTurnsBlocks(t *testing.T) {
+	provider := &staticPolicyProvider{
+		engine: policy.NewEngine(spec.PolicySpec{
+			Budget: spec.BudgetSpec{MaxTurns: 1},
+		}),
+	}
+
+	recorder := &collectingRecorder{}
+	exec := NewExecutor(adapter.NewEchoAdapter()).
+		WithPolicyProvider(provider).
+		WithAuditRecorder(recorder)
+
+	ds := &spec.DomainSpec{
+		ID: "d-budget",
+		Harness: spec.HarnessSpec{
+			Agents: map[string]spec.AgentSpec{
+				"a": {Provider: "echo", Adapter: spec.AdapterConfig{Kind: "echo"}},
+			},
+			Session: spec.SessionSpec{Mode: "single", Agent: "a"},
+		},
+	}
+
+	// First run consumes the single allowed turn.
+	_, err := exec.Execute(context.Background(), ds, map[string]any{"msg": "first"})
+	if err != nil {
+		t.Fatalf("first run should succeed: %v", err)
+	}
+
+	// Second run should be blocked because the shared provider returns the same
+	// engine with one turn already recorded.
+	_, err = exec.Execute(context.Background(), ds, map[string]any{"msg": "second"})
+	if err == nil {
+		t.Fatal("expected budget exceeded error")
+	}
+	if !errors.Is(err, policy.ErrBudgetExceeded) {
+		t.Fatalf("expected ErrBudgetExceeded, got %v", err)
+	}
+
+	if len(recorder.entries) == 0 {
+		t.Fatal("expected audit entries")
+	}
+}
+
+func TestExecutor_Execute_PermissionDenied(t *testing.T) {
+	provider := &staticPolicyProvider{
+		engine: policy.NewEngine(spec.PolicySpec{
+			Permissions: spec.PermissionSpec{AllowFileWrite: false},
+		}),
+	}
+	exec := NewExecutor(adapter.NewEchoAdapter()).WithPolicyProvider(provider)
+
+	ds := &spec.DomainSpec{
+		ID: "d-perm",
+		Harness: spec.HarnessSpec{
+			Agents: map[string]spec.AgentSpec{
+				"a": {
+					Provider: "echo",
+					Adapter:  spec.AdapterConfig{Kind: "echo"},
+					Tools:    []string{"writer"},
+				},
+			},
+			Tools: map[string]spec.ToolConfig{
+				"writer": {Kind: "file_write"},
+			},
+			Session: spec.SessionSpec{Mode: "single", Agent: "a"},
+		},
+	}
+
+	_, err := exec.Execute(context.Background(), ds, map[string]any{"msg": "x"})
+	if err == nil {
+		t.Fatal("expected permission denied error")
+	}
+	if !errors.Is(err, policy.ErrPermissionDenied) {
+		t.Fatalf("expected ErrPermissionDenied, got %v", err)
+	}
+}
+
+type staticPolicyProvider struct {
+	engine *policy.Engine
+}
+
+func (p *staticPolicyProvider) SessionEngine(_, _ string) (*policy.Engine, error) {
+	return p.engine, nil
+}
+
+type collectingRecorder struct {
+	entries []AuditEntry
+}
+
+func (r *collectingRecorder) Record(_ context.Context, entry AuditEntry) error {
+	r.entries = append(r.entries, entry)
+	return nil
+}
+
+// Ensure staticPolicyProvider implements the interface.
+var _ PolicyEngineProvider = (*staticPolicyProvider)(nil)
+
+// Ensure collectingRecorder implements the interface.
+var _ AuditRecorder = (*collectingRecorder)(nil)
+
+// Ensure noopRecorder implements the interface.
+var _ AuditRecorder = noopRecorder{}
+
+// Ensure permissiveProvider implements the interface.
+var _ PolicyEngineProvider = permissiveProvider{}
+
+// Ensure policyAdapter implements runtime.Adapter.
+var _ runtime.Adapter = (*policyAdapter)(nil)

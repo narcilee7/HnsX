@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
 # scripts/smoke.sh — end-to-end smoke against an in-process hnsx-server.
 #
-# This script does NOT require Postgres or OTLP. It boots the server in
-# no-db / stdout-otel mode, exercises the REST API + SSE + the four example
-# domains, and prints a summary. Any failure exits non-zero.
+# This script boots the server with a real Postgres backend, applies migrations,
+# exercises the REST API + SSE + the example domains, and prints a summary.
+# Any failure exits non-zero.
 #
 # Usage:
 #   ./scripts/smoke.sh [ADDR]                (default 127.0.0.1:51002)
 #
 # Requires:
 #   - hnsx + hnsx-server binaries in ../bin OR the Go toolchain to build them.
-#   - jq, curl with -N support.
+#   - Docker + docker compose (for local Postgres).
+#   - curl with -N support.
 #
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-HNSX_DIR="$ROOT/hnsx"
 HNSX_SERVER_DIR="$ROOT/hnsx-server"
-HNSX_CORE_DIR="$ROOT/hnsx-core"
 BIN_DIR="$ROOT/bin"
+DEPLOY_DIR="$ROOT/deployments/local"
 ADDR="${1:-127.0.0.1:51002}"
 
 bold() { printf "\033[1m%s\033[0m\n" "$*"; }
@@ -32,23 +32,34 @@ need() {
 need curl
 
 # 1. Build binaries if missing.
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-HNSX_DIR="$ROOT/hnsx"
-HNSX_SERVER_DIR="$ROOT/hnsx-server"
-HNSX_CORE_DIR="$ROOT/hnsx-core"
-
 if [[ ! -x "$BIN_DIR/hnsx-server" || ! -x "$BIN_DIR/hnsx" ]]; then
-  bold "[1/6] building binaries"
-  ( cd "$HNSX_CORE_DIR" && go build -o /dev/null ./... )
-  ( cd "$HNSX_DIR"      && go build -o "$BIN_DIR/hnsx"        ./cmd/hnsx )
-  ( cd "$HNSX_SERVER_DIR" && go build -o "$BIN_DIR/hnsx-server" ./cmd/hnsx-server )
+  bold "[1/7] building binaries"
+  make build-go
   ok "built hnsx + hnsx-server"
 else
-  bold "[1/6] using existing binaries"; ok "found $BIN_DIR/hnsx-server"
+  bold "[1/7] using existing binaries"; ok "found $BIN_DIR/hnsx-server"
 fi
 
-# 2. Validate the four example domains.
-bold "[2/6] validating example domains"
+# 2. Ensure local Postgres is running.
+bold "[2/7] ensuring local Postgres"
+if [ -n "${HNSX_DATABASE_URL:-}" ]; then
+  ok "using HNSX_DATABASE_URL"
+else
+  cd "$DEPLOY_DIR" && docker compose up -d postgres
+  cd "$ROOT"
+  for i in $(seq 1 30); do
+    if docker compose -f "$DEPLOY_DIR/docker-compose.yaml" exec -T postgres pg_isready -U hnsx >/dev/null 2>&1; then break; fi
+    sleep 1
+  done
+  docker compose -f "$DEPLOY_DIR/docker-compose.yaml" exec -T postgres pg_isready -U hnsx >/dev/null || fail "postgres failed to become ready"
+  ok "postgres ready"
+  export HNSX_DATABASE_URL="postgres://hnsx:hnsx@127.0.0.1:5432/hnsx?sslmode=disable"
+fi
+
+export HNSX_MIGRATIONS_DIR="$ROOT/go/migrations"
+
+# 3. Validate the example domains.
+bold "[3/7] validating example domains"
 for dir in "$ROOT/example-domains"/*/; do
   [[ -f "$dir/domain.yaml" ]] || continue
   out="$("$BIN_DIR/hnsx" validate --domain "$dir/domain.yaml" --json)"
@@ -57,10 +68,10 @@ for dir in "$ROOT/example-domains"/*/; do
   ok "$(basename "$dir")"
 done
 
-# 3. Boot server with explicit --seed-from so we have known fixtures.
+# 4. Boot server with explicit --seed-from so we have known fixtures.
 LOG="$(mktemp -t hnsx-smoke.XXXXXX.log)"
-bold "[3/6] booting server on $ADDR (log $LOG)"
-HNSX_HTTP_ADDR="$ADDR" "$BIN_DIR/hnsx-server" server --seed-from "$ROOT/example-domains" >"$LOG" 2>&1 &
+bold "[4/7] booting server on $ADDR (log $LOG)"
+HNSX_HTTP_ADDR="$ADDR" HNSX_GRPC_ADDR="" "$BIN_DIR/hnsx-server" server --seed-from "$ROOT/example-domains" >"$LOG" 2>&1 &
 SERVER_PID=$!
 trap 'kill "$SERVER_PID" 2>/dev/null || true; rm -f "$LOG"' EXIT
 
@@ -72,22 +83,22 @@ done
 curl -fsS "http://$ADDR/healthz" >/dev/null || { cat "$LOG"; fail "server failed to start"; }
 ok "healthz reachable"
 
-# 4. /api/v1/domains is seeded via --seed-from (explicit operator action).
-bold "[4/6] checking REST contract"
+# 5. /api/v1/domains is seeded via --seed-from (explicit operator action).
+bold "[5/7] checking REST contract"
 DOMAINS=$(curl -fsS "http://$ADDR/api/v1/domains")
 COUNT=$(printf '%s' "$DOMAINS" | grep -o '"id":"' | wc -l | tr -d ' ')
 [[ "$COUNT" -ge 4 ]] || fail "expected ≥4 bootstrapped domains, got $COUNT"
 ok "domains list contains $COUNT items"
 
-# 5. /api/v1/domains/<missing> -> 404 with envelope.
+# 6. /api/v1/domains/<missing> -> 404 with envelope.
 RESP_CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://$ADDR/api/v1/domains/__missing__")
 [[ "$RESP_CODE" == "404" ]] || fail "expected 404 on missing domain, got $RESP_CODE"
 BODY=$(curl -s "http://$ADDR/api/v1/domains/__missing__")
 echo "$BODY" | grep -q '"code":"DOMAIN_NOT_FOUND"' || fail "missing code in error body: $BODY"
 ok "error envelope is well-formed"
 
-# 6. Trigger a session + capture a brief SSE replay.
-bold "[5/6] triggering a session + capturing SSE"
+# 7. Trigger a session + capture a brief SSE replay.
+bold "[6/7] triggering a session + capturing SSE"
 TRIGGER='{"domain_id":"customer-service","trigger":{"question":"hello"}}'
 RESP=$(curl -fsS -X POST "http://$ADDR/api/v1/sessions" \
   -H 'Content-Type: application/json' \
@@ -114,7 +125,7 @@ STATE=$(printf '%s' "$FINAL" | grep -o '"state":"[^"]*' | head -1 | sed 's/^"sta
 [[ "$STATE" == "completed" ]] || fail "session did not complete (state=$STATE)"
 ok "session state=completed"
 
-bold "[6/6] shutting down"; kill "$SERVER_PID" 2>/dev/null || true
+bold "[7/7] shutting down"; kill "$SERVER_PID" 2>/dev/null || true
 trap - EXIT
 rm -f "$LOG"
 

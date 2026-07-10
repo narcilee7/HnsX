@@ -21,7 +21,6 @@ import logging
 import queue
 import threading
 import time
-from collections.abc import Iterator
 from concurrent import futures
 
 import grpc
@@ -66,9 +65,9 @@ class MockHnsXServer:
     def offer(self, resp: worker_pb2.PullSessionResponse) -> None:
         self.session_queue.put(resp)
 
-    def session_complete(self) -> None:
+    def session_complete(self, domain_spec_json: str = "") -> None:
         """Push a final session whose spec triggers immediate session_end."""
-        self.session_queue.put(_noop_session())
+        self.session_queue.put(_noop_session(domain_spec_json=domain_spec_json))
 
     # ------------------------------------------------------------------ capture
 
@@ -149,30 +148,32 @@ class _SchedulerServicer(worker_pb2_grpc.SchedulerServiceServicer):
             return
 
 
-def _noop_session() -> worker_pb2.PullSessionResponse:
+def _noop_session(domain_spec_json: str = "") -> worker_pb2.PullSessionResponse:
     import json as _json
 
-    spec = {
-        "id": "mock-domain",
-        "version": "0.1.0",
-        "harness": {
-            "agents": {
-                "primary": {
-                    "id": "primary",
-                    "provider": "noop",
-                    "model": "noop-1",
-                    "adapter": {"kind": "noop"},
-                    "system_prompt": "You are a primary agent.",
-                }
+    if not domain_spec_json:
+        spec = {
+            "id": "mock-domain",
+            "version": "0.1.0",
+            "harness": {
+                "agents": {
+                    "primary": {
+                        "id": "primary",
+                        "provider": "noop",
+                        "model": "noop-1",
+                        "adapter": {"kind": "noop"},
+                        "system_prompt": "You are a primary agent.",
+                    }
+                },
+                "session": {"mode": "single-task", "agent": "primary"},
             },
-            "session": {"mode": "single-task", "agent": "primary"},
-        },
-    }
+        }
+        domain_spec_json = _json.dumps(spec)
     return worker_pb2.PullSessionResponse(
         session_id=f"s-mock-{int(time.time() * 1000)}",
         domain_id="mock-domain",
         domain_version="0.1.0",
-        domain_spec_json=_json.dumps(spec),
+        domain_spec_json=domain_spec_json,
         trigger_payload_json=_json.dumps({"question": "hello from mock"}),
         trace_id="t-mock-1",
         assigned_at_ms=int(time.time() * 1000),

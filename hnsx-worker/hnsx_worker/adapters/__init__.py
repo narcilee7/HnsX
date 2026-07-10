@@ -72,6 +72,8 @@ class AdapterRegistry:
         _try_register(cls, "anthropic", "hnsx_worker.adapters.anthropic", "AnthropicAdapter")
         _try_register(cls, "openai", "hnsx_worker.adapters.openai", "OpenAIAdapter")
         _try_register(cls, "ollama", "hnsx_worker.adapters.ollama", "OllamaAdapter")
+        _try_register(cls, "claudecode", "hnsx_worker.adapters.claude_code", "ClaudeCodeAdapter")
+        _try_register(cls, "codex", "hnsx_worker.adapters.codex", "CodexAdapter")
         cls._initialized = True
 
 

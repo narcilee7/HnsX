@@ -1,49 +1,66 @@
 id: claude-triage
-version: 0.2.0
+version: 0.3.0
 description: |
-  Two-provider triage flow. Anthropic classifies the question via the
-  Messages API; OpenAI drafts the reply. Demonstrates a workflow that
-  exercises both providers end-to-end.
+  Supervisor-based triage flow. A triage agent classifies the question and the
+  harness routes to a billing or technical specialist. Demonstrates W5
+  multi-agent orchestration.
 harness:
   agents:
-    claude-triage:
-      id: claude-triage
+    triage:
+      id: triage
       provider: anthropic
       model: claude-haiku-4-5
       adapter:
         kind: anthropic
         timeout_seconds: 30
       system_prompt: triage-prompt
-    gpt-responder:
-      id: gpt-responder
+    billing:
+      id: billing
       provider: openai
       model: gpt-4o-mini
       adapter:
         kind: openai
         timeout_seconds: 60
-      system_prompt: responder-prompt
+      system_prompt: billing-prompt
+    technical:
+      id: technical
+      provider: openai
+      model: gpt-4o-mini
+      adapter:
+        kind: openai
+        timeout_seconds: 60
+      system_prompt: technical-prompt
   prompts:
     triage-prompt:
       type: system
       template: |
         You are a triage agent. Classify the user's question into one of
-        {billing, technical, other} and reply with JSON only.
-    responder-prompt:
+        {billing, technical, other} and reply with JSON only:
+        {"to": "billing|technical|other", "reason": "short reason"}
+    billing-prompt:
       type: system
       template: |
-        You are the responder. Given the classification, draft a short,
-        helpful reply.
+        You are the billing specialist. Answer the user's billing question
+        concisely.
+    technical-prompt:
+      type: system
+      template: |
+        You are the technical specialist. Diagnose and answer the user's
+        technical question concisely.
+  policy:
+    budget:
+      max_cost_usd: 1.0
+      max_turns: 5
   session:
-    mode: workflow
-    workflow:
-      entry: classify
-      steps:
-        - id: classify
-          agent: claude-triage
-          next: respond
-          output: classification
-        - id: respond
-          agent: gpt-responder
-          input:
-            classification: "${classification}"
-          output: reply
+    mode: supervisor
+    supervisor:
+      agent: triage
+      transitions:
+        - condition: output.to == 'billing'
+          to: billing
+        - condition: output.to == 'technical'
+          to: technical
+      exit:
+        - condition: output.to == 'other'
+          state: completed
+          reason: question routed to other channel

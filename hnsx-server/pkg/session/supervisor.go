@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/hnsx-io/hnsx/core/domain"
-	"github.com/hnsx-io/hnsx/core/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
 
 // ErrSupervisorNotImplemented is returned by Supervisor.Run because the
@@ -26,6 +26,6 @@ func NewSupervisor() *Supervisor { return &Supervisor{} }
 // Run returns ErrSupervisorNotImplemented. Future PRs will replace this with
 // the transition-rule engine that drives dynamic dispatch between specialists
 // (see docs/know-how/我们如何编排Agent并集成Harness.md §3.2).
-func (s *Supervisor) Run(_ context.Context, _ *domain.DomainSpec, _ map[string]any) (*runtime.Result, error) {
+func (s *Supervisor) Run(_ context.Context, _ *spec.DomainSpec, _ map[string]any) (*runtime.Result, error) {
 	return nil, ErrSupervisorNotImplemented
 }
