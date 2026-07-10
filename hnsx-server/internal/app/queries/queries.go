@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/app"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 )
 
 // DomainListItem is the public view returned by ListDomains.
@@ -37,11 +38,11 @@ type SessionTrace struct {
 }
 
 // ListDomains returns every registered domain as a list item.
-func ListDomains(state *app.State) []DomainListItem {
+func ListDomains(state *app.State, tenantID tenant.ID) []DomainListItem {
 	if state == nil {
 		return nil
 	}
-	items := state.ListDomains()
+	items := state.ListDomains(tenantID)
 	out := make([]DomainListItem, 0, len(items))
 	for _, d := range items {
 		out = append(out, DomainListItem{
@@ -57,11 +58,11 @@ func ListDomains(state *app.State) []DomainListItem {
 }
 
 // GetDomain returns the public view of a single domain.
-func GetDomain(state *app.State, id string) (*DomainListItem, *app.RegisteredDomain, bool) {
+func GetDomain(state *app.State, tenantID tenant.ID, id string) (*DomainListItem, *app.RegisteredDomain, bool) {
 	if state == nil {
 		return nil, nil, false
 	}
-	d, ok := state.LookupDomain(id)
+	d, ok := state.LookupDomain(tenantID, id)
 	if !ok {
 		return nil, nil, false
 	}
@@ -77,11 +78,11 @@ func GetDomain(state *app.State, id string) (*DomainListItem, *app.RegisteredDom
 }
 
 // ListSessions returns every registered session as a list item.
-func ListSessions(state *app.State) []SessionListItem {
+func ListSessions(state *app.State, tenantID tenant.ID) []SessionListItem {
 	if state == nil {
 		return nil
 	}
-	items := state.ListSessions()
+	items := state.ListSessions(tenantID)
 	out := make([]SessionListItem, 0, len(items))
 	for _, s := range items {
 		out = append(out, SessionListItem{
@@ -98,19 +99,19 @@ func ListSessions(state *app.State) []SessionListItem {
 }
 
 // GetSession returns a single session by ID.
-func GetSession(state *app.State, id string) (*app.RegisteredSession, bool) {
+func GetSession(state *app.State, tenantID tenant.ID, id string) (*app.RegisteredSession, bool) {
 	if state == nil {
 		return nil, false
 	}
-	return state.LookupSession(id)
+	return state.LookupSession(tenantID, id)
 }
 
 // GetSessionTrace returns the trace envelope for a session.
-func GetSessionTrace(state *app.State, id string) (*SessionTrace, bool) {
+func GetSessionTrace(state *app.State, tenantID tenant.ID, id string) (*SessionTrace, bool) {
 	if state == nil {
 		return nil, false
 	}
-	if _, ok := state.LookupSession(id); !ok {
+	if _, ok := state.LookupSession(tenantID, id); !ok {
 		return nil, false
 	}
 	return &SessionTrace{

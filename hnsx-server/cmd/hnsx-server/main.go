@@ -26,6 +26,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/adapter"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
@@ -230,7 +231,7 @@ func cmdServer(args []string) int {
 	if cfg.GRPCAddr != "" {
 		grpcSrv = controlplane.NewServer(cfg.GRPCAddr).WithWorkerServices(workerReg, sessionQ)
 		if grpcSrv.Sched != nil {
-			grpcSrv.Sched.OnObservation = func(sessionID string, obs *pb.Observation) {
+			grpcSrv.Sched.OnObservation = func(tid tenant.ID, sessionID string, obs *pb.Observation) {
 				payload := map[string]any{}
 				if obs.GetPayload() != "" {
 					_ = json.Unmarshal([]byte(obs.GetPayload()), &payload)
@@ -247,8 +248,8 @@ func cmdServer(args []string) int {
 					Timestamp: time.UnixMilli(obs.GetCreatedAtMs()),
 				})
 			}
-			grpcSrv.Sched.OnSessionStatus = func(sessionID, state string) {
-				srv.UpdateSessionState(sessionID, state)
+			grpcSrv.Sched.OnSessionStatus = func(tid tenant.ID, sessionID, state string) {
+				srv.UpdateSessionState(tid, sessionID, state)
 			}
 		}
 	}
@@ -322,7 +323,7 @@ func seedFromDir(s *api.Server, dir string) {
 			log.Printf("[seed] skip %s: %v", path, err)
 			continue
 		}
-		s.RegisterBootstrapDomain(spec)
+		s.RegisterBootstrapDomain(tenant.DefaultID, spec)
 		registered++
 	}
 	if registered > 0 {
