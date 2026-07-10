@@ -16,6 +16,7 @@ import (
 	"math"
 	"sync/atomic"
 
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
 
@@ -148,6 +149,17 @@ func (e *Engine) Guardrails() []spec.GuardrailSpec {
 	out := make([]spec.GuardrailSpec, len(e.spec.Guardrails))
 	copy(out, e.spec.Guardrails)
 	return out
+}
+
+// Snapshot returns the current cost/token/turn counters as a runtime.Cost
+// value. This is the single source of truth used to populate
+// runtime.Observation.Cost and drive trace/metric aggregation.
+func (e *Engine) Snapshot() *runtime.Cost {
+	return &runtime.Cost{
+		PromptTokens:     int(e.promptTokens.Load()),
+		CompletionTokens: int(e.completionTokens.Load()),
+		CostUSD:          float64FromBits(e.costUSD.Load()),
+	}
 }
 
 // ----------------------------------------------------------------------------
