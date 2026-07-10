@@ -44,7 +44,8 @@ var ErrUnknownWorker = errors.New("worker: unknown worker_id")
 type Registry struct {
 	mu                 sync.RWMutex
 	workers            map[string]*WorkerRecord
-	sessionAssignments map[string]string // session_id -> worker_id
+	sessionAssignments map[string]string   // session_id -> worker_id
+	workerSessions     map[string]map[string]struct{} // worker_id -> set of session_ids
 	now                func() time.Time
 }
 
@@ -53,6 +54,7 @@ func NewRegistry() *Registry {
 	return &Registry{
 		workers:            map[string]*WorkerRecord{},
 		sessionAssignments: map[string]string{},
+		workerSessions:     map[string]map[string]struct{}{},
 		now:                time.Now,
 	}
 }
@@ -207,6 +209,7 @@ func (r *Registry) EvictStale(maxAge time.Duration) []string {
 		if rec.LastSeen.Before(cutoff) {
 			close(rec.Inbound) // signal any open stream
 			delete(r.workers, id)
+			delete(r.workerSessions, id)
 			evicted = append(evicted, id)
 		}
 	}
@@ -218,14 +221,65 @@ func (r *Registry) EvictStale(maxAge time.Duration) []string {
 func (r *Registry) AssignSession(workerID, sessionID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	// Remove from previous worker's set if reassigned.
+	if prev, ok := r.sessionAssignments[sessionID]; ok && prev != workerID {
+		if set, ok := r.workerSessions[prev]; ok {
+			delete(set, sessionID)
+		}
+	}
+
 	r.sessionAssignments[sessionID] = workerID
+	if r.workerSessions[workerID] == nil {
+		r.workerSessions[workerID] = map[string]struct{}{}
+	}
+	r.workerSessions[workerID][sessionID] = struct{}{}
 }
 
 // UnassignSession removes the session-to-worker mapping.
 func (r *Registry) UnassignSession(sessionID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	if workerID, ok := r.sessionAssignments[sessionID]; ok {
+		if set, ok := r.workerSessions[workerID]; ok {
+			delete(set, sessionID)
+		}
+	}
 	delete(r.sessionAssignments, sessionID)
+}
+
+// SessionsForWorker returns the session IDs currently assigned to a worker.
+// The worker may already have been evicted; this returns the last known set.
+func (r *Registry) SessionsForWorker(workerID string) []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	set, ok := r.workerSessions[workerID]
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(set))
+	for id := range set {
+		out = append(out, id)
+	}
+	return out
+}
+
+// RemoveWorkerSessions drops all session assignments for a worker without
+// evicting the worker itself. Used after the caller has requeued the sessions.
+func (r *Registry) RemoveWorkerSessions(workerID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	set, ok := r.workerSessions[workerID]
+	if !ok {
+		return
+	}
+	for sessionID := range set {
+		delete(r.sessionAssignments, sessionID)
+	}
+	delete(r.workerSessions, workerID)
 }
 
 // SessionWorker returns the worker_id currently assigned to “sessionID“,
