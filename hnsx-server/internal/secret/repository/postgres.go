@@ -1,9 +1,9 @@
 package repository
 
 import (
-	"context"
-	"database/sql"
 	"errors"
+
+	"gorm.io/gorm"
 
 	"github.com/hnsx-io/hnsx/server/internal/secret/model"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
@@ -11,19 +11,22 @@ import (
 
 const secretDefaultTenantUUID = "00000000-0000-0000-0000-000000000000"
 
-// PostgresRepository persists secrets to Postgres.
+// PostgresRepository persists secrets to Postgres using GORM.
 type PostgresRepository struct {
-	db *db.DB
+	db *gorm.DB
 }
 
 // NewPostgresRepository constructs a Postgres-backed secret repository.
 func NewPostgresRepository(database *db.DB) *PostgresRepository {
-	return &PostgresRepository{db: database}
+	if database == nil || database.GormDB == nil {
+		return &PostgresRepository{}
+	}
+	return &PostgresRepository{db: database.GormDB}
 }
 
 // Save implements Repository.
 func (r *PostgresRepository) Save(s *model.Secret) error {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return errors.New("secret/postgres: no database configured")
 	}
 	if s == nil || s.Name == "" {
@@ -33,54 +36,55 @@ func (r *PostgresRepository) Save(s *model.Secret) error {
 		s.Kind = "generic"
 	}
 
-	ctx := context.Background()
-	_, err := r.db.Pool.Exec(ctx, `
-		INSERT INTO secrets (tenant_id, secret_id, value, description, kind, updated_at)
-		VALUES ($1::uuid, $2, $3, $4, $5, NOW())
-		ON CONFLICT (tenant_id, secret_id) DO UPDATE
-		SET value = EXCLUDED.value,
-		    description = EXCLUDED.description,
-		    kind = EXCLUDED.kind,
-		    updated_at = NOW()
-	`, secretDefaultTenantUUID, s.Name, s.Value, "", s.Kind)
-	return err
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var rec SecretRecord
+		err := tx.Where("tenant_id = ? AND secret_id = ?", secretDefaultTenantUUID, s.Name).
+			Take(&rec).Error
+		isNew := errors.Is(err, gorm.ErrRecordNotFound)
+
+		rec.TenantID = secretDefaultTenantUUID
+		rec.SecretID = s.Name
+		rec.Value = s.Value
+		rec.Kind = s.Kind
+
+		if isNew {
+			return tx.Create(&rec).Error
+		}
+		return tx.Save(&rec).Error
+	})
 }
 
 // ByName implements Repository.
 func (r *PostgresRepository) ByName(name string) (*model.Secret, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, model.ErrSecretNotFound
 	}
 
-	ctx := context.Background()
-	var s model.Secret
-	err := r.db.Pool.QueryRow(ctx, `
-		SELECT secret_id, value, kind
-		FROM secrets
-		WHERE tenant_id = $1::uuid AND secret_id = $2
-		LIMIT 1
-	`, secretDefaultTenantUUID, name).Scan(&s.Name, &s.Value, &s.Kind)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	var rec SecretRecord
+	if err := r.db.Where("tenant_id = ? AND secret_id = ?", secretDefaultTenantUUID, name).
+		Take(&rec).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, model.ErrSecretNotFound
 		}
 		return nil, err
 	}
-	return &s, nil
+
+	return &model.Secret{
+		ID:    rec.ID,
+		Name:  rec.SecretID,
+		Value: rec.Value,
+		Kind:  rec.Kind,
+	}, nil
 }
 
 // Delete implements Repository.
 func (r *PostgresRepository) Delete(name string) error {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil
 	}
 
-	ctx := context.Background()
-	_, err := r.db.Pool.Exec(ctx, `
-		DELETE FROM secrets
-		WHERE tenant_id = $1::uuid AND secret_id = $2
-	`, secretDefaultTenantUUID, name)
-	return err
+	return r.db.Where("tenant_id = ? AND secret_id = ?", secretDefaultTenantUUID, name).
+		Delete(&SecretRecord{}).Error
 }
 
 var _ Repository = (*PostgresRepository)(nil)

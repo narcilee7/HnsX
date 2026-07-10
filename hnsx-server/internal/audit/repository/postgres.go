@@ -1,30 +1,35 @@
 package repository
 
 import (
-	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 
+	"gorm.io/gorm"
+
 	"github.com/hnsx-io/hnsx/server/internal/audit/model"
+	domainRepo "github.com/hnsx-io/hnsx/server/internal/domain/repository"
+	sessionRepo "github.com/hnsx-io/hnsx/server/internal/session/repository"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 )
 
 const auditDefaultTenantUUID = "00000000-0000-0000-0000-000000000000"
 
-// PostgresRepository persists audit entries to Postgres.
+// PostgresRepository persists audit entries to Postgres using GORM.
 type PostgresRepository struct {
-	db *db.DB
+	db *gorm.DB
 }
 
 // NewPostgresRepository constructs a Postgres-backed audit repository.
 func NewPostgresRepository(database *db.DB) *PostgresRepository {
-	return &PostgresRepository{db: database}
+	if database == nil || database.GormDB == nil {
+		return &PostgresRepository{}
+	}
+	return &PostgresRepository{db: database.GormDB}
 }
 
 // Save implements Repository.
 func (r *PostgresRepository) Save(e *model.Entry) error {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return errors.New("audit/postgres: no database configured")
 	}
 	if e == nil {
@@ -34,17 +39,15 @@ func (r *PostgresRepository) Save(e *model.Entry) error {
 		return err
 	}
 
-	ctx := context.Background()
-
 	var domainUUID, sessionUUID *string
 	if e.DomainID != "" {
-		uuid, err := r.lookupDomainUUID(ctx, e.DomainID)
+		uuid, err := r.lookupDomainUUID(e.DomainID)
 		if err == nil {
 			domainUUID = &uuid
 		}
 	}
 	if e.SessionID != "" {
-		uuid, err := r.lookupSessionUUID(ctx, e.SessionID)
+		uuid, err := r.lookupSessionUUID(e.SessionID)
 		if err == nil {
 			sessionUUID = &uuid
 		}
@@ -55,151 +58,139 @@ func (r *PostgresRepository) Save(e *model.Entry) error {
 		return err
 	}
 
-	_, err = r.db.Pool.Exec(ctx, `
-		INSERT INTO audit_logs (
-			tenant_id, timestamp, session_uuid, domain_uuid, action,
-			actor, actor_type, resource, resource_type, decision, reason, details
-		)
-		VALUES ($1::uuid, $2, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
-	`, auditDefaultTenantUUID, e.Timestamp, sessionUUID, domainUUID, e.Action,
-		e.Actor, e.ActorType, e.Resource, e.ResourceType, e.Decision, e.Reason, string(detailsJSON))
-	return err
+	rec := AuditRecord{
+		TenantID:     auditDefaultTenantUUID,
+		Timestamp:    e.Timestamp,
+		SessionUUID:  sessionUUID,
+		DomainUUID:   domainUUID,
+		Action:       e.Action,
+		Actor:        e.Actor,
+		ActorType:    e.ActorType,
+		Resource:     e.Resource,
+		ResourceType: e.ResourceType,
+		Decision:     e.Decision,
+		Reason:       e.Reason,
+		Details:      detailsJSON,
+	}
+	return r.db.Create(&rec).Error
 }
 
 // BySession implements Repository.
 func (r *PostgresRepository) BySession(sessionID string) ([]model.Entry, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, nil
 	}
 
-	ctx := context.Background()
-	sessionUUID, err := r.lookupSessionUUID(ctx, sessionID)
+	sessionUUID, err := r.lookupSessionUUID(sessionID)
 	if err != nil {
 		return nil, err
 	}
 
-	rows, err := r.db.Pool.Query(ctx, `
-		SELECT timestamp, action, actor, actor_type, resource, resource_type, decision, reason, details
-		FROM audit_logs
-		WHERE tenant_id = $1::uuid AND session_uuid = $2::uuid
-		ORDER BY timestamp DESC
-	`, auditDefaultTenantUUID, sessionUUID)
-	if err != nil {
+	var records []AuditRecord
+	if err := r.db.Where("tenant_id = ? AND session_uuid = ?", auditDefaultTenantUUID, sessionUUID).
+		Order("timestamp DESC").
+		Find(&records).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	return r.scanEntries(rows)
+	return r.toModelList(records)
 }
 
 // ByDomain implements Repository.
 func (r *PostgresRepository) ByDomain(domainID string) ([]model.Entry, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, nil
 	}
 
-	ctx := context.Background()
-	domainUUID, err := r.lookupDomainUUID(ctx, domainID)
+	domainUUID, err := r.lookupDomainUUID(domainID)
 	if err != nil {
 		return nil, err
 	}
 
-	rows, err := r.db.Pool.Query(ctx, `
-		SELECT timestamp, action, actor, actor_type, resource, resource_type, decision, reason, details
-		FROM audit_logs
-		WHERE tenant_id = $1::uuid AND domain_uuid = $2::uuid
-		ORDER BY timestamp DESC
-	`, auditDefaultTenantUUID, domainUUID)
-	if err != nil {
+	var records []AuditRecord
+	if err := r.db.Where("tenant_id = ? AND domain_uuid = ?", auditDefaultTenantUUID, domainUUID).
+		Order("timestamp DESC").
+		Find(&records).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	return r.scanEntries(rows)
+	return r.toModelList(records)
 }
 
 // List implements Repository.
 func (r *PostgresRepository) List(limit, offset int) ([]model.Entry, int, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, 0, nil
 	}
 
-	ctx := context.Background()
-	var total int
-	err := r.db.Pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1::uuid
-	`, auditDefaultTenantUUID).Scan(&total)
-	if err != nil {
+	var total int64
+	if err := r.db.Model(&AuditRecord{}).
+		Where("tenant_id = ?", auditDefaultTenantUUID).
+		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	rows, err := r.db.Pool.Query(ctx, `
-		SELECT timestamp, action, actor, actor_type, resource, resource_type, decision, reason, details
-		FROM audit_logs
-		WHERE tenant_id = $1::uuid
-		ORDER BY timestamp DESC
-		LIMIT $2 OFFSET $3
-	`, auditDefaultTenantUUID, limit, offset)
-	if err != nil {
+	var records []AuditRecord
+	if err := r.db.Where("tenant_id = ?", auditDefaultTenantUUID).
+		Order("timestamp DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&records).Error; err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
 
-	entries, err := r.scanEntries(rows)
-	return entries, total, err
+	entries, err := r.toModelList(records)
+	return entries, int(total), err
 }
 
-func (r *PostgresRepository) scanEntries(rows interface {
-	Next() bool
-	Scan(dest ...any) error
-	Err() error
-	Close()
-}) ([]model.Entry, error) {
-	var out []model.Entry
-	for rows.Next() {
-		var e model.Entry
-		var detailsJSON []byte
-		if err := rows.Scan(&e.Timestamp, &e.Action, &e.Actor, &e.ActorType, &e.Resource, &e.ResourceType, &e.Decision, &e.Reason, &detailsJSON); err != nil {
-			return nil, err
-		}
-		if len(detailsJSON) > 0 {
-			_ = json.Unmarshal(detailsJSON, &e.Details)
-		}
-		out = append(out, e)
-	}
-	return out, rows.Err()
-}
-
-func (r *PostgresRepository) lookupDomainUUID(ctx context.Context, domainID string) (string, error) {
-	var domainUUID string
-	err := r.db.Pool.QueryRow(ctx, `
-		SELECT id FROM domains
-		WHERE tenant_id = $1::uuid AND domain_id = $2
-		LIMIT 1
-	`, auditDefaultTenantUUID, domainID).Scan(&domainUUID)
+func (r *PostgresRepository) lookupDomainUUID(domainID string) (string, error) {
+	var rec domainRepo.DomainRecord
+	err := r.db.Where("tenant_id = ? AND domain_id = ?", auditDefaultTenantUUID, domainID).
+		Take(&rec).Error
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", errors.New("audit/postgres: domain not found")
 		}
 		return "", err
 	}
-	return domainUUID, nil
+	return rec.ID, nil
 }
 
-func (r *PostgresRepository) lookupSessionUUID(ctx context.Context, sessionID string) (string, error) {
-	var sessionUUID string
-	err := r.db.Pool.QueryRow(ctx, `
-		SELECT id FROM sessions
-		WHERE tenant_id = $1::uuid AND session_id = $2
-		LIMIT 1
-	`, auditDefaultTenantUUID, sessionID).Scan(&sessionUUID)
+func (r *PostgresRepository) lookupSessionUUID(sessionID string) (string, error) {
+	var rec sessionRepo.SessionRecord
+	err := r.db.Where("tenant_id = ? AND session_id = ?", auditDefaultTenantUUID, sessionID).
+		Take(&rec).Error
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", errors.New("audit/postgres: session not found")
 		}
 		return "", err
 	}
-	return sessionUUID, nil
+	return rec.ID, nil
+}
+
+func (r *PostgresRepository) toModelList(records []AuditRecord) ([]model.Entry, error) {
+	out := make([]model.Entry, 0, len(records))
+	for _, rec := range records {
+		var details map[string]any
+		if len(rec.Details) > 0 {
+			if err := json.Unmarshal(rec.Details, &details); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, model.Entry{
+			Timestamp:    rec.Timestamp,
+			Action:       rec.Action,
+			Actor:        rec.Actor,
+			ActorType:    rec.ActorType,
+			Resource:     rec.Resource,
+			ResourceType: rec.ResourceType,
+			Decision:     rec.Decision,
+			Reason:       rec.Reason,
+			Details:      details,
+		})
+	}
+	return out, nil
 }
 
 var _ Repository = (*PostgresRepository)(nil)

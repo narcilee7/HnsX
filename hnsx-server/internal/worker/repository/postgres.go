@@ -1,11 +1,11 @@
 package repository
 
 import (
-	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"time"
+
+	"gorm.io/gorm"
 
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 	"github.com/hnsx-io/hnsx/server/internal/worker/model"
@@ -14,19 +14,22 @@ import (
 
 const workerDefaultTenantUUID = "00000000-0000-0000-0000-000000000000"
 
-// PostgresRepository persists worker aggregates to Postgres.
+// PostgresRepository persists worker aggregates to Postgres using GORM.
 type PostgresRepository struct {
-	db *db.DB
+	db *gorm.DB
 }
 
 // NewPostgresRepository constructs a Postgres-backed worker repository.
 func NewPostgresRepository(database *db.DB) *PostgresRepository {
-	return &PostgresRepository{db: database}
+	if database == nil || database.GormDB == nil {
+		return &PostgresRepository{}
+	}
+	return &PostgresRepository{db: database.GormDB}
 }
 
 // Save implements Repository.
 func (r *PostgresRepository) Save(w *model.Worker) error {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return errors.New("worker/postgres: no database configured")
 	}
 	if w == nil || w.ID == "" {
@@ -62,108 +65,95 @@ func (r *PostgresRepository) Save(w *model.Worker) error {
 		lastSeen = &w.LastSeen
 	}
 
-	ctx := context.Background()
-	_, err := r.db.Pool.Exec(ctx, `
-		INSERT INTO runtimes (
-			tenant_id, runtime_id, version, region, capabilities,
-			last_heartbeat_at, status, updated_at
-		)
-		VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7, NOW())
-		ON CONFLICT (tenant_id, runtime_id) DO UPDATE
-		SET version = EXCLUDED.version,
-		    region = EXCLUDED.region,
-		    capabilities = EXCLUDED.capabilities,
-		    last_heartbeat_at = EXCLUDED.last_heartbeat_at,
-		    status = EXCLUDED.status,
-		    updated_at = NOW()
-	`, workerDefaultTenantUUID, w.ID, version, region, string(capabilitiesJSON), lastSeen, string(w.State))
-	return err
+	now := time.Now().UTC()
+
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var rec RuntimeRecord
+		err := tx.Where("tenant_id = ? AND runtime_id = ?", workerDefaultTenantUUID, w.ID).
+			Take(&rec).Error
+		isNew := errors.Is(err, gorm.ErrRecordNotFound)
+
+		rec.TenantID = workerDefaultTenantUUID
+		rec.RuntimeID = w.ID
+		rec.Version = version
+		rec.Region = region
+		rec.Capabilities = capabilitiesJSON
+		rec.LastHeartbeatAt = lastSeen
+		rec.Status = string(w.State)
+		rec.UpdatedAt = now
+		if isNew {
+			rec.CreatedAt = now
+			return tx.Create(&rec).Error
+		}
+		return tx.Save(&rec).Error
+	})
 }
 
 // ByID implements Repository.
 func (r *PostgresRepository) ByID(id string) (*model.Worker, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, model.ErrWorkerNotFound
 	}
 
-	ctx := context.Background()
-	row := r.db.Pool.QueryRow(ctx, `
-		SELECT runtime_id, version, region, capabilities, last_heartbeat_at, status
-		FROM runtimes
-		WHERE tenant_id = $1::uuid AND runtime_id = $2
-		LIMIT 1
-	`, workerDefaultTenantUUID, id)
+	var rec RuntimeRecord
+	if err := r.db.Where("tenant_id = ? AND runtime_id = ?", workerDefaultTenantUUID, id).
+		Take(&rec).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, model.ErrWorkerNotFound
+		}
+		return nil, err
+	}
 
-	return r.scanWorker(row)
+	return r.toModel(rec)
 }
 
 // All implements Repository.
 func (r *PostgresRepository) All() ([]*model.Worker, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, nil
 	}
 
-	ctx := context.Background()
-	rows, err := r.db.Pool.Query(ctx, `
-		SELECT runtime_id, version, region, capabilities, last_heartbeat_at, status
-		FROM runtimes
-		WHERE tenant_id = $1::uuid
-	`, workerDefaultTenantUUID)
-	if err != nil {
+	var records []RuntimeRecord
+	if err := r.db.Where("tenant_id = ?", workerDefaultTenantUUID).Find(&records).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var out []*model.Worker
-	for rows.Next() {
-		w, err := r.scanWorker(rows)
+	out := make([]*model.Worker, 0, len(records))
+	for _, rec := range records {
+		w, err := r.toModel(rec)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, w)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // Delete implements Repository.
 func (r *PostgresRepository) Delete(id string) error {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil
 	}
 
-	ctx := context.Background()
-	_, err := r.db.Pool.Exec(ctx, `
-		DELETE FROM runtimes
-		WHERE tenant_id = $1::uuid AND runtime_id = $2
-	`, workerDefaultTenantUUID, id)
-	return err
+	return r.db.Where("tenant_id = ? AND runtime_id = ?", workerDefaultTenantUUID, id).
+		Delete(&RuntimeRecord{}).Error
 }
 
-func (r *PostgresRepository) scanWorker(row interface {
-	Scan(dest ...any) error
-}) (*model.Worker, error) {
-	var w model.Worker
-	w.Info = &pb.WorkerInfo{}
-	var capabilitiesJSON []byte
-	var lastSeen *time.Time
-	var status string
-	err := row.Scan(&w.ID, &w.Info.Version, &w.Info.Region, &capabilitiesJSON, &lastSeen, &status)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, model.ErrWorkerNotFound
-		}
-		return nil, err
+func (r *PostgresRepository) toModel(rec RuntimeRecord) (*model.Worker, error) {
+	w := &model.Worker{
+		ID:    rec.RuntimeID,
+		Info:  &pb.WorkerInfo{Version: rec.Version, Region: rec.Region},
+		State: model.State(rec.Status),
 	}
-	if lastSeen != nil {
-		w.LastSeen = *lastSeen
+	if rec.LastHeartbeatAt != nil {
+		w.LastSeen = *rec.LastHeartbeatAt
 	}
-	w.State = model.State(status)
-	if len(capabilitiesJSON) > 0 {
+	if len(rec.Capabilities) > 0 {
 		var caps map[string]any
-		_ = json.Unmarshal(capabilitiesJSON, &caps)
+		_ = json.Unmarshal(rec.Capabilities, &caps)
 		// Best-effort decode; protobuf details are not fully reconstructed.
 	}
-	return &w, nil
+	return w, nil
 }
 
 var _ Repository = (*PostgresRepository)(nil)

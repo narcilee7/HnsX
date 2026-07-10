@@ -1,38 +1,42 @@
 package repository
 
 import (
-	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
+	"time"
 
+	"gorm.io/gorm"
+
+	"github.com/hnsx-io/hnsx/server/internal/domain/repository"
 	"github.com/hnsx-io/hnsx/server/internal/policy/model"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 )
 
 const policyDefaultTenantUUID = "00000000-0000-0000-0000-000000000000"
 
-// PostgresRepository persists policy aggregates to Postgres.
+// PostgresRepository persists Policy aggregates to Postgres using GORM.
 type PostgresRepository struct {
-	db *db.DB
+	db *gorm.DB
 }
 
 // NewPostgresRepository constructs a Postgres-backed policy repository.
 func NewPostgresRepository(database *db.DB) *PostgresRepository {
-	return &PostgresRepository{db: database}
+	if database == nil || database.GormDB == nil {
+		return &PostgresRepository{}
+	}
+	return &PostgresRepository{db: database.GormDB}
 }
 
 // Save implements Repository.
 func (r *PostgresRepository) Save(p *model.Policy) error {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return errors.New("policy/postgres: no database configured")
 	}
 	if p == nil || p.DomainID == "" {
 		return errors.New("policy: invalid policy")
 	}
 
-	ctx := context.Background()
-	domainUUID, err := r.lookupDomainUUID(ctx, p.DomainID)
+	domainUUID, err := r.lookupDomainUUID(p.DomainID)
 	if err != nil {
 		return err
 	}
@@ -47,39 +51,43 @@ func (r *PostgresRepository) Save(p *model.Policy) error {
 		return err
 	}
 
-	_, err = r.db.Pool.Exec(ctx, `
-		INSERT INTO policies (tenant_id, policy_id, domain_uuid, name, rules, updated_at)
-		VALUES ($1::uuid, $2, $3::uuid, $4, $5::jsonb, NOW())
-		ON CONFLICT (tenant_id, policy_id) DO UPDATE
-		SET domain_uuid = EXCLUDED.domain_uuid,
-		    name = EXCLUDED.name,
-		    rules = EXCLUDED.rules,
-		    updated_at = NOW()
-	`, policyDefaultTenantUUID, p.DomainID, domainUUID, p.DomainID, string(rulesJSON))
-	return err
+	now := time.Now().UTC()
+
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var rec PolicyRecord
+		err := tx.Where("tenant_id = ? AND policy_id = ?", policyDefaultTenantUUID, p.DomainID).
+			Take(&rec).Error
+		isNew := errors.Is(err, gorm.ErrRecordNotFound)
+
+		rec.TenantID = policyDefaultTenantUUID
+		rec.PolicyID = p.DomainID
+		rec.DomainUUID = domainUUID
+		rec.Name = p.DomainID
+		rec.Rules = rulesJSON
+		rec.UpdatedAt = now
+		if isNew {
+			rec.CreatedAt = now
+			return tx.Create(&rec).Error
+		}
+		return tx.Save(&rec).Error
+	})
 }
 
 // ByDomain implements Repository.
 func (r *PostgresRepository) ByDomain(domainID string) (*model.Policy, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, model.ErrPolicyNotFound
 	}
 
-	ctx := context.Background()
-	domainUUID, err := r.lookupDomainUUID(ctx, domainID)
+	domainUUID, err := r.lookupDomainUUID(domainID)
 	if err != nil {
 		return nil, model.ErrPolicyNotFound
 	}
 
-	var rulesJSON []byte
-	err = r.db.Pool.QueryRow(ctx, `
-		SELECT rules
-		FROM policies
-		WHERE tenant_id = $1::uuid AND domain_uuid = $2::uuid
-		LIMIT 1
-	`, policyDefaultTenantUUID, domainUUID).Scan(&rulesJSON)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	var rec PolicyRecord
+	if err := r.db.Where("tenant_id = ? AND domain_uuid = ?", policyDefaultTenantUUID, domainUUID).
+		Take(&rec).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, model.ErrPolicyNotFound
 		}
 		return nil, err
@@ -90,7 +98,7 @@ func (r *PostgresRepository) ByDomain(domainID string) (*model.Policy, error) {
 		Permissions model.Permissions `json:"permissions"`
 		Guardrails  []model.Guardrail `json:"guardrails"`
 	}
-	if err := json.Unmarshal(rulesJSON, &rules); err != nil {
+	if err := json.Unmarshal(rec.Rules, &rules); err != nil {
 		return nil, err
 	}
 
@@ -102,20 +110,17 @@ func (r *PostgresRepository) ByDomain(domainID string) (*model.Policy, error) {
 	}, nil
 }
 
-func (r *PostgresRepository) lookupDomainUUID(ctx context.Context, domainID string) (string, error) {
-	var domainUUID string
-	err := r.db.Pool.QueryRow(ctx, `
-		SELECT id FROM domains
-		WHERE tenant_id = $1::uuid AND domain_id = $2
-		LIMIT 1
-	`, policyDefaultTenantUUID, domainID).Scan(&domainUUID)
+func (r *PostgresRepository) lookupDomainUUID(domainID string) (string, error) {
+	var rec repository.DomainRecord
+	err := r.db.Where("tenant_id = ? AND domain_id = ?", policyDefaultTenantUUID, domainID).
+		Take(&rec).Error
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", errors.New("policy/postgres: domain not found")
 		}
 		return "", err
 	}
-	return domainUUID, nil
+	return rec.ID, nil
 }
 
 var _ Repository = (*PostgresRepository)(nil)

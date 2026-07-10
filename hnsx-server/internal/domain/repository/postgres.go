@@ -2,33 +2,35 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"time"
+
+	"gorm.io/gorm"
 
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
 
-// DefaultTenantUUID is the placeholder tenant used until the service layer
-// propagates real tenant context.
-const DefaultTenantUUID = "00000000-0000-0000-0000-000000000000"
+const domainDefaultTenantUUID = "00000000-0000-0000-0000-000000000000"
 
-// PostgresRepository persists RegisteredDomain aggregates to Postgres.
+// PostgresRepository persists RegisteredDomain aggregates to Postgres using GORM.
 type PostgresRepository struct {
-	db *db.DB
+	db *gorm.DB
 }
 
 // NewPostgresRepository constructs a Postgres-backed domain repository.
 func NewPostgresRepository(database *db.DB) *PostgresRepository {
-	return &PostgresRepository{db: database}
+	if database == nil || database.GormDB == nil {
+		return &PostgresRepository{}
+	}
+	return &PostgresRepository{db: database.GormDB}
 }
 
 // Save implements Repository.
 func (r *PostgresRepository) Save(d *model.RegisteredDomain) error {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return errors.New("domain/postgres: no database configured")
 	}
 	if err := d.Validate(); err != nil {
@@ -40,164 +42,147 @@ func (r *PostgresRepository) Save(d *model.RegisteredDomain) error {
 		return err
 	}
 
-	ctx := context.Background()
 	now := time.Now().UTC()
 
-	tx, err := r.db.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var rec DomainRecord
+		err := tx.Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, d.ID).
+			Take(&rec).Error
+		isNew := errors.Is(err, gorm.ErrRecordNotFound)
 
-	// Upsert the domain registry row.
-	var domainUUID string
-	err = tx.QueryRow(ctx, `
-		INSERT INTO domains (tenant_id, domain_id, current_version, description, status, created_at, updated_at)
-		VALUES ($1::uuid, $2, $3, $4, 'active', $5, $6)
-		ON CONFLICT (tenant_id, domain_id) DO UPDATE
-		SET current_version = EXCLUDED.current_version,
-		    description = EXCLUDED.description,
-		    updated_at = EXCLUDED.updated_at
-		RETURNING id
-	`, DefaultTenantUUID, d.ID, d.Version, d.Description, now, now).Scan(&domainUUID)
-	if err != nil {
-		return err
-	}
+		rec.TenantID = domainDefaultTenantUUID
+		rec.DomainID = d.ID
+		rec.CurrentVersion = d.Version
+		rec.Description = d.Description
+		rec.Status = "active"
+		rec.UpdatedAt = now
+		if isNew {
+			rec.CreatedAt = now
+		}
 
-	// Insert a new version row. Older versions are retained for history.
-	_, err = tx.Exec(ctx, `
-		INSERT INTO domain_versions (tenant_id, domain_uuid, version, yaml_body, json_body, harness_hash, created_at)
-		VALUES ($1::uuid, $2::uuid, $3, $4, $5::jsonb, $6, $7)
-		ON CONFLICT (tenant_id, domain_uuid, version) DO UPDATE
-		SET yaml_body = EXCLUDED.yaml_body,
-		    json_body = EXCLUDED.json_body,
-		    harness_hash = EXCLUDED.harness_hash
-	`, DefaultTenantUUID, domainUUID, d.Version, string(specJSON), string(specJSON), "", now)
-	if err != nil {
-		return err
-	}
+		if err := tx.Save(&rec).Error; err != nil {
+			return err
+		}
 
-	return tx.Commit(ctx)
+		version := DomainVersionRecord{
+			TenantID:    domainDefaultTenantUUID,
+			DomainUUID:  rec.ID,
+			Version:     d.Version,
+			YAMLBody:    string(specJSON),
+			JSONBody:    specJSON,
+			HarnessHash: "",
+			CreatedAt:   now,
+		}
+		return tx.Save(&version).Error
+	})
 }
 
 // ByID implements Repository.
 func (r *PostgresRepository) ByID(id string) (*model.RegisteredDomain, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, model.ErrDomainNotFound
 	}
 
-	ctx := context.Background()
-	row := r.db.Pool.QueryRow(ctx, `
-		SELECT d.id, d.current_version, d.description, d.created_at, d.updated_at, dv.json_body
-		FROM domains d
-		JOIN domain_versions dv ON dv.domain_uuid = d.id AND dv.version = d.current_version
-		WHERE d.tenant_id = $1::uuid AND d.domain_id = $2
-		ORDER BY dv.created_at DESC
-		LIMIT 1
-	`, DefaultTenantUUID, id)
-
-	var domainUUID, version, description string
-	var createdAt, updatedAt time.Time
-	var specJSON []byte
-	err := row.Scan(&domainUUID, &version, &description, &createdAt, &updatedAt, &specJSON)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	var rec DomainRecord
+	if err := r.db.Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, id).
+		Take(&rec).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, model.ErrDomainNotFound
 		}
 		return nil, err
 	}
 
-	var spec spec.DomainSpec
-	if err := json.Unmarshal(specJSON, &spec); err != nil {
-		return nil, err
-	}
-
-	return &model.RegisteredDomain{
-		ID:          id,
-		Version:     version,
-		Description: description,
-		Spec:        &spec,
-		CreatedAt:   createdAt,
-		UpdatedAt:   updatedAt,
-	}, nil
+	return r.toModel(rec)
 }
 
 // All implements Repository.
 func (r *PostgresRepository) All() ([]*model.RegisteredDomain, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil, nil
 	}
 
-	ctx := context.Background()
-	rows, err := r.db.Pool.Query(ctx, `
-		SELECT d.domain_id, d.current_version, d.description, d.created_at, d.updated_at, dv.json_body
-		FROM domains d
-		JOIN domain_versions dv ON dv.domain_uuid = d.id AND dv.version = d.current_version
-		WHERE d.tenant_id = $1::uuid
-	`, DefaultTenantUUID)
-	if err != nil {
+	var records []DomainRecord
+	if err := r.db.Where("tenant_id = ?", domainDefaultTenantUUID).Find(&records).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var out []*model.RegisteredDomain
-	for rows.Next() {
-		var id, version, description string
-		var createdAt, updatedAt time.Time
-		var specJSON []byte
-		if err := rows.Scan(&id, &version, &description, &createdAt, &updatedAt, &specJSON); err != nil {
+	out := make([]*model.RegisteredDomain, 0, len(records))
+	for _, rec := range records {
+		d, err := r.toModel(rec)
+		if err != nil {
 			return nil, err
 		}
-		var spec spec.DomainSpec
-		if err := json.Unmarshal(specJSON, &spec); err != nil {
-			return nil, err
-		}
-		out = append(out, &model.RegisteredDomain{
-			ID:          id,
-			Version:     version,
-			Description: description,
-			Spec:        &spec,
-			CreatedAt:   createdAt,
-			UpdatedAt:   updatedAt,
-		})
+		out = append(out, d)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // Delete implements Repository.
 func (r *PostgresRepository) Delete(id string) error {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return nil
 	}
 
-	ctx := context.Background()
-	_, err := r.db.Pool.Exec(ctx, `
-		DELETE FROM domains
-		WHERE tenant_id = $1::uuid AND domain_id = $2
-	`, DefaultTenantUUID, id)
-	return err
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var rec DomainRecord
+		if err := tx.Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, id).
+			Take(&rec).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return err
+		}
+
+		if err := tx.Where("tenant_id = ? AND domain_uuid = ?", domainDefaultTenantUUID, rec.ID).
+			Delete(&DomainVersionRecord{}).Error; err != nil {
+			return err
+		}
+
+		return tx.Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, id).
+			Delete(&DomainRecord{}).Error
+	})
 }
 
 // Exists implements Repository.
 func (r *PostgresRepository) Exists(id string) (bool, error) {
-	if r.db == nil || r.db.IsNoDB() {
+	if r.db == nil {
 		return false, nil
 	}
 
-	ctx := context.Background()
-	var one int
-	err := r.db.Pool.QueryRow(ctx, `
-		SELECT 1 FROM domains
-		WHERE tenant_id = $1::uuid AND domain_id = $2
-		LIMIT 1
-	`, DefaultTenantUUID, id).Scan(&one)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
+	var count int64
+	err := r.db.Model(&DomainRecord{}).
+		Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, id).
+		Count(&count).Error
+	return count > 0, err
+}
+
+func (r *PostgresRepository) toModel(rec DomainRecord) (*model.RegisteredDomain, error) {
+	var version DomainVersionRecord
+	if err := r.db.Where("tenant_id = ? AND domain_uuid = ?", domainDefaultTenantUUID, rec.ID).
+		Order("created_at DESC").
+		Take(&version).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, model.ErrDomainNotFound
 		}
-		return false, err
+		return nil, err
 	}
-	return true, nil
+
+	var s spec.DomainSpec
+	if err := json.Unmarshal(version.JSONBody, &s); err != nil {
+		return nil, err
+	}
+
+	return &model.RegisteredDomain{
+		ID:          rec.DomainID,
+		Version:     rec.CurrentVersion,
+		Description: rec.Description,
+		Spec:        &s,
+		CreatedAt:   rec.CreatedAt,
+		UpdatedAt:   rec.UpdatedAt,
+	}, nil
 }
 
 var _ Repository = (*PostgresRepository)(nil)
+
+// Ensure context import is referenced when needed.
+var _ = context.Background()
