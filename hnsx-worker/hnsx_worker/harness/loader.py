@@ -28,6 +28,12 @@ class HarnessValidationError(Exception):
 class HarnessSpec:
     """A validated view of the ``harness`` section of a DomainSpec."""
 
+    # Strategies W12 knows about. ``direct`` keeps existing multi-turn / single
+    # behavior; the rest opt into ReAct / Plan-and-Solve / Multi-Agent.
+    VALID_STRATEGIES = frozenset(
+        {"direct", "react", "plan_and_solve", "multi_agent"}
+    )
+
     def __init__(self, spec: dict[str, Any]) -> None:
         self.spec = spec
         self.id = str(spec.get("id", ""))
@@ -38,6 +44,8 @@ class HarnessSpec:
         self.session = self.harness.get("session", {}) or {}
         self.mode = str(self.session.get("mode", ""))
         self.supervisor_cfg = self.session.get("supervisor") or {}
+        self.orchestration = self.harness.get("orchestration") or {}
+        self.strategy = str(self.orchestration.get("strategy", "direct"))
         self._validate()
 
     def _validate(self) -> None:
@@ -55,6 +63,46 @@ class HarnessSpec:
 
         if self.mode in ("supervisor", "hierarchical", "autonomous"):
             self._validate_supervisor_mode()
+
+        self._validate_orchestration()
+
+    def _validate_orchestration(self) -> None:
+        """Validate the W12 ``orchestration`` block.
+
+        The block is optional; when present, ``strategy`` must be one of
+        :attr:`VALID_STRATEGIES`. ``multi_agent`` requires at least two
+        agents so ``delegate_to`` has somewhere to point.
+        """
+        if not self.orchestration:
+            return
+        if not isinstance(self.orchestration, dict):
+            raise HarnessValidationError("harness.orchestration must be a dict")
+
+        strategy = self.strategy
+        if strategy not in self.VALID_STRATEGIES:
+            raise HarnessValidationError(
+                f"orchestration.strategy {strategy!r} is not supported "
+                f"(known: {sorted(self.VALID_STRATEGIES)})"
+            )
+
+        if strategy == "multi_agent" and len(self.agents) < 2:
+            raise HarnessValidationError(
+                "orchestration.strategy=multi_agent requires at least 2 agents"
+            )
+
+        reflection = self.orchestration.get("reflection") or {}
+        if reflection and not isinstance(reflection, dict):
+            raise HarnessValidationError("orchestration.reflection must be a dict")
+
+        react_cfg = self.orchestration.get("react") or {}
+        if react_cfg and not isinstance(react_cfg, dict):
+            raise HarnessValidationError("orchestration.react must be a dict")
+
+        plan_cfg = self.orchestration.get("plan_and_solve") or {}
+        if plan_cfg and not isinstance(plan_cfg, dict):
+            raise HarnessValidationError(
+                "orchestration.plan_and_solve must be a dict"
+            )
 
     def _validate_supervisor_mode(self) -> None:
         supervisor = self.supervisor_cfg

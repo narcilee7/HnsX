@@ -40,6 +40,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from hnsx_worker.adapters import AdapterRegistry
@@ -95,6 +96,7 @@ def execute_session(
 ) -> dict[str, Any]:
     """Dispatch to the right mode-specific runner."""
     mode = _read_mode(spec)
+    strategy = _read_strategy(spec)
     result: dict[str, Any] = {
         "output": "",
         "prompt_tokens": 0,
@@ -106,31 +108,66 @@ def execute_session(
     memory_cfg = (spec.get("harness") or {}).get("memory")
     memory: MemoryStore | None = build_memory_backend(memory_cfg) if memory_cfg else None
 
+    # W12: orchestration.strategy overrides session.mode when set to one of
+    # the advanced strategies. ``direct`` keeps existing mode semantics.
+    used_strategy = False
     try:
-        if mode in ("single", "single-task"):
-            result["output"] = _run_single(
-                spec, trigger, config, stop_event=stop_event, emit=emit, cost_totals=result
-            )
-        elif mode == "multi-turn":
-            result["output"] = _run_multi_turn(
-                spec,
-                trigger,
-                config,
+        if strategy == "react":
+            result["output"] = _run_strategy_agent(
+                spec, trigger, config,
                 stop_event=stop_event,
                 emit=emit,
                 cost_totals=result,
                 memory=memory,
+                builder="react",
             )
-        elif mode == "workflow":
-            result["output"] = _run_workflow(
-                spec, trigger, config, stop_event=stop_event, emit=emit, cost_totals=result
+            used_strategy = True
+        elif strategy == "plan_and_solve":
+            result["output"] = _run_strategy_agent(
+                spec, trigger, config,
+                stop_event=stop_event,
+                emit=emit,
+                cost_totals=result,
+                memory=memory,
+                builder="plan_and_solve",
             )
-        elif mode in ("supervisor", "hierarchical", "autonomous"):
-            run_orchestration(
-                spec, trigger, config, stop_event=stop_event, emit=emit
+            used_strategy = True
+        elif strategy == "multi_agent":
+            result["output"] = _run_strategy_agent(
+                spec, trigger, config,
+                stop_event=stop_event,
+                emit=emit,
+                cost_totals=result,
+                memory=memory,
+                builder="multi_agent",
             )
-        else:
-            raise ValueError(f"unknown session.mode: {mode!r}")
+            used_strategy = True
+
+        if not used_strategy:
+            if mode in ("single", "single-task"):
+                result["output"] = _run_single(
+                    spec, trigger, config, stop_event=stop_event, emit=emit, cost_totals=result
+                )
+            elif mode == "multi-turn":
+                result["output"] = _run_multi_turn(
+                    spec,
+                    trigger,
+                    config,
+                    stop_event=stop_event,
+                    emit=emit,
+                    cost_totals=result,
+                    memory=memory,
+                )
+            elif mode == "workflow":
+                result["output"] = _run_workflow(
+                    spec, trigger, config, stop_event=stop_event, emit=emit, cost_totals=result
+                )
+            elif mode in ("supervisor", "hierarchical", "autonomous"):
+                run_orchestration(
+                    spec, trigger, config, stop_event=stop_event, emit=emit
+                )
+            else:
+                raise ValueError(f"unknown session.mode: {mode!r}")
 
         # W11: persist a session summary into long-term memory when configured.
         if memory is not None:
@@ -1052,6 +1089,55 @@ def _read_mode(spec: dict) -> str:
     return (spec.get("harness", {}).get("session", {}) or {}).get("mode", "")
 
 
+def _read_strategy(spec: dict) -> str:
+    """Read ``harness.orchestration.strategy`` (defaults to ``direct``)."""
+    return (
+        (spec.get("harness", {}) or {})
+        .get("orchestration", {})
+        .get("strategy", "direct")
+        or "direct"
+    )
+
+
+def _run_strategy_agent(
+    spec: dict,
+    trigger: dict,
+    config: dict,
+    *,
+    stop_event: threading.Event,
+    emit: EmitFn,
+    cost_totals: dict[str, Any],
+    memory: MemoryStore | None,
+    builder: str,
+) -> str:
+    """Dispatch to the W12 strategy builder and accumulate cost."""
+    from hnsx_worker.agents import (
+        build_multi_agent_runner,
+        build_plan_and_solve_agent,
+        build_react_agent,
+    )
+
+    if builder == "react":
+        agent = build_react_agent(
+            spec=spec, config=config, emit=emit, memory=memory
+        )
+    elif builder == "plan_and_solve":
+        agent = build_plan_and_solve_agent(
+            spec=spec, config=config, emit=emit, memory=memory
+        )
+    elif builder == "multi_agent":
+        agent = build_multi_agent_runner(
+            spec=spec, config=config, emit=emit, memory=memory
+        )
+    else:
+        raise ValueError(f"unknown W12 strategy: {builder!r}")
+
+    text = agent.run(trigger, stop_event=stop_event)
+    # Cost attribution for strategy runs that go through run_multi_turn_loop
+    # already accumulated via cost_totals; nothing more to do here.
+    return text
+
+
 def _first_key(d: dict) -> str:
     return next(iter(d), "")
 
@@ -1178,3 +1264,357 @@ def _maybe_stop(stop_event: threading.Event, emit: EmitFn, config: dict) -> None
 
 class _Stopped(Exception):
     """Sentinel raised by ``_maybe_stop`` to unwind the executor cleanly."""
+
+
+# ---------------------------------------------------------------------------
+# W12 public API — reusable multi-turn loop for advanced agent strategies
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AgentLoopContext:
+    """Everything an advanced agent (W12) needs to drive the multi-turn loop.
+
+    The executor builds this once per session, then hands it to whichever
+    :class:`Agent` strategy runs. Strategies can decorate the loop with
+    their own pre/post hooks without re-implementing the tool dispatch.
+    """
+
+    spec: dict[str, Any]
+    agent_cfg: dict[str, Any]
+    adapter: Any
+    prompt: str
+    registry: ToolRegistry
+    policy: PolicyEngine
+    store: Any
+    sandbox: Any
+    messages: list[dict]
+    secrets: dict[str, str]
+    session_id: str
+    domain_id: str
+    agent_id: str
+    max_turns: int
+
+
+HookFn = Callable[[int, "AgentLoopTurnInfo"], None]
+
+
+@dataclass
+class AgentLoopTurnInfo:
+    """Snapshot passed to strategy hooks after each turn."""
+
+    turn: int
+    final_text: str
+    tool_calls: list[Any]
+    messages: list[dict]
+    cost: Any
+
+
+def build_agent_loop_context(
+    *,
+    spec: dict[str, Any],
+    agent_cfg: dict[str, Any],
+    config: dict[str, Any],
+    memory: MemoryStore | None = None,
+    extra_tools: list[Any] | None = None,
+) -> AgentLoopContext:
+    """Build an :class:`AgentLoopContext` for the given agent.
+
+    Reused by:
+
+      - the built-in ``multi-turn`` mode (via :func:`_run_multi_turn`)
+      - :class:`ReActAgent` / :class:`PlanAndSolveAgent` / :class:`MultiAgentRunner`
+
+    Pass ``extra_tools`` to inject additional tools (e.g. ``delegate_to``)
+    on top of the agent's declared ``tools:`` entries.
+    """
+    harness = spec.get("harness", {})
+    session_id = config.get("session_id", "")
+    domain_id = spec.get("id", "")
+    agent_id = (
+        (harness.get("session", {}) or {}).get("agent")
+        or next(iter(harness.get("agents", {}) or {}), "")
+    )
+    if not agent_id:
+        raise ValueError("build_agent_loop_context requires a non-empty agents map")
+    prompt = _resolve_prompt(spec, agent_cfg)
+    adapter = AdapterRegistry.get(agent_cfg.get("adapter", {}).get("kind", "noop"))
+    max_turns = int(
+        (harness.get("policy", {}) or {}).get("budget", {}).get("max_turns")
+        or (harness.get("session", {}) or {}).get("max_turns")
+        or _DEFAULT_MAX_TURNS
+    )
+
+    policy = PolicyEngine(
+        spec, session_id=session_id, domain_id=domain_id, agent_id=agent_id, emit=_noop_emit
+    )
+    sandbox = build_sandbox_backend(harness.get("sandbox"))
+    store = build_store_backend(harness.get("store"))
+
+    # Re-use _build_tool_registry so the agent sees the same schemas as the
+    # built-in multi-turn mode. We pass through memory so memory_* tools are
+    # auto-injected when configured.
+    registry, _failures = _build_tool_registry(
+        spec=spec,
+        agent=agent_cfg,
+        session_id=session_id,
+        domain_id=domain_id,
+        emit=_noop_emit,
+        policy_decision=policy.check_tool,
+        memory=memory,
+    )
+    if extra_tools:
+        for tool in extra_tools:
+            if tool.name in registry.names():
+                continue
+            registry.register(tool)
+
+    return AgentLoopContext(
+        spec=spec,
+        agent_cfg=agent_cfg,
+        adapter=adapter,
+        prompt=prompt,
+        registry=registry,
+        policy=policy,
+        store=store,
+        sandbox=sandbox,
+        messages=[],
+        secrets=_read_secrets(config),
+        session_id=session_id,
+        domain_id=domain_id,
+        agent_id=agent_id,
+        max_turns=max_turns,
+    )
+
+
+def run_multi_turn_loop(
+    context: AgentLoopContext,
+    *,
+    user_input: dict[str, Any],
+    stop_event: threading.Event,
+    emit: EmitFn,
+    cost_totals: dict[str, Any] | None = None,
+    on_turn_start: HookFn | None = None,
+    on_tool_result: HookFn | None = None,
+    on_turn_end: HookFn | None = None,
+    max_turns_override: int | None = None,
+    prompt_suffix: str = "",
+) -> dict[str, Any]:
+    """Run the tool-using multi-turn loop.
+
+    Strategies (ReAct / Plan-and-Solve / Multi-Agent) get:
+
+      - the same stream-based agent invocation,
+      - the same ToolRegistry + policy gating,
+      - the same message-store persistence,
+
+    while staying free to decorate the loop via the three hooks.
+
+    Returns ``{final_text, tool_call_count, turn_count, cost}``.
+    """
+    if cost_totals is None:
+        cost_totals = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0,
+            "latency_ms": 0,
+        }
+
+    max_turns = int(max_turns_override or context.max_turns)
+
+    messages = list(context.messages)
+    if not messages:
+        messages = _build_initial_messages(context.prompt + prompt_suffix, user_input)
+
+    final_text = ""
+    stop_reason = "natural"
+    tool_call_count = 0
+    cost = None
+
+    secrets = context.secrets
+    ctx_factory = _make_tool_context_factory(
+        session_id=context.session_id,
+        domain_id=context.domain_id,
+        agent_id=context.agent_id,
+        secrets=secrets,
+        emit=emit,
+        sandbox=context.sandbox,
+    )
+
+    for turn in range(1, max_turns + 1):
+        if stop_event.is_set():
+            stop_reason = "cancelled"
+            break
+
+        budget_decision = context.policy.check_budget()
+        if not budget_decision.allow:
+            emit(
+                {
+                    "kind": "session_end",
+                    "session_id": context.session_id,
+                    "domain_id": context.domain_id,
+                    "state": "failed",
+                    "payload": {"reason": budget_decision.reason, "turn": turn},
+                }
+            )
+            return {
+                "final_text": "",
+                "tool_call_count": tool_call_count,
+                "turn_count": turn,
+                "cost": cost,
+                "stop_reason": "budget_exceeded",
+            }
+
+        emit(
+            {
+                "kind": "turn_start",
+                "session_id": context.session_id,
+                "domain_id": context.domain_id,
+                "agent_id": context.agent_id,
+                "payload": {"turn": turn, "adapter": context.adapter.name(), "max_turns": max_turns},
+            }
+        )
+
+        text, tool_calls, cost = _stream_turn(
+            context.adapter,
+            context.agent_cfg,
+            context.prompt + prompt_suffix,
+            user_input,
+            messages=messages,
+            session_id=context.session_id,
+            domain_id=context.domain_id,
+            agent_id=context.agent_id,
+            stop_event=stop_event,
+            emit=emit,
+            turn=turn,
+        )
+        final_text = text
+        _accumulate_cost(cost, cost_totals)
+        if cost is not None:
+            context.policy.add_cost(cost.cost_usd)
+
+        context.store.set(context.session_id, "messages", messages)
+
+        info = AgentLoopTurnInfo(
+            turn=turn,
+            final_text=text,
+            tool_calls=list(tool_calls),
+            messages=messages,
+            cost=cost,
+        )
+
+        if not tool_calls:
+            emit(
+                {
+                    "kind": "agent_text",
+                    "session_id": context.session_id,
+                    "domain_id": context.domain_id,
+                    "agent_id": context.agent_id,
+                    "payload": {"content": text, "final": True, "turn": turn},
+                }
+            )
+            emit(
+                {
+                    "kind": "turn_end",
+                    "session_id": context.session_id,
+                    "domain_id": context.domain_id,
+                    "agent_id": context.agent_id,
+                    "payload": {"turn": turn, "stop_reason": "natural"},
+                }
+            )
+            if on_turn_end is not None:
+                on_turn_end(turn, info)
+            stop_reason = "natural"
+            break
+
+        emit(
+            {
+                "kind": "agent_text",
+                "session_id": context.session_id,
+                "domain_id": context.domain_id,
+                "agent_id": context.agent_id,
+                "payload": {"content": text, "final": False, "turn": turn},
+            }
+        )
+        for tc in tool_calls:
+            ctx = ctx_factory(turn=turn, tool_call_id=tc.id)
+            if _is_cli_adapter(context.adapter):
+                tool_decision = context.policy.check_tool(tc.name, ctx)
+                result = _delegate_cli_tool_result(tc, decision=tool_decision)
+            else:
+                result = context.registry.call(tc.name, ctx, dict(tc.input))
+            tool_call_count += 1
+            payload = {
+                "tool_call_id": tc.id,
+                "name": tc.name,
+                "output": result.to_observation_payload(),
+                "ok": result.ok,
+                "turn": turn,
+            }
+            emit(
+                {
+                    "kind": "tool_result",
+                    "session_id": context.session_id,
+                    "domain_id": context.domain_id,
+                    "agent_id": context.agent_id,
+                    "payload": payload,
+                }
+            )
+            serialized = result.output if result.ok else {"error": result.error}
+            messages = _append_tool_result(
+                messages, tc, serialized, adapter_kind=context.adapter.name()
+            )
+            if on_tool_result is not None:
+                on_tool_result(turn, AgentLoopTurnInfo(
+                    turn=turn,
+                    final_text=text,
+                    tool_calls=[tc],
+                    messages=messages,
+                    cost=cost,
+                ))
+
+        context.store.set(context.session_id, "messages", messages)
+
+        emit(
+            {
+                "kind": "turn_end",
+                "session_id": context.session_id,
+                "domain_id": context.domain_id,
+                "agent_id": context.agent_id,
+                "payload": {"turn": turn, "stop_reason": "tool_call"},
+            }
+        )
+        if on_turn_end is not None:
+            on_turn_end(turn, info)
+        if on_turn_start is not None:
+            # Defer to next iteration.
+            pass
+
+        if turn >= max_turns:
+            stop_reason = "max_turns"
+            break
+    else:
+        stop_reason = "max_turns"
+
+    if stop_reason == "max_turns":
+        emit(
+            {
+                "kind": "agent_text",
+                "session_id": context.session_id,
+                "domain_id": context.domain_id,
+                "agent_id": context.agent_id,
+                "payload": {"content": final_text, "final": True, "truncated": True},
+            }
+        )
+
+    return {
+        "final_text": final_text,
+        "tool_call_count": tool_call_count,
+        "turn_count": min(turn, max_turns) if "turn" in locals() else 0,
+        "cost": cost,
+        "stop_reason": stop_reason,
+    }
+
+
+def _noop_emit(_obs: dict) -> None:  # pragma: no cover - debug helper
+    """Default ``emit`` used during context build (no observation sink yet)."""
