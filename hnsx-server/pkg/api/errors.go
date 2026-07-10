@@ -86,6 +86,8 @@ func HTTPStatusFor(code string) int {
 		return http.StatusUnprocessableEntity
 	case "SECRETS_UNAVAILABLE":
 		return http.StatusServiceUnavailable
+	case "POLICY_UNAVAILABLE":
+		return http.StatusServiceUnavailable
 	default:
 		return http.StatusInternalServerError
 	}
