@@ -160,30 +160,38 @@ type GuardrailSpec struct {
 	Config  any    `json:"config,omitempty" yaml:"config,omitempty"`
 }
 
-// StoreConfig defines storage backends for context, knowledge, and ephemeral
-// state. The previous name "MemoryConfig" is kept as a deprecated alias for
-// backward compatibility.
+// StoreConfig selects per-namespace storage backends. The previous flat
+// "memory" configuration is replaced by explicit context / knowledge /
+// ephemeral namespaces.
 type StoreConfig struct {
-	Backend       string `json:"backend" yaml:"backend"`
-	Config        any    `json:"config,omitempty" yaml:"config,omitempty"`
-	DefaultWindow int    `json:"default_window,omitempty" yaml:"default_window,omitempty"`
+	Context   StoreNamespaceConfig `json:"context" yaml:"context"`
+	Knowledge StoreNamespaceConfig `json:"knowledge" yaml:"knowledge"`
+	Ephemeral StoreNamespaceConfig `json:"ephemeral" yaml:"ephemeral"`
 }
 
-// MemoryConfig is the deprecated alias for StoreConfig.
-type MemoryConfig = StoreConfig
+// StoreNamespaceConfig selects the backend for one store namespace.
+type StoreNamespaceConfig struct {
+	Backend string `json:"backend" yaml:"backend"`
+	Config  any    `json:"config,omitempty" yaml:"config,omitempty"`
+}
+
+// DefaultStoreNamespaceConfig returns the default in-memory store namespace
+// configuration used when a domain omits the store block.
+func DefaultStoreNamespaceConfig() StoreNamespaceConfig {
+	return StoreNamespaceConfig{Backend: "in_memory"}
+}
 
 // SessionSpec defines the session/orchestration mode.
 type SessionSpec struct {
-	Mode          string        `json:"mode" yaml:"mode"`
-	Agent         string        `json:"agent,omitempty" yaml:"agent,omitempty"`
-	Skill         string        `json:"skill,omitempty" yaml:"skill,omitempty"`
-	TriggerSchema any           `json:"trigger_schema,omitempty" yaml:"trigger_schema,omitempty"`
-	OutputSchema  string        `json:"output_schema,omitempty" yaml:"output_schema,omitempty"`
-	Workflow      *WorkflowSpec `json:"workflow,omitempty" yaml:"workflow,omitempty"`
+	Mode          HarnessSessionMode `json:"mode" yaml:"mode"`
+	Agent         string             `json:"agent,omitempty" yaml:"agent,omitempty"`
+	Skill         string             `json:"skill,omitempty" yaml:"skill,omitempty"`
+	TriggerSchema any                `json:"trigger_schema,omitempty" yaml:"trigger_schema,omitempty"`
+	OutputSchema  string             `json:"output_schema,omitempty" yaml:"output_schema,omitempty"`
+	Workflow      *WorkflowSpec      `json:"workflow,omitempty" yaml:"workflow,omitempty"`
 }
 
-// WorkflowSpec is the deterministic DAG (legacy) or supervisor's static
-// fallback list.
+// WorkflowSpec is the deterministic DAG or supervisor's static fallback list.
 type WorkflowSpec struct {
 	Entry       string     `json:"entry" yaml:"entry"`
 	Steps       []StepSpec `json:"steps" yaml:"steps"`
@@ -213,3 +221,15 @@ type TelemetryReporter struct {
 	Type string `json:"type" yaml:"type"`
 	Addr string `json:"addr,omitempty" yaml:"addr,omitempty"`
 }
+
+type HarnessSessionMode string
+
+const (
+	SingleTask   HarnessSessionMode = "single-task"
+	Single       HarnessSessionMode = "single"
+	MultiTurn    HarnessSessionMode = "multi-turn"
+	Supervisor   HarnessSessionMode = "supervisor"
+	Hierarchical HarnessSessionMode = "hierarchical"
+	Autonomous   HarnessSessionMode = "autonomous"
+	Workflow     HarnessSessionMode = "workflow"
+)

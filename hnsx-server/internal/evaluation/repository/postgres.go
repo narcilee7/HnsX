@@ -301,6 +301,76 @@ func (r *PostgresRepository) RunsBySet(setID string) ([]model.EvalRun, error) {
 	return out, nil
 }
 
+// SaveResults implements Repository. It replaces any existing per-case results
+// for the run with the supplied set.
+//
+// NOTE: this maps case_id -> eval_cases.id (UUID) via the run's set. It requires
+// eval_runs.id to be a UUID; run IDs are currently session-style slugs (see
+// runtime.NewSessionID), so on Postgres the run insert fails upstream and this
+// method is not yet reached. It is implemented so it works once run IDs are
+// reconciled to UUIDs.
+func (r *PostgresRepository) SaveResults(runID string, results []model.EvalResult) error {
+	if r.db == nil {
+		return errors.New("evaluation/postgres: no database configured")
+	}
+	if len(results) == 0 {
+		return nil
+	}
+
+	var runRec EvalRunRecord
+	if err := r.db.Where("tenant_id = ? AND id = ?", evaluationDefaultTenantUUID, runID).
+		Take(&runRec).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return model.ErrEvalRunNotFound
+		}
+		return err
+	}
+
+	// Build case_id -> UUID map for the run's set.
+	var caseRecs []EvalCaseRecord
+	if err := r.db.Select("id, case_id").
+		Where("tenant_id = ? AND eval_set_uuid = ?", evaluationDefaultTenantUUID, runRec.EvalSetUUID).
+		Find(&caseRecs).Error; err != nil {
+		return err
+	}
+	caseUUID := make(map[string]string, len(caseRecs))
+	for _, cr := range caseRecs {
+		caseUUID[cr.CaseID] = cr.ID
+	}
+
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id = ? AND eval_run_uuid = ?", evaluationDefaultTenantUUID, runRec.ID).
+			Delete(&EvalResultRecord{}).Error; err != nil {
+			return err
+		}
+		for _, res := range results {
+			cu, ok := caseUUID[res.CaseID]
+			if !ok {
+				// Unknown case id: skip rather than fail the whole run.
+				continue
+			}
+			actualJSON, _ := json.Marshal(res.Actual)
+			detailsJSON, _ := json.Marshal(res.Details)
+			rec := EvalResultRecord{
+				TenantID:    evaluationDefaultTenantUUID,
+				EvalRunUUID: runRec.ID,
+				CaseUUID:    cu,
+				Score:       res.Score,
+				Passed:      res.Passed,
+				Actual:      actualJSON,
+				Details:     detailsJSON,
+				DurationMs:  res.DurationMs,
+				CostUSD:     res.CostUSD,
+				CreatedAt:   res.CreatedAt,
+			}
+			if err := tx.Create(&rec).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func (r *PostgresRepository) toEvalSet(rec EvalSetRecord) (*model.EvalSet, error) {
 	var domainRec repository.DomainRecord
 	if err := r.db.Select("domain_id").
@@ -356,7 +426,58 @@ func (r *PostgresRepository) toEvalRun(rec EvalRunRecord) (*model.EvalRun, error
 		DurationMs:    rec.DurationMs,
 		CreatedAt:     rec.CreatedAt,
 		CompletedAt:   rec.CompletedAt,
+		Results:       r.loadResults(rec.ID, rec.EvalSetUUID),
 	}, nil
+}
+
+// loadResults returns the per-case results for a run, mapping case UUIDs back to
+// their stable case_id. Errors degrade to an empty slice.
+func (r *PostgresRepository) loadResults(runUUID, setUUID string) []model.EvalResult {
+	var recs []EvalResultRecord
+	if err := r.db.Where("tenant_id = ? AND eval_run_uuid = ?", evaluationDefaultTenantUUID, runUUID).
+		Order("created_at ASC").Find(&recs).Error; err != nil {
+		return nil
+	}
+	if len(recs) == 0 {
+		return nil
+	}
+
+	var caseRecs []EvalCaseRecord
+	_ = r.db.Select("id, case_id").
+		Where("tenant_id = ? AND eval_set_uuid = ?", evaluationDefaultTenantUUID, setUUID).
+		Find(&caseRecs).Error
+	caseID := make(map[string]string, len(caseRecs))
+	for _, cr := range caseRecs {
+		caseID[cr.ID] = cr.CaseID
+	}
+
+	out := make([]model.EvalResult, 0, len(recs))
+	for _, rec := range recs {
+		var actual, details map[string]any
+		if len(rec.Actual) > 0 {
+			_ = json.Unmarshal(rec.Actual, &actual)
+		}
+		if len(rec.Details) > 0 {
+			_ = json.Unmarshal(rec.Details, &details)
+		}
+		sessID := ""
+		if rec.SessionUUID != nil {
+			sessID = *rec.SessionUUID
+		}
+		out = append(out, model.EvalResult{
+			ID:         rec.ID,
+			CaseID:     caseID[rec.CaseUUID],
+			SessionID:  sessID,
+			Score:      rec.Score,
+			Passed:     rec.Passed,
+			Actual:     actual,
+			Details:    details,
+			DurationMs: rec.DurationMs,
+			CostUSD:    rec.CostUSD,
+			CreatedAt:  rec.CreatedAt,
+		})
+	}
+	return out
 }
 
 func (r *PostgresRepository) lookupDomainUUID(domainID string) (string, error) {

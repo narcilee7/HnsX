@@ -31,6 +31,12 @@ func (s *Service) Aggregate(sessionIDs []string) (model.Aggregate, error) {
 	return s.repo.Aggregate(sessionIDs)
 }
 
+// AggregateBySession returns a per-session rollup keyed by session ID for the
+// given session IDs. Sessions with no observations are omitted.
+func (s *Service) AggregateBySession(sessionIDs []string) (map[string]model.Aggregate, error) {
+	return s.repo.AggregateBySession(sessionIDs)
+}
+
 // BySession returns observations for a session in chronological order.
 func (s *Service) BySession(sessionID string) ([]model.ObservationRecord, error) {
 	return s.repo.BySession(sessionID)

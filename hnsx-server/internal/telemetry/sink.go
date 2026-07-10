@@ -9,7 +9,7 @@
 //
 //   - StdoutSink: prints observations as one JSON line per event.
 //   - OtlpGRPCSink: ships observations as OTLP traces to a Collector.
-//   - DBSink: persists observations into the `observations` table via pgx.
+//   - DBSink: persists observations into the `observations` table via GORM.
 //   - FanOutSink: composes multiple sinks.
 package telemetry
 

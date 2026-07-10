@@ -29,6 +29,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/telemetry"
 	tracerepository "github.com/hnsx-io/hnsx/server/internal/trace/repository"
 	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
+	storeservice "github.com/hnsx-io/hnsx/server/internal/store/service"
 	"github.com/hnsx-io/hnsx/server/internal/worker"
 	workerrepository "github.com/hnsx-io/hnsx/server/internal/worker/repository"
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
@@ -53,10 +54,9 @@ type Application struct {
 	TraceService   *traceservice.Service
 	EvalService    *evalservice.Service
 	SecretService  *secretservice.Service
+	StoreService   *storeservice.Service
 
-	Executor       *pkgexecutor.Executor
-	WorkerRegistry *worker.Registry
-	SessionQueue   worker.SessionQueue
+	Executor *pkgexecutor.Executor
 
 	State *State
 
@@ -112,11 +112,12 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 	traceSvc := traceservice.NewService(traceRepo)
 	evalSvc := evalservice.NewService(evalRepo)
 	secretSvc := secretservice.NewService(secretRepo)
+	storeSvc := storeservice.NewService(store)
 
 	// Sinks.
 	sinks := []runtime.Sink{
 		telemetry.NewStdoutSink(),
-		telemetry.NewDBSink(store.Pool),
+		telemetry.NewDBSink(store.GormDB),
 	}
 	if cfg.OTel.Exporter != "none" {
 		sinks = append(sinks, telemetry.NewTracerSink())
@@ -136,10 +137,9 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 
 	// Worker pool is only enabled when a gRPC address is configured.
 	var workerSvc *workerservice.Service
-	var workerReg *worker.Registry
-	var sessionQ worker.SessionQueue
 	var rdb *redis.Client
 	if cfg.GRPCAddr != "" {
+		var sessionQ worker.SessionQueue
 		if cfg.RedisEnabled() {
 			rdb = redis.NewClient(&redis.Options{
 				Addr:     cfg.Redis.Addr,
@@ -155,7 +155,6 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 			log.Info("session queue: in-memory")
 		}
 		workerSvc = workerservice.NewServiceWithQueue(workerRepo, sessionQ)
-		workerReg = workerSvc.Registry()
 	}
 
 	return &Application{
@@ -171,9 +170,8 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 		TraceService:   traceSvc,
 		EvalService:    evalSvc,
 		SecretService:  secretSvc,
+		StoreService:   storeSvc,
 		Executor:       exec,
-		WorkerRegistry: workerReg,
-		SessionQueue:   sessionQ,
 		State:          appState,
 		redisClient:    rdb,
 	}, nil

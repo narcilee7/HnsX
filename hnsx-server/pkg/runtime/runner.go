@@ -75,13 +75,13 @@ func (r *Runner) publish(obs Observation) {
 
 // Result is the structured outcome of a single session run.
 type Result struct {
-	SessionID  string         `json:"session_id"`
-	DomainID   string         `json:"domain_id"`
-	State      string         `json:"state"`
-	Mode       string         `json:"mode"`
-	Output     map[string]any `json:"output"`
-	StartedAt  time.Time      `json:"started_at,omitempty"`
-	FinishedAt time.Time      `json:"finished_at,omitempty"`
+	SessionID  string                  `json:"session_id"`
+	DomainID   string                  `json:"domain_id"`
+	State      string                  `json:"state"`
+	Mode       spec.HarnessSessionMode `json:"mode"`
+	Output     map[string]any          `json:"output"`
+	StartedAt  time.Time               `json:"started_at,omitempty"`
+	FinishedAt time.Time               `json:"finished_at,omitempty"`
 }
 
 // ErrSupervisorNotImplemented is returned for orchestration modes that
@@ -90,10 +90,10 @@ type Result struct {
 var ErrSupervisorNotImplemented = errors.New(
 	"session mode is not yet implemented in this build")
 
-// Run executes spec end-to-end and returns the result. Trigger is forwarded
+// Run executes a DomainSpec end-to-end and returns the result. Trigger is forwarded
 // to the agent as its initial input.
-func (r *Runner) Run(ctx context.Context, spec *spec.DomainSpec, trigger map[string]any) (*Result, error) {
-	if spec == nil {
+func (r *Runner) Run(ctx context.Context, ds *spec.DomainSpec, trigger map[string]any) (*Result, error) {
+	if ds == nil {
 		return nil, errors.New("nil domain spec")
 	}
 	if r.adapter == nil {
@@ -105,14 +105,14 @@ func (r *Runner) Run(ctx context.Context, spec *spec.DomainSpec, trigger map[str
 
 	sessID := SessionIDFromContext(ctx)
 	if sessID == "" {
-		sessID = NewSessionID(spec.ID)
+		sessID = NewSessionID(ds.ID)
 	}
 
 	res := &Result{
 		SessionID: sessID,
-		DomainID:  spec.ID,
+		DomainID:  ds.ID,
 		State:     "running",
-		Mode:      spec.Harness.Session.Mode,
+		Mode:      ds.Harness.Session.Mode,
 		Output:    map[string]any{},
 		StartedAt: time.Now().UTC(),
 	}
@@ -125,16 +125,16 @@ func (r *Runner) Run(ctx context.Context, spec *spec.DomainSpec, trigger map[str
 	})
 
 	var runErr error
-	switch spec.Harness.Session.Mode {
-	case "single", "single-task", "multi-turn":
-		runErr = r.runSingle(ctx, spec, trigger, res)
-	case "workflow":
-		runErr = r.runWorkflow(ctx, spec, trigger, res)
-	case "supervisor", "hierarchical", "autonomous":
+	switch ds.Harness.Session.Mode {
+	case spec.Single, spec.SingleTask, spec.MultiTurn:
+		runErr = r.runSingle(ctx, ds, trigger, res)
+	case spec.Workflow:
+		runErr = r.runWorkflow(ctx, ds, trigger, res)
+	case spec.Supervisor, spec.Hierarchical, spec.Autonomous:
 		runErr = fmt.Errorf("%w (mode=%s, build=phase1)",
-			ErrSupervisorNotImplemented, spec.Harness.Session.Mode)
+			ErrSupervisorNotImplemented, ds.Harness.Session.Mode)
 	default:
-		runErr = fmt.Errorf("unknown session mode: %q", spec.Harness.Session.Mode)
+		runErr = fmt.Errorf("unknown session mode: %q", ds.Harness.Session.Mode)
 	}
 
 	res.FinishedAt = time.Now().UTC()
@@ -161,10 +161,10 @@ func (r *Runner) Run(ctx context.Context, spec *spec.DomainSpec, trigger map[str
 }
 
 // runSingle executes the named primary agent once.
-func (r *Runner) runSingle(ctx context.Context, spec *spec.DomainSpec, trigger map[string]any, res *Result) error {
-	agentName := spec.Harness.Session.Agent
+func (r *Runner) runSingle(ctx context.Context, ds *spec.DomainSpec, trigger map[string]any, res *Result) error {
+	agentName := ds.Harness.Session.Agent
 	if agentName == "" {
-		for name := range spec.Harness.Agents {
+		for name := range ds.Harness.Agents {
 			agentName = name
 			break
 		}
@@ -172,12 +172,12 @@ func (r *Runner) runSingle(ctx context.Context, spec *spec.DomainSpec, trigger m
 	if agentName == "" {
 		return errors.New("no agent selected for single mode")
 	}
-	agent, ok := spec.Harness.Agents[agentName]
+	agent, ok := ds.Harness.Agents[agentName]
 	if !ok {
 		return fmt.Errorf("primary agent %q not found", agentName)
 	}
 
-	prompt, err := resolvePrompt(spec, agent)
+	prompt, err := resolvePrompt(ds, agent)
 	if err != nil {
 		return err
 	}
@@ -217,11 +217,11 @@ func (r *Runner) runSingle(ctx context.Context, spec *spec.DomainSpec, trigger m
 // resolvePrompt returns the prompt template configured for the agent.
 // If the agent references a named prompt via system_prompt, we look it up in
 // harness.prompts; otherwise the system_prompt string is treated verbatim.
-func resolvePrompt(spec *spec.DomainSpec, agent spec.AgentSpec) (string, error) {
+func resolvePrompt(ds *spec.DomainSpec, agent spec.AgentSpec) (string, error) {
 	if agent.SystemPrompt == "" {
 		return "", nil
 	}
-	if p, ok := spec.Harness.Prompts[agent.SystemPrompt]; ok {
+	if p, ok := ds.Harness.Prompts[agent.SystemPrompt]; ok {
 		return p.Template, nil
 	}
 	return agent.SystemPrompt, nil

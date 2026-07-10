@@ -16,7 +16,7 @@ type DomainSummary struct {
 	Valid      bool
 	ID         string
 	Version    string
-	Mode       string
+	Mode       spec.HarnessSessionMode
 	AgentCount int
 	StepCount  int
 }

@@ -202,7 +202,13 @@ def execute_session(
     # W9: if an EvalSet was injected, run every case and produce a report.
     eval_set = config.get("eval_set")
     if eval_set:
-        from hnsx_worker.eval import run_eval_set
+        from hnsx_worker.eval import (
+            RegressionStore,
+            check_regressions,
+            evolve_prompt,
+            run_eval_set,
+            run_improvement_loop,
+        )
 
         report = run_eval_set(
             eval_set,
@@ -215,6 +221,23 @@ def execute_session(
         )
         result["output"] = json.dumps(report, ensure_ascii=False, default=str)
         result["eval_report"] = report
+
+        # W13: chain the smart-eval pipeline when the spec asks for it.
+        # Each step is independently fallible — we surface the error in
+        # ``result`` so observability can pick it up, but never abort the
+        # session (the eval report is the source of truth).
+        improvement_cfg = (spec or {}).get("improvement") or {}
+        if improvement_cfg:
+            _run_w13_improvement_pipeline(
+                report,
+                spec=spec,
+                config=config,
+                improvement_cfg=improvement_cfg,
+                result=result,
+                emit=emit,
+                stop_event=stop_event,
+            )
+
         return result
 
     # W8: if an EvalCase was injected, run scorers against the final output.
@@ -381,6 +404,7 @@ def _run_multi_turn(
     stop_reason = "natural"
 
     # Build the ToolRegistry from the agent's ``tools`` spec entries.
+    skill_tool_specs = _resolve_skill_tool_specs(spec=spec, agent=agent)
     registry, schema_failures = _build_tool_registry(
         spec=spec,
         agent=agent,
@@ -389,6 +413,7 @@ def _run_multi_turn(
         emit=emit,
         policy_decision=policy.check_tool,
         memory=memory,
+        extra_tool_specs=skill_tool_specs,
     )
     if schema_failures:
         for failure in schema_failures:
@@ -554,7 +579,21 @@ def _run_multi_turn(
                 tool_decision = policy.check_tool(tc.name, ctx)
                 result = _delegate_cli_tool_result(tc, decision=tool_decision)
             else:
-                result = registry.call(tc.name, ctx, dict(tc.input))
+                # W14: gate ``policy.approval.required_for`` before dispatch.
+                gated = _maybe_gate_for_approval(
+                    approval_policy=getattr(policy, "approval_policy", None),
+                    approval_bus=None,
+                    session_id=session_id,
+                    domain_id=domain_id,
+                    agent_id=agent_name,
+                    tool_name=tc.name,
+                    tool_input=dict(tc.input),
+                    stop_event=stop_event,
+                )
+                if gated is None:
+                    result = registry.call(tc.name, ctx, dict(tc.input))
+                else:
+                    result = gated
             payload = {
                 "tool_call_id": tc.id,
                 "name": tc.name,
@@ -868,6 +907,39 @@ def _append_tool_result(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_skill_tool_specs(
+    *,
+    spec: dict[str, Any],
+    agent: dict,
+) -> list[dict[str, Any]]:
+    """Resolve W15 skill tools into a flat list of tool-spec dicts.
+
+    Reads spec.harness.skills via :class:``SkillRegistry`` and
+    agent.skill_refs via :func:``resolve_agent_skills``; returns
+    the merged tool entries in first-seen order (preserving the
+    agent's declaration). An empty list when no skills are referenced.
+    """
+    harness = (spec or {}).get("harness") or {}
+    raw_skills = harness.get("skills")
+    if not raw_skills:
+        return []
+    refs = agent.get("skill_refs")
+    if not refs:
+        return []
+    from hnsx_worker.skills import SkillRegistry, resolve_agent_skills
+    try:
+        registry = SkillRegistry.from_dict(raw_skills)
+    except ValueError:
+        # Malformed skill definitions are surfaced by HarnessSpec at load
+        # time; at runtime we silently skip so a bad Skill doesn't break
+        # the agent.
+        return []
+    out: list[dict[str, Any]] = []
+    for resolved in resolve_agent_skills(agent, registry):
+        out.extend(resolved.tools)
+    return out
+
+
 def _build_tool_registry(
     *,
     spec: dict[str, Any],
@@ -877,15 +949,27 @@ def _build_tool_registry(
     emit: EmitFn,
     policy_decision: Any = None,
     memory: MemoryStore | None = None,
+    extra_tool_specs: list[dict[str, Any]] | None = None,
 ) -> tuple[ToolRegistry, list[str]]:
-    """Build a ToolRegistry from ``agent.tools``.
+    """Build a ToolRegistry from ``agent.tools`` + optional skill tools.
 
     Returns ``(registry, failures)`` where ``failures`` is a list of
     human-readable error strings for entries that couldn't be built.
     The executor emits a ``tool_spec_invalid`` observation so the user
     can see what was dropped.
+
+    ``extra_tool_specs`` are tool entries contributed by W15 Skills
+    (resolved via :func:``resolve_agent_skills``); they are appended
+    after the agent's own ``tools`` so explicit agent config still
+    wins on name collisions (entries with the same name keep the agent's
+    copy).
     """
-    raw_tools = agent.get("tools") or []
+    raw_tools = list(agent.get("tools") or [])
+    if extra_tool_specs:
+        # Skill tools come last; existing agent.tools entries with the
+        # same name take precedence in tool_schemas_for_adapter /
+        # registry insertion order.
+        raw_tools.extend(extra_tool_specs)
     mcp_server_map = build_mcp_server_map(spec)
 
     # Discover remote tool schemas for any referenced MCP servers so the
@@ -1035,6 +1119,151 @@ def _allow_all_policy_hook() -> Callable[[str, dict, ToolContext], ToolDecision]
 
 
 # ---------------------------------------------------------------------------
+# W13 Eval-driven improvement pipeline
+# ---------------------------------------------------------------------------
+
+
+def _lookup_prompt_template(spec: dict, prompt_name: str) -> str:
+    """Resolve ``prompt_name`` from ``spec.harness.prompts``.
+
+    Returns ``""`` when the spec has no such prompt or the entry shape is
+    unexpected — the caller treats empty string as "no prompt to evolve".
+    """
+    harness = (spec or {}).get("harness") or {}
+    prompts = harness.get("prompts") or {}
+    entry = prompts.get(prompt_name)
+    if isinstance(entry, dict):
+        return str(entry.get("template") or "")
+    return ""
+
+
+def _decorate_cases_for_evolution(eval_report: dict, *, config: dict) -> list[dict]:
+    """Reattach ``expected`` + ``scorers`` from the original eval_set.
+
+    ``run_eval_set`` produces a report whose per-case entries only carry
+    ``input`` + ``output`` + ``eval_scores``. ``evolve_prompt`` needs the
+    original ``expected`` / ``scorers`` to score variant outputs against,
+    so we look each case_id up in ``config["eval_set"]["cases"]`` and
+    merge those fields back in. Falls back to passing through the
+    report's case dict when no original case is found.
+    """
+    eval_set = (config or {}).get("eval_set") or {}
+    original = {str(c.get("case_id", "")): c for c in (eval_set.get("cases") or [])}
+    decorated: list[dict] = []
+    for case in eval_report.get("cases") or []:
+        case_id = str(case.get("case_id", ""))
+        orig = original.get(case_id) or {}
+        merged = dict(case)
+        if "expected" not in merged and "expected" in orig:
+            merged["expected"] = orig["expected"]
+        if "scorers" not in merged and "scorers" in orig:
+            merged["scorers"] = orig["scorers"]
+        decorated.append(merged)
+    return decorated
+
+
+def _run_w13_improvement_pipeline(
+    eval_report: dict,
+    *,
+    spec: dict,
+    config: dict,
+    improvement_cfg: dict,
+    result: dict,
+    emit: EmitFn,
+    stop_event: threading.Event,
+) -> None:
+    """Run the W13 chain (improvement → evolution → regression) and write
+    results into ``result``.
+
+    Each step is independently fault-tolerant: failures surface as
+    ``<step>_error`` in ``result`` but never abort the session.
+    """
+    # Lazy import — keep cost off cold-start paths and avoid binding
+    # these names into ``execute_session``'s local scope.
+    from hnsx_worker.eval import (
+        RegressionStore,
+        check_regressions,
+        evolve_prompt,
+        run_improvement_loop,
+    )
+
+    # ---- 1. improvement loop ---------------------------------------
+    judge_adapter_kind = improvement_cfg.get("judge_adapter")
+    try:
+        improvement = run_improvement_loop(
+            eval_report,
+            spec,
+            judge_adapter_kind=judge_adapter_kind,
+            emit=emit,
+        )
+        result["improvement_report"] = improvement.to_dict()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("W13 improvement_loop failed: %s", exc)
+        result["improvement_error"] = repr(exc)
+
+    # ---- 2. prompt evolution ---------------------------------------
+    target = improvement_cfg.get("target_prompt") or ""
+    if target:
+        current = _lookup_prompt_template(spec, target)
+        if current:
+            try:
+                # ``evolve_prompt`` expects each case to carry
+                # ``expected`` and ``scorers``; ``eval_report`` strips them.
+                # Decorate the report with the original eval_set cases so
+                # evolution can score variants against expected output.
+                cases_for_evolution = _decorate_cases_for_evolution(
+                    eval_report, config=config
+                )
+                evolution = evolve_prompt(
+                    spec=spec,
+                    current_prompt=current,
+                    prompt_name=target,
+                    eval_report={"eval_set_id": eval_report.get("eval_set_id", ""),
+                                 "cases": cases_for_evolution},
+                    improvement_report=result.get("improvement_report"),
+                    judge_adapter_kind=judge_adapter_kind or "noop",
+                    n_variants=int(improvement_cfg.get("n_variants") or 3),
+                    min_improvement=float(improvement_cfg.get("min_improvement") or 0.02),
+                    session_runner=None,
+                    emit=emit,
+                )
+                result["evolution_report"] = evolution.to_dict()
+                # Per W13 roadmap: human review required before applying.
+                # ``evolution.apply()`` is intentionally NOT called here.
+            except Exception as exc:  # noqa: BLE001
+                log.warning("W13 evolve_prompt failed: %s", exc)
+                result["evolution_error"] = repr(exc)
+        else:
+            result["evolution_skipped"] = (
+                f"target_prompt {target!r} not found in spec.harness.prompts"
+            )
+
+    # ---- 3. regression radar ---------------------------------------
+    try:
+        baseline_label = str(improvement_cfg.get("baseline_label") or "main")
+        threshold = float(improvement_cfg.get("score_threshold") or 0.05)
+        store = RegressionStore(path=config.get("regression_store_path"))
+        check, rc = check_regressions(
+            eval_report,
+            store=store,
+            baseline_label=baseline_label,
+            score_threshold=threshold,
+            emit=emit,
+        )
+        result["regression_check"] = check.to_dict()
+        result["regression_rc"] = rc
+        # Default semantics: overwrite the baseline with the latest result.
+        # ``baseline_mode: append_only`` keeps the previous baseline unless
+        # the check passed (rc == 0).
+        mode = improvement_cfg.get("baseline_mode") or "overwrite"
+        should_put = (mode != "append_only") or rc == 0
+        if should_put:
+            store.put(baseline_label, eval_report)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("W13 regression_radar failed: %s", exc)
+        result["regression_error"] = repr(exc)
+
+
 # CLI-agent helpers
 # ---------------------------------------------------------------------------
 
@@ -1045,6 +1274,73 @@ _CLI_ADAPTER_KINDS = frozenset({"claudecode", "codex"})
 def _is_cli_adapter(adapter: Any) -> bool:
     """Return True if the adapter delegates to an external CLI agent."""
     return adapter.name() in _CLI_ADAPTER_KINDS
+
+
+def _maybe_gate_for_approval(
+    *,
+    approval_policy: Any | None,
+    approval_bus: Any | None,
+    session_id: str,
+    domain_id: str,
+    agent_id: str,
+    tool_name: str,
+    tool_input: dict[str, Any],
+    stop_event: threading.Event,
+) -> ToolResult | None:
+    """Gate a tool call behind human approval when policy.approval says so.
+
+    Returns ``None`` to let the loop invoke the tool normally. Returns a
+    :class:`ToolResult` (typically an error) when approval was required
+    but denied / timed out.
+    """
+    if approval_policy is None:
+        return None
+    needs, rule = approval_policy.requires_approval(tool_name, tool_input)
+    if not needs:
+        return None
+    if approval_bus is None:
+        return ToolResult(
+            error=(
+                f"tool {tool_name!r} requires approval ({rule}) but no "
+                "approval_bus was configured for this session"
+            ),
+            metadata={"approval_required": True, "rule": rule},
+        )
+
+    from hnsx_worker.approval import ApprovalRequest, request_approval
+
+    req = ApprovalRequest(
+        session_id=session_id,
+        domain_id=domain_id,
+        agent_id=agent_id,
+        reason=f"tool {tool_name!r} matched {rule}",
+        options=["approve", "deny"],
+        severity="high",
+        draft=None,
+        tool_name=tool_name,
+        tool_input=tool_input,
+        timeout_seconds=getattr(approval_policy, "default_timeout_seconds", 0.0),
+        metadata={"rule": rule},
+    )
+    resp = request_approval(approval_bus, req, stop_event=stop_event)
+    if not resp.allowed:
+        return ToolResult(
+            error=(
+                f"approval denied for {tool_name!r}: "
+                f"{resp.comment or resp.decision.value}"
+            ),
+            output={
+                "decision": resp.decision.value,
+                "comment": resp.comment,
+                "decided_by": resp.decided_by,
+            },
+            metadata={
+                "approval_required": True,
+                "approval_decision": resp.decision.value,
+                "rule": rule,
+            },
+        )
+    return None  # proceed with normal dispatch
 
 
 def _delegate_cli_tool_result(
@@ -1294,6 +1590,8 @@ class AgentLoopContext:
     domain_id: str
     agent_id: str
     max_turns: int
+    approval_bus: Any = None  # optional hnsx_worker.approval.ApprovalBus
+    approval_stop_event: threading.Event | None = None
 
 
 HookFn = Callable[[int, "AgentLoopTurnInfo"], None]
@@ -1317,6 +1615,8 @@ def build_agent_loop_context(
     config: dict[str, Any],
     memory: MemoryStore | None = None,
     extra_tools: list[Any] | None = None,
+    approval_bus: Any | None = None,
+    approval_stop_event: threading.Event | None = None,
 ) -> AgentLoopContext:
     """Build an :class:`AgentLoopContext` for the given agent.
 
@@ -1327,6 +1627,9 @@ def build_agent_loop_context(
 
     Pass ``extra_tools`` to inject additional tools (e.g. ``delegate_to``)
     on top of the agent's declared ``tools:`` entries.
+
+    Pass ``approval_bus`` (W14) so the loop can gate tool calls that match
+    ``policy.approval.required_for``.
     """
     harness = spec.get("harness", {})
     session_id = config.get("session_id", "")
@@ -1354,6 +1657,7 @@ def build_agent_loop_context(
     # Re-use _build_tool_registry so the agent sees the same schemas as the
     # built-in multi-turn mode. We pass through memory so memory_* tools are
     # auto-injected when configured.
+    skill_tool_specs = _resolve_skill_tool_specs(spec=spec, agent=agent_cfg)
     registry, _failures = _build_tool_registry(
         spec=spec,
         agent=agent_cfg,
@@ -1362,6 +1666,7 @@ def build_agent_loop_context(
         emit=_noop_emit,
         policy_decision=policy.check_tool,
         memory=memory,
+        extra_tool_specs=skill_tool_specs,
     )
     if extra_tools:
         for tool in extra_tools:
@@ -1384,6 +1689,8 @@ def build_agent_loop_context(
         domain_id=domain_id,
         agent_id=agent_id,
         max_turns=max_turns,
+        approval_bus=approval_bus,
+        approval_stop_event=approval_stop_event,
     )
 
 
@@ -1542,7 +1849,21 @@ def run_multi_turn_loop(
                 tool_decision = context.policy.check_tool(tc.name, ctx)
                 result = _delegate_cli_tool_result(tc, decision=tool_decision)
             else:
-                result = context.registry.call(tc.name, ctx, dict(tc.input))
+                # W14: gate ``policy.approval.required_for`` before dispatch.
+                gated = _maybe_gate_for_approval(
+                    approval_policy=getattr(context.policy, "approval_policy", None),
+                    approval_bus=context.approval_bus,
+                    session_id=context.session_id,
+                    domain_id=context.domain_id,
+                    agent_id=context.agent_id,
+                    tool_name=tc.name,
+                    tool_input=dict(tc.input),
+                    stop_event=stop_event,
+                )
+                if gated is not None:
+                    result = gated
+                else:
+                    result = context.registry.call(tc.name, ctx, dict(tc.input))
             tool_call_count += 1
             payload = {
                 "tool_call_id": tc.id,

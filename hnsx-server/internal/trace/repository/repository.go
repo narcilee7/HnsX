@@ -18,6 +18,10 @@ type Repository interface {
 	// Aggregate returns rolled-up cost/token/invocation counts for the given
 	// session IDs. Passing an empty slice returns zeroes.
 	Aggregate(sessionIDs []string) (model.Aggregate, error)
+	// AggregateBySession returns a per-session rollup keyed by session ID.
+	// Sessions with no observations are omitted from the map. Passing an empty
+	// slice returns an empty map.
+	AggregateBySession(sessionIDs []string) (map[string]model.Aggregate, error)
 }
 
 // InMemoryRepository is a thread-safe in-memory implementation.
@@ -103,6 +107,36 @@ func (r *InMemoryRepository) Aggregate(sessionIDs []string) (model.Aggregate, er
 		}
 	}
 	return agg, nil
+}
+
+// AggregateBySession implements Repository.
+func (r *InMemoryRepository) AggregateBySession(sessionIDs []string) (map[string]model.Aggregate, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	want := make(map[string]struct{}, len(sessionIDs))
+	for _, id := range sessionIDs {
+		want[id] = struct{}{}
+	}
+	out := make(map[string]model.Aggregate)
+	for _, rec := range r.records {
+		if len(want) > 0 {
+			if _, ok := want[rec.SessionID]; !ok {
+				continue
+			}
+		}
+		agg := out[rec.SessionID]
+		agg.TotalCostUSD += rec.CostUSD
+		agg.TotalPromptTokens += rec.PromptTokens
+		agg.TotalCompletionTokens += rec.CompletionTokens
+		switch rec.Kind {
+		case "agent_invoke":
+			agg.AgentInvocations++
+		case "tool_call":
+			agg.ToolInvocations++
+		}
+		out[rec.SessionID] = agg
+	}
+	return out, nil
 }
 
 var _ Repository = (*InMemoryRepository)(nil)
