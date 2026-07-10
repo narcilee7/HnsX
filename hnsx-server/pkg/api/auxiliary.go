@@ -21,7 +21,7 @@ func (s *Server) ListTraces(w http.ResponseWriter, r *http.Request) {
 	limit := intQuery(r, "limit", 50)
 	offset := intQuery(r, "offset", 0)
 
-	items := queries.ListSessions(s.AppState, tenant.FromContext(r.Context()))
+	items := s.Queries.ListSessions(tenant.FromContext(r.Context()))
 	out := make([]map[string]any, 0, len(items))
 	for _, sess := range items {
 		if domainFilter != "" && sess.DomainID != domainFilter {
@@ -56,7 +56,7 @@ func (s *Server) ListTraces(w http.ResponseWriter, r *http.Request) {
 // GetTrace handles GET /api/v1/traces/{traceId}.
 func (s *Server) GetTrace(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "traceId")
-	sess, ok := queries.GetSession(s.AppState, tenant.FromContext(r.Context()), id)
+	sess, ok := s.Queries.GetSession(tenant.FromContext(r.Context()), id)
 	if !ok {
 		writeError(w, r, NewSessionNotFound(id))
 		return
@@ -67,12 +67,8 @@ func (s *Server) GetTrace(w http.ResponseWriter, r *http.Request) {
 		"domain_id":     sess.DomainID,
 		"orchestration": sess.Orchestration,
 		"state":         sess.State,
-		"started_at":    queries.FormatTimeValue(sess.StartedAt),
-		"duration_ms": durationMs(queries.SessionListItem{
-			ID:          sess.ID,
-			StartedAt:   sess.StartedAt,
-			CompletedAt: sess.CompletedAt,
-		}),
+		"started_at":    sess.StartedAt,
+		"duration_ms":   registeredSessionSummary(sess)["duration_ms"],
 	})
 }
 
@@ -167,7 +163,7 @@ func (s *Server) CreateEvalSet(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, NewValidation(errors.New("set_id and domain_id are required")))
 		return
 	}
-	_, _, ok := queries.GetDomain(s.AppState, tenant.FromContext(r.Context()), body.DomainID)
+	_, _, ok := s.Queries.GetDomain(tenant.FromContext(r.Context()), body.DomainID)
 	if !ok {
 		writeError(w, r, NewDomainNotFound(body.DomainID))
 		return
@@ -264,7 +260,7 @@ func (s *Server) RunEval(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, domain, ok := queries.GetDomain(s.AppState, tenant.FromContext(r.Context()), set.DomainID)
+	_, domain, ok := s.Queries.GetDomain(tenant.FromContext(r.Context()), set.DomainID)
 	if !ok {
 		writeError(w, r, NewDomainNotFound(set.DomainID))
 		return
@@ -391,7 +387,7 @@ func (s *Server) ListAudit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	domainFilter := q.Get("domain")
-	sessions := queries.ListSessions(s.AppState, tenant.FromContext(r.Context()))
+	sessions := s.Queries.ListSessions(tenant.FromContext(r.Context()))
 	total := 0
 	completed := 0
 	failed := 0

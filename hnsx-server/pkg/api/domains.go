@@ -17,7 +17,7 @@ import (
 
 // ListDomains handles GET /api/v1/domains.
 func (s *Server) ListDomains(w http.ResponseWriter, r *http.Request) {
-	items := queries.ListDomains(s.AppState, tenant.FromContext(r.Context()))
+	items := s.Queries.ListDomains(tenant.FromContext(r.Context()))
 	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
 
 	out := make([]map[string]any, 0, len(items))
@@ -42,7 +42,7 @@ func (s *Server) ListDomains(w http.ResponseWriter, r *http.Request) {
 // GetDomain handles GET /api/v1/domains/{id}.
 func (s *Server) GetDomain(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	item, d, ok := queries.GetDomain(s.AppState, tenant.FromContext(r.Context()), id)
+	item, d, ok := s.Queries.GetDomain(tenant.FromContext(r.Context()), id)
 	if !ok {
 		writeError(w, r, NewDomainNotFound(id))
 		return
@@ -60,7 +60,7 @@ func (s *Server) GetDomain(w http.ResponseWriter, r *http.Request) {
 
 // RegisterDomain handles POST /api/v1/domains.
 func (s *Server) RegisterDomain(w http.ResponseWriter, r *http.Request) {
-	res, err := commands.RegisterDomain(s.AppState, tenant.FromContext(r.Context()), r.Body, r.Header.Get("Content-Type"))
+	res, err := s.DomainCommands.Register(r.Context(), tenant.FromContext(r.Context()), r.Body, r.Header.Get("Content-Type"))
 	if err != nil {
 		if err == commands.ErrDomainExists {
 			writeError(w, r, &APIError{
@@ -87,7 +87,7 @@ func (s *Server) RegisterDomain(w http.ResponseWriter, r *http.Request) {
 // UpdateDomain handles PUT /api/v1/domains/{id}.
 func (s *Server) UpdateDomain(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	updated, err := commands.UpdateDomain(s.AppState, tenant.FromContext(r.Context()), id, r.Body, r.Header.Get("Content-Type"))
+	updated, err := s.DomainCommands.Update(r.Context(), tenant.FromContext(r.Context()), id, r.Body, r.Header.Get("Content-Type"))
 	if err != nil {
 		switch err {
 		case commands.ErrDomainNotFound:
@@ -108,14 +108,14 @@ func (s *Server) UpdateDomain(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id":         updated.ID,
 		"version":    updated.Version,
-		"updated_at": queries.FormatTimeValue(updated.UpdatedAt),
+		"updated_at": updated.UpdatedAt,
 	})
 }
 
 // DeleteDomain handles DELETE /api/v1/domains/{id}.
 func (s *Server) DeleteDomain(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := commands.DeleteDomain(s.AppState, tenant.FromContext(r.Context()), id); err != nil {
+	if err := s.DomainCommands.Delete(r.Context(), tenant.FromContext(r.Context()), id); err != nil {
 		writeError(w, r, NewDomainNotFound(id))
 		return
 	}
@@ -128,7 +128,7 @@ func (s *Server) DeleteDomain(w http.ResponseWriter, r *http.Request) {
 // history is a future PR.
 func (s *Server) ListDomainVersions(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	_, d, ok := queries.GetDomain(s.AppState, tenant.FromContext(r.Context()), id)
+	_, d, ok := s.Queries.GetDomain(tenant.FromContext(r.Context()), id)
 	if !ok {
 		writeError(w, r, NewDomainNotFound(id))
 		return
@@ -136,7 +136,7 @@ func (s *Server) ListDomainVersions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"items": []map[string]any{{
 			"version":    d.Version,
-			"created_at": queries.FormatTimeValue(d.CreatedAt),
+			"created_at": d.CreatedAt,
 			"is_current": true,
 		}},
 		"total": 1,
