@@ -10,6 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
+	approvalmodel "github.com/hnsx-io/hnsx/server/internal/approval/model"
+	approvalrepo "github.com/hnsx-io/hnsx/server/internal/approval/repository"
+	auditmodel "github.com/hnsx-io/hnsx/server/internal/audit/model"
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
 	evalrunner "github.com/hnsx-io/hnsx/server/internal/evaluation/runner"
 	policymodel "github.com/hnsx-io/hnsx/server/internal/policy/model"
@@ -154,30 +157,209 @@ func formatTimePtr(t time.Time) any {
 	return t.UTC().Format(time.RFC3339Nano)
 }
 
-// ListApprovals handles GET /api/v1/approvals.
+// ListApprovals handles GET /api/v1/approvals — the default filter is
+// "pending" so the approvals inbox only ever surfaces what the operator
+// still has to decide.
 func (s *Server) ListApprovals(c *gin.Context) {
+	if s.ApprovalService == nil {
+		writeError(c, &APIError{
+			Code:    "APPROVAL_UNAVAILABLE",
+			Message: "approval service is not configured on this server",
+		})
+		return
+	}
+	filter := approvalrepo.ListFilter{
+		DomainID:  c.Query("domain"),
+		SessionID: c.Query("session"),
+		Status:    c.Query("status"),
+	}
+	if filter.Status == "" {
+		filter.Status = string(approvalmodel.StatusPending)
+	}
+	items, err := s.ApprovalService.List(filter)
+	if err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, it := range items {
+		out = append(out, approvalItemToJSON(it))
+	}
 	writeJSON(c, http.StatusOK, map[string]any{
-		"items":  []map[string]any{},
-		"total":  0,
-		"limit":  0,
-		"offset": 0,
+		"items": out,
+		"total": len(out),
 	})
+}
+
+// GetApproval handles GET /api/v1/approvals/:id — returns the full
+// record (including Context) so the console can render the tool payload.
+func (s *Server) GetApproval(c *gin.Context) {
+	if s.ApprovalService == nil {
+		writeError(c, &APIError{
+			Code:    "APPROVAL_UNAVAILABLE",
+			Message: "approval service is not configured on this server",
+		})
+		return
+	}
+	a, err := s.ApprovalService.Get(c.Param("id"))
+	if err != nil {
+		if errors.Is(err, approvalmodel.ErrApprovalNotFound) {
+			writeError(c, &APIError{
+				Code:    "APPROVAL_NOT_FOUND",
+				Message: err.Error(),
+			})
+			return
+		}
+		writeError(c, NewInternal(err))
+		return
+	}
+	writeJSON(c, http.StatusOK, approvalToJSON(a))
 }
 
 // ApproveApproval handles POST /api/v1/approvals/:id/approve.
 func (s *Server) ApproveApproval(c *gin.Context) {
-	writeError(c, &APIError{
-		Code:    "APPROVAL_NOT_FOUND",
-		Message: "approval subsystem not enabled in this build",
-	})
+	if s.ApprovalService == nil {
+		writeError(c, &APIError{
+			Code:    "APPROVAL_UNAVAILABLE",
+			Message: "approval service is not configured on this server",
+		})
+		return
+	}
+	id := c.Param("id")
+	var body approvalDecisionBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		writeError(c, NewInvalidRequest("invalid request body"))
+		return
+	}
+	reviewer := body.ReviewedBy
+	if reviewer == "" {
+		reviewer = "operator"
+	}
+	got, err := s.ApprovalService.Approve(id, reviewer, body.Comment)
+	if err != nil {
+		s.writeApprovalDecisionError(c, err)
+		return
+	}
+	s.recordApprovalAudit(c, got, "approved", reviewer, body.Comment)
+	writeJSON(c, http.StatusOK, approvalToJSON(got))
 }
 
 // RejectApproval handles POST /api/v1/approvals/:id/reject.
 func (s *Server) RejectApproval(c *gin.Context) {
-	writeError(c, &APIError{
-		Code:    "APPROVAL_NOT_FOUND",
-		Message: "approval subsystem not enabled in this build",
-	})
+	if s.ApprovalService == nil {
+		writeError(c, &APIError{
+			Code:    "APPROVAL_UNAVAILABLE",
+			Message: "approval service is not configured on this server",
+		})
+		return
+	}
+	id := c.Param("id")
+	var body approvalDecisionBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		writeError(c, NewInvalidRequest("invalid request body"))
+		return
+	}
+	reviewer := body.ReviewedBy
+	if reviewer == "" {
+		reviewer = "operator"
+	}
+	got, err := s.ApprovalService.Reject(id, reviewer, body.Comment)
+	if err != nil {
+		s.writeApprovalDecisionError(c, err)
+		return
+	}
+	s.recordApprovalAudit(c, got, "rejected", reviewer, body.Comment)
+	writeJSON(c, http.StatusOK, approvalToJSON(got))
+}
+
+type approvalDecisionBody struct {
+	ReviewedBy string `json:"reviewed_by"`
+	Comment    string `json:"comment"`
+}
+
+// writeApprovalDecisionError centralizes the 404 / 409 mapping so the
+// approve and reject handlers stay symmetric.
+func (s *Server) writeApprovalDecisionError(c *gin.Context, err error) {
+	if errors.Is(err, approvalmodel.ErrApprovalNotFound) {
+		writeError(c, &APIError{
+			Code:    "APPROVAL_NOT_FOUND",
+			Message: err.Error(),
+		})
+		return
+	}
+	if errors.Is(err, approvalmodel.ErrAlreadyResolved) {
+		writeError(c, &APIError{
+			Code:    "APPROVAL_ALREADY_RESOLVED",
+			Message: err.Error(),
+		})
+		return
+	}
+	writeError(c, NewInternal(err))
+}
+
+// recordApprovalAudit writes an immutable audit row alongside each
+// approval decision so the AuditLog can attribute human-gate changes.
+func (s *Server) recordApprovalAudit(c *gin.Context, a *approvalmodel.Approval, decision, reviewer, comment string) {
+	if s.AuditService == nil {
+		return
+	}
+	entry := auditmodel.Entry{
+		SessionID: a.SessionID,
+		DomainID:  a.DomainID,
+		Action:    "approval_decision",
+		Actor:     reviewer,
+		ActorType: auditmodel.ActorTypeUser,
+		Resource:  "approval:" + a.ID,
+		Decision:  decision,
+		Reason:    comment,
+		Details: map[string]any{
+			"approval_id": a.ID,
+			"action":      a.Action,
+			"resource":    a.Resource,
+			"risk_level":  a.RiskLevel,
+		},
+	}
+	_ = s.AuditService.Record(c.Request.Context(), &entry)
+}
+
+func approvalItemToJSON(it approvalmodel.ListItem) map[string]any {
+	return map[string]any{
+		"id":           it.ID,
+		"session_id":   it.SessionID,
+		"domain_id":    it.DomainID,
+		"action":       it.Action,
+		"resource":     it.Resource,
+		"risk_level":   it.RiskLevel,
+		"status":       it.Status,
+		"requested_by": it.RequestedBy,
+		"created_at":   it.CreatedAt,
+		"updated_at":   it.UpdatedAt,
+	}
+}
+
+func approvalToJSON(a *approvalmodel.Approval) map[string]any {
+	if a == nil {
+		return nil
+	}
+	out := map[string]any{
+		"id":           a.ID,
+		"session_id":   a.SessionID,
+		"domain_id":    a.DomainID,
+		"action":       a.Action,
+		"resource":     a.Resource,
+		"risk_level":   a.RiskLevel,
+		"context":      a.Context,
+		"status":       a.Status,
+		"requested_by": a.RequestedBy,
+		"reviewed_by":  a.ReviewedBy,
+		"comment":      a.Comment,
+		"created_at":   a.CreatedAt,
+		"updated_at":   a.UpdatedAt,
+	}
+	if a.ResolvedAt != nil {
+		out["resolved_at"] = *a.ResolvedAt
+	}
+	return out
 }
 
 // ListEvalSets handles GET /api/v1/evals.
