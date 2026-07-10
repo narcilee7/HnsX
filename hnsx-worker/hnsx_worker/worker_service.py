@@ -449,6 +449,7 @@ class WorkerService:
             agent_id=obs.get("agent_id", ""),
             kind=obs.get("kind", ""),
             payload=dict(obs.get("payload", {}) or {}),
+            metadata=dict(obs.get("metadata", {}) or {}),
             created_at_ms=int(obs.get("created_at_ms") or time.time() * 1000),
             trace_id=obs.get("trace_id", ""),
         )

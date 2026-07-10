@@ -1384,6 +1384,7 @@ func observationToMap(rec tracemodel.ObservationRecord) map[string]any {
 		"step_id":           rec.StepID,
 		"agent_id":          rec.AgentID,
 		"payload":           rec.Payload,
+		"metadata":          rec.Metadata,
 		"cost_usd":          rec.CostUSD,
 		"prompt_tokens":     rec.PromptTokens,
 		"completion_tokens": rec.CompletionTokens,

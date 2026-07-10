@@ -38,6 +38,10 @@ func (r *PostgresRepository) Save(record *model.ObservationRecord) error {
 	if err != nil {
 		return err
 	}
+	metadataJSON, err := json.Marshal(record.Metadata)
+	if err != nil {
+		return err
+	}
 
 	entity := ObservationRecord{
 		TraceID:          record.TraceID,
@@ -48,6 +52,7 @@ func (r *PostgresRepository) Save(record *model.ObservationRecord) error {
 		AgentID:          record.AgentID,
 		Kind:             record.Kind,
 		Payload:          payloadJSON,
+		Metadata:         metadataJSON,
 		CostUSD:          record.CostUSD,
 		PromptTokens:     record.PromptTokens,
 		CompletionTokens: record.CompletionTokens,
@@ -357,6 +362,13 @@ func (r *PostgresRepository) toModel(rec ObservationRecord) model.ObservationRec
 	if payload == nil {
 		payload = map[string]any{}
 	}
+	metadata := map[string]any{}
+	if len(rec.Metadata) > 0 {
+		_ = json.Unmarshal(rec.Metadata, &metadata)
+	}
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
 
 	return model.ObservationRecord{
 		ID:               rec.ID,
@@ -368,6 +380,7 @@ func (r *PostgresRepository) toModel(rec ObservationRecord) model.ObservationRec
 		AgentID:          rec.AgentID,
 		Kind:             rec.Kind,
 		Payload:          payload,
+		Metadata:         metadata,
 		CostUSD:          rec.CostUSD,
 		PromptTokens:     rec.PromptTokens,
 		CompletionTokens: rec.CompletionTokens,
