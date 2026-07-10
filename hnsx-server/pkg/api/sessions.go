@@ -23,7 +23,7 @@ import (
 
 // ListSessions handles GET /api/v1/sessions.
 func (s *Server) ListSessions(w http.ResponseWriter, r *http.Request) {
-	items := queries.ListSessions(s.AppState, tenant.FromContext(r.Context()))
+	items := s.Queries.ListSessions(tenant.FromContext(r.Context()))
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].StartedAt.After(items[j].StartedAt)
 	})
@@ -63,7 +63,7 @@ func (s *Server) ListSessions(w http.ResponseWriter, r *http.Request) {
 // GetSession handles GET /api/v1/sessions/{id}.
 func (s *Server) GetSession(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	sess, ok := queries.GetSession(s.AppState, tenant.FromContext(r.Context()), id)
+	sess, ok := s.Queries.GetSession(tenant.FromContext(r.Context()), id)
 	if !ok {
 		writeError(w, r, NewSessionNotFound(id))
 		return
@@ -94,13 +94,13 @@ func (s *Server) triggerSession(w http.ResponseWriter, r *http.Request, tenantID
 		})
 		return
 	}
-	_, d, ok := queries.GetDomain(s.AppState, tenantID, domainID)
+	_, d, ok := s.Queries.GetDomain(tenantID, domainID)
 	if !ok {
 		writeError(w, r, NewDomainNotFound(domainID))
 		return
 	}
 
-	sess, err := commands.TriggerSession(s.AppState, tenantID, d, trigger, runtime.NewSessionID)
+	sess, err := s.SessionCommands.Trigger(r.Context(), tenantID, d, trigger, runtime.NewSessionID)
 	if err != nil {
 		writeError(w, r, NewInternal(err))
 		return
@@ -174,22 +174,20 @@ func (s *Server) enqueueForWorker(tenantID tenant.ID, sess *app.RegisteredSessio
 
 // runInBackground executes the registered session via the executor.
 func (s *Server) runInBackground(tenantID tenant.ID, sess *app.RegisteredSession, d *app.RegisteredDomain, bc *broadcaster.Broadcaster, trigger map[string]any) {
-	s.AppState.UpdateSessionState(tenantID, sess.ID, "running")
+	_, _ = s.SessionCommands.MarkRunning(context.Background(), tenantID, sess.ID)
 	executor := s.Executor.WithBroadcaster(bc)
 
 	ctx := runtime.WithSessionID(context.Background(), sess.ID)
 
 	result, err := executor.Execute(ctx, d.Spec, trigger)
 	if result != nil {
-		s.AppState.SetSessionResult(tenantID, sess.ID, result)
+		_, _ = s.SessionCommands.MarkCompleted(context.Background(), tenantID, sess.ID, result)
 	}
 	if err != nil {
-		s.AppState.UpdateSessionState(tenantID, sess.ID, "failed")
-	} else {
-		s.AppState.UpdateSessionState(tenantID, sess.ID, "completed")
+		_, _ = s.SessionCommands.MarkFailed(context.Background(), tenantID, sess.ID)
 	}
 
-	state, _ := queries.GetSession(s.AppState, tenantID, sess.ID)
+	state, _ := s.Queries.GetSession(tenantID, sess.ID)
 	bc.Publish(ctx, runtime.Observation{
 		Kind:      "state",
 		SessionID: sess.ID,
@@ -201,7 +199,7 @@ func (s *Server) runInBackground(tenantID tenant.ID, sess *app.RegisteredSession
 // CancelSession handles POST /api/v1/sessions/{id}/cancel.
 func (s *Server) CancelSession(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	sess, err := commands.CancelSession(s.AppState, tenant.FromContext(r.Context()), id)
+	sess, err := s.SessionCommands.Cancel(r.Context(), tenant.FromContext(r.Context()), id)
 	if err != nil {
 		if errors.Is(err, commands.ErrSessionNotFound) {
 			writeError(w, r, NewSessionNotFound(id))
@@ -220,13 +218,15 @@ func (s *Server) CancelSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	s.AppState.DetachBroadcaster(id)
+
 	writeJSON(w, http.StatusOK, jsonSession(sess))
 }
 
 // RerunSession handles POST /api/v1/sessions/{id}/rerun.
 func (s *Server) RerunSession(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	_, err := commands.RerunSession(s.AppState, tenant.FromContext(r.Context()), id, runtime.NewSessionID)
+	_, err := s.SessionCommands.Rerun(r.Context(), tenant.FromContext(r.Context()), id)
 	if err != nil {
 		if errors.Is(err, commands.ErrSessionNotFound) {
 			writeError(w, r, NewSessionNotFound(id))
@@ -245,7 +245,7 @@ func (s *Server) RerunSession(w http.ResponseWriter, r *http.Request) {
 // is not configured, falls back to the in-memory broadcaster replay buffer.
 func (s *Server) GetSessionTrace(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	sess, ok := queries.GetSession(s.AppState, tenant.FromContext(r.Context()), id)
+	sess, ok := s.Queries.GetSession(tenant.FromContext(r.Context()), id)
 	if !ok {
 		writeError(w, r, NewSessionNotFound(id))
 		return
@@ -292,7 +292,7 @@ func (s *Server) GetSessionTrace(w http.ResponseWriter, r *http.Request) {
 // client disconnects.
 func (s *Server) StreamSessionEvents(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if _, ok := queries.GetSession(s.AppState, tenant.FromContext(r.Context()), id); !ok {
+	if _, ok := s.Queries.GetSession(tenant.FromContext(r.Context()), id); !ok {
 		writeError(w, r, NewSessionNotFound(id))
 		return
 	}
@@ -357,23 +357,35 @@ func jsonSession(sess *app.RegisteredSession) map[string]any {
 		"orchestration":  sess.Orchestration,
 		"state":          sess.State,
 		"trigger":        sess.Trigger,
-		"started_at":     queries.FormatTimeValue(sess.StartedAt),
+		"started_at":     sess.StartedAt,
 	}
 	if sess.CompletedAt != nil {
-		out["completed_at"] = queries.FormatTime(sess.CompletedAt)
+		out["completed_at"] = *sess.CompletedAt
 	}
 	if sess.Result != nil {
 		out["result"] = sess.Result
-		out["summary"] = sessionSummary(queries.SessionListItem{
-			ID:            sess.ID,
-			DomainID:      sess.DomainID,
-			DomainVersion: sess.DomainVersion,
-			Orchestration: sess.Orchestration,
-			State:         sess.State,
-			StartedAt:     sess.StartedAt,
-			CompletedAt:   sess.CompletedAt,
-		})
+		out["summary"] = registeredSessionSummary(sess)
 	}
+	return out
+}
+
+func registeredSessionSummary(sess *app.RegisteredSession) map[string]any {
+	out := map[string]any{
+		"duration_ms": uint64(0),
+	}
+	started, err := time.Parse(time.RFC3339, sess.StartedAt)
+	if err == nil && sess.CompletedAt != nil {
+		if completed, err := time.Parse(time.RFC3339, *sess.CompletedAt); err == nil {
+			delta := completed.Sub(started).Milliseconds()
+			if delta > 0 {
+				out["duration_ms"] = uint64(delta)
+			}
+		}
+	}
+	out["mode"] = sess.Orchestration
+	out["agent_invocations"] = 0
+	out["tool_invocations"] = 0
+	out["total_cost_usd"] = 0.0
 	return out
 }
 

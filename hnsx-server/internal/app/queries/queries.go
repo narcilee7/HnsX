@@ -1,13 +1,26 @@
-// Package queries implements read-only application queries shared between
-// the CLI and the HTTP API.
+// Package queries implements read-only application queries used by the HTTP
+// API and gRPC control plane.
 package queries
 
 import (
 	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/app"
+	domainservice "github.com/hnsx-io/hnsx/server/internal/domain/service"
+	sessionservice "github.com/hnsx-io/hnsx/server/internal/session/service"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 )
+
+// Queries exposes read-only use cases backed by domain/session services.
+type Queries struct {
+	domainSvc  *domainservice.Service
+	sessionSvc *sessionservice.Service
+}
+
+// NewQueries constructs a Queries backed by the supplied services.
+func NewQueries(domainSvc *domainservice.Service, sessionSvc *sessionservice.Service) *Queries {
+	return &Queries{domainSvc: domainSvc, sessionSvc: sessionSvc}
+}
 
 // DomainListItem is the public view returned by ListDomains.
 type DomainListItem struct {
@@ -38,11 +51,14 @@ type SessionTrace struct {
 }
 
 // ListDomains returns every registered domain as a list item.
-func ListDomains(state *app.State, tenantID tenant.ID) []DomainListItem {
-	if state == nil {
+func (q *Queries) ListDomains(tenantID tenant.ID) []DomainListItem {
+	if q.domainSvc == nil {
 		return nil
 	}
-	items := state.ListDomains(tenantID)
+	items, err := q.domainSvc.List()
+	if err != nil {
+		return nil
+	}
 	out := make([]DomainListItem, 0, len(items))
 	for _, d := range items {
 		out = append(out, DomainListItem{
@@ -58,12 +74,12 @@ func ListDomains(state *app.State, tenantID tenant.ID) []DomainListItem {
 }
 
 // GetDomain returns the public view of a single domain.
-func GetDomain(state *app.State, tenantID tenant.ID, id string) (*DomainListItem, *app.RegisteredDomain, bool) {
-	if state == nil {
+func (q *Queries) GetDomain(tenantID tenant.ID, id string) (*DomainListItem, *app.RegisteredDomain, bool) {
+	if q.domainSvc == nil {
 		return nil, nil, false
 	}
-	d, ok := state.LookupDomain(tenantID, id)
-	if !ok {
+	d, err := q.domainSvc.Get(id)
+	if err != nil {
 		return nil, nil, false
 	}
 	item := &DomainListItem{
@@ -74,15 +90,18 @@ func GetDomain(state *app.State, tenantID tenant.ID, id string) (*DomainListItem
 		CreatedAt:   d.CreatedAt,
 		UpdatedAt:   d.UpdatedAt,
 	}
-	return item, d, true
+	return item, app.DomainFromModel(d), true
 }
 
 // ListSessions returns every registered session as a list item.
-func ListSessions(state *app.State, tenantID tenant.ID) []SessionListItem {
-	if state == nil {
+func (q *Queries) ListSessions(tenantID tenant.ID) []SessionListItem {
+	if q.sessionSvc == nil {
 		return nil
 	}
-	items := state.ListSessions(tenantID)
+	items, err := q.sessionSvc.List()
+	if err != nil {
+		return nil
+	}
 	out := make([]SessionListItem, 0, len(items))
 	for _, s := range items {
 		out = append(out, SessionListItem{
@@ -90,7 +109,7 @@ func ListSessions(state *app.State, tenantID tenant.ID) []SessionListItem {
 			DomainID:      s.DomainID,
 			DomainVersion: s.DomainVersion,
 			Orchestration: s.Orchestration,
-			State:         s.State,
+			State:         string(s.State),
 			StartedAt:     s.StartedAt,
 			CompletedAt:   s.CompletedAt,
 		})
@@ -99,19 +118,23 @@ func ListSessions(state *app.State, tenantID tenant.ID) []SessionListItem {
 }
 
 // GetSession returns a single session by ID.
-func GetSession(state *app.State, tenantID tenant.ID, id string) (*app.RegisteredSession, bool) {
-	if state == nil {
+func (q *Queries) GetSession(tenantID tenant.ID, id string) (*app.RegisteredSession, bool) {
+	if q.sessionSvc == nil {
 		return nil, false
 	}
-	return state.LookupSession(tenantID, id)
+	s, err := q.sessionSvc.Get(id)
+	if err != nil {
+		return nil, false
+	}
+	return app.SessionFromModel(s), true
 }
 
 // GetSessionTrace returns the trace envelope for a session.
-func GetSessionTrace(state *app.State, tenantID tenant.ID, id string) (*SessionTrace, bool) {
-	if state == nil {
+func (q *Queries) GetSessionTrace(tenantID tenant.ID, id string) (*SessionTrace, bool) {
+	if q.sessionSvc == nil {
 		return nil, false
 	}
-	if _, ok := state.LookupSession(tenantID, id); !ok {
+	if _, err := q.sessionSvc.Get(id); err != nil {
 		return nil, false
 	}
 	return &SessionTrace{

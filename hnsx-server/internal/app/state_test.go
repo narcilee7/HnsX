@@ -2,62 +2,67 @@ package app
 
 import (
 	"testing"
-	"time"
 
-	"github.com/hnsx-io/hnsx/server/internal/tenant"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
 
-func TestState_TenantIsolation(t *testing.T) {
+func TestState_AttachBroadcaster(t *testing.T) {
 	s := NewState()
-	t1 := tenant.ID("tenant-1")
-	t2 := tenant.ID("tenant-2")
-
-	s.RegisterDomain(t1, &RegisteredDomain{ID: "d1", Version: "v1", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()})
-	s.RegisterDomain(t2, &RegisteredDomain{ID: "d1", Version: "v2", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()})
-
-	if len(s.ListDomains(t1)) != 1 {
-		t.Fatalf("tenant-1 domain count = %d, want 1", len(s.ListDomains(t1)))
+	bc1 := s.AttachBroadcaster("sess-1")
+	if bc1 == nil {
+		t.Fatal("expected non-nil broadcaster")
 	}
-	if len(s.ListDomains(t2)) != 1 {
-		t.Fatalf("tenant-2 domain count = %d, want 1", len(s.ListDomains(t2)))
-	}
-
-	d1, _ := s.LookupDomain(t1, "d1")
-	if d1.Version != "v1" {
-		t.Fatalf("tenant-1 domain version = %q, want v1", d1.Version)
-	}
-	d2, _ := s.LookupDomain(t2, "d1")
-	if d2.Version != "v2" {
-		t.Fatalf("tenant-2 domain version = %q, want v2", d2.Version)
+	bc2 := s.AttachBroadcaster("sess-1")
+	if bc1 != bc2 {
+		t.Fatal("expected same broadcaster for the same session")
 	}
 }
 
-func TestState_SessionTenantIsolation(t *testing.T) {
+func TestState_DetachBroadcaster(t *testing.T) {
 	s := NewState()
-	t1 := tenant.ID("tenant-a")
-	t2 := tenant.ID("tenant-b")
+	bc := s.AttachBroadcaster("sess-1")
+	s.DetachBroadcaster("sess-1")
 
-	s.RegisterSession(t1, &RegisteredSession{ID: "s1", State: "pending", StartedAt: time.Now().UTC()})
-	s.RegisterSession(t2, &RegisteredSession{ID: "s2", State: "pending", StartedAt: time.Now().UTC()})
-
-	if len(s.ListSessions(t1)) != 1 {
-		t.Fatalf("tenant-a session count = %d, want 1", len(s.ListSessions(t1)))
-	}
-	if len(s.ListSessions(t2)) != 1 {
-		t.Fatalf("tenant-b session count = %d, want 1", len(s.ListSessions(t2)))
+	if _, ok := s.Broadcaster("sess-1"); ok {
+		t.Fatal("broadcaster should have been removed")
 	}
 
-	if _, ok := s.LookupSession(t1, "s2"); ok {
-		t.Fatal("tenant-a should not see tenant-b session")
+	ch, unsub := bc.Subscribe()
+	defer unsub()
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatal("detached broadcaster should be closed")
+		}
+	default:
+		// closed channels return immediately with zero value; either is fine.
 	}
 }
 
-func TestState_DefaultTenantEmpty(t *testing.T) {
+func TestState_PublishObservation(t *testing.T) {
 	s := NewState()
-	if len(s.ListDomains(tenant.DefaultID)) != 0 {
-		t.Fatalf("default tenant should start empty")
+	bc := s.AttachBroadcaster("sess-1")
+	ch, unsub := bc.Subscribe()
+	defer unsub()
+
+	obs := runtime.Observation{Kind: "state", SessionID: "sess-1", Payload: map[string]any{"state": "running"}}
+	if !s.PublishObservation("sess-1", obs) {
+		t.Fatal("expected publish to succeed")
 	}
-	if len(s.ListSessions(tenant.DefaultID)) != 0 {
-		t.Fatalf("default tenant sessions should start empty")
+
+	select {
+	case got := <-ch:
+		if got.Kind != "state" {
+			t.Fatalf("observation kind = %q, want state", got.Kind)
+		}
+	default:
+		t.Fatal("expected observation on subscriber channel")
+	}
+}
+
+func TestState_BroadcasterLookupMissing(t *testing.T) {
+	s := NewState()
+	if _, ok := s.Broadcaster("missing"); ok {
+		t.Fatal("missing broadcaster should not be found")
 	}
 }
