@@ -43,6 +43,7 @@ from typing import Any
 
 from hnsx_worker.adapters import AdapterRegistry
 from hnsx_worker.adapters.base import Adapter
+from hnsx_worker.harness import run as run_orchestration
 from hnsx_worker.tools import (
     ToolContext,
     ToolDecision,
@@ -85,9 +86,8 @@ def execute_session(
     elif mode == "workflow":
         _run_workflow(spec, trigger, config, stop_event=stop_event, emit=emit)
     elif mode in ("supervisor", "hierarchical", "autonomous"):
-        raise NotImplementedError(
-            f"session.mode={mode} is scheduled for M4; M2 only supports "
-            f"single / single-task / multi-turn / workflow"
+        run_orchestration(
+            spec, trigger, config, stop_event=stop_event, emit=emit
         )
     else:
         raise ValueError(f"unknown session.mode: {mode!r}")
