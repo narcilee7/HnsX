@@ -33,6 +33,9 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: hnsx
     depends_on:
       - tempo
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
 
   server:
     build:

@@ -89,7 +89,7 @@ func Default() *Config {
 		DatabaseURL:   "",
 		MigrationsDir: "go/migrations",
 		OTel: OTelConfig{
-			Exporter:     "stdout",
+			Exporter:     "otlp",
 			OTLPEndpoint: "127.0.0.1:4317",
 			ServiceName:  "hnsx-server",
 		},

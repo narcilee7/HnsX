@@ -144,8 +144,13 @@ ok "session state=completed"
 
 # 8. Trace API: GET /api/v1/traces picks up the session just spawned.
 bold "[8/7] verifying trace list + per-trace detail"
-TRACES=$(curl -fsS "http://$ADDR/api/v1/traces?domain=customer-service")
-TRACE_COUNT=$(printf '%s' "$TRACES" | grep -o '"trace_id":"' | wc -l | tr -d ' ')
+TRACE_COUNT=0
+for i in $(seq 1 5); do
+  TRACES=$(curl -fsS "http://$ADDR/api/v1/traces?domain=customer-service")
+  TRACE_COUNT=$(printf '%s' "$TRACES" | grep -o '"trace_id":"' | wc -l | tr -d ' ')
+  if [[ "$TRACE_COUNT" -ge 1 ]]; then break; fi
+  sleep 1
+done
 [[ "$TRACE_COUNT" -ge 1 ]] || fail "expected ≥1 trace for customer-service, got $TRACE_COUNT"
 ok "traces list returned $TRACE_COUNT entries"
 TID=$(printf '%s' "$TRACES" | grep -o '"trace_id":"[^"]*' | head -1 | sed 's/^"trace_id":"//')
