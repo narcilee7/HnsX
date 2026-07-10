@@ -18,6 +18,9 @@ func CapabilitiesFromInfo(info *pb.WorkerInfo) []string {
 		for _, p := range info.Capacity.Providers {
 			if p != "" {
 				caps["provider:"+p] = struct{}{}
+				// A provider declaration implies the corresponding adapter
+				// is available on this worker (e.g. provider:echo -> adapter:echo).
+				caps["adapter:"+p] = struct{}{}
 			}
 		}
 		for _, m := range info.Capacity.Models {

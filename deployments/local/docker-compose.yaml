@@ -6,9 +6,14 @@ services:
       POSTGRES_PASSWORD: hnsx
       POSTGRES_DB: hnsx
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hnsx -d hnsx"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   tempo:
     image: grafana/tempo:latest
@@ -23,11 +28,67 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3001:3000"
+      - "3002:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: hnsx
     depends_on:
       - tempo
+
+  server:
+    build:
+      context: ../../hnsx-server
+      dockerfile: ../deployments/local/Dockerfile.server
+    ports:
+      - "50052:50051"
+      - "50062:50061"
+    environment:
+      HNSX_HTTP_ADDR: "0.0.0.0:50051"
+      HNSX_GRPC_ADDR: "0.0.0.0:50061"
+      HNSX_DATABASE_URL: "postgres://hnsx:hnsx@postgres:5432/hnsx?sslmode=disable"
+      HNSX_MIGRATIONS_DIR: "/app/go/migrations"
+      HNSX_SECRET_KEY: "${HNSX_SECRET_KEY:-hnsx-local-dev-secret-key-do-not-use-in-prod}"
+      HNSX_OTEL_EXPORTER: "${HNSX_OTEL_EXPORTER:-otlp}"
+      HNSX_OTEL_OTLP_ENDPOINT: "tempo:4317"
+      HNSX_LOG_LEVEL: "${HNSX_LOG_LEVEL:-info}"
+      HNSX_REDIS_ADDR: ""
+    volumes:
+      - ../../go/migrations:/app/go/migrations:ro
+      - ../../example-domains:/app/example-domains:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:50051/healthz >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    command: ["--seed-from", "/app/example-domains"]
+
+  worker:
+    build:
+      context: ../../hnsx-worker
+      dockerfile: ../deployments/local/Dockerfile.worker
+    environment:
+      HNSX_SERVER: "server:50061"
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped
+    command:
+      - "run"
+      - "--server"
+      - "server:50061"
+      - "--worker-id"
+      - "worker-1"
+      - "--max-concurrent-sessions"
+      - "2"
+      - "--providers"
+      - "anthropic,openai,echo"
+      - "--models"
+      - "claude-haiku-4-5,gpt-4o-mini"
+      - "--sandbox-runtimes"
+      - "none"
 
 volumes:
   postgres_data:

@@ -690,6 +690,16 @@ def _run_workflow(
                 "payload": {"adapter": adapter.name()},
             }
         )
+        emit(
+            {
+                "kind": "agent_invoke",
+                "session_id": config.get("session_id", ""),
+                "domain_id": spec.get("id", ""),
+                "step_id": step["id"],
+                "agent_id": agent_name,
+                "payload": {"adapter": adapter.name()},
+            }
+        )
         messages = _build_initial_messages(prompt, step_input)
         text, _tool_calls, cost = _stream_turn(
             adapter,
