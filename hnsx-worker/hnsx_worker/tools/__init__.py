@@ -26,18 +26,26 @@ from .base import (
 from .delegate import DelegateTool, DelegateToolConfig
 from .factory import build_delegate_tool, build_tool, tool_schemas_for_adapter
 from .registry import ToolRegistry
+from .self_check import SelfCheckTool, SelfCheckToolConfig, build_self_check_tool
+from .human_approval import HumanApprovalTool, HumanApprovalToolConfig, build_human_approval_tool
 
 __all__ = [
     "DelegateTool",
     "DelegateToolConfig",
     "EmitFn",
+    "HumanApprovalTool",
+    "HumanApprovalToolConfig",
     "PolicyHook",
+    "SelfCheckTool",
+    "SelfCheckToolConfig",
     "Tool",
     "ToolContext",
     "ToolDecision",
     "ToolRegistry",
     "ToolResult",
     "build_delegate_tool",
+    "build_human_approval_tool",
+    "build_self_check_tool",
     "build_tool",
     "tool_schemas_for_adapter",
 ]

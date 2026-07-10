@@ -31,6 +31,8 @@ from .mcp_client import McpClientTool, McpToolConfig
 from .python import PythonTool, PythonToolConfig
 from .sql import SqlTool, SqlToolConfig
 from .delegate import DelegateTool, DelegateToolConfig
+from .self_check import SelfCheckTool, SelfCheckToolConfig
+from .human_approval import HumanApprovalTool, HumanApprovalToolConfig
 
 # Mapping from spec type string → (config_class, tool_class).
 # Adding a new built-in tool is a one-line edit here.
@@ -40,6 +42,8 @@ _BUILTIN_TOOLS: dict[str, tuple[type, type]] = {
     "sql": (SqlToolConfig, SqlTool),
     "python": (PythonToolConfig, PythonTool),
     "delegate": (DelegateToolConfig, DelegateTool),
+    "self_check": (SelfCheckToolConfig, SelfCheckTool),
+    "human_approval": (HumanApprovalToolConfig, HumanApprovalTool),
 }
 
 
