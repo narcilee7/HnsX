@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/session/broadcaster"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
@@ -45,85 +46,101 @@ type RegisteredSession struct {
 // the current execution window; persistence happens via the domain services.
 type State struct {
 	mu           sync.RWMutex
-	domains      map[string]*RegisteredDomain
-	sessions     map[string]*RegisteredSession
+	domains      map[tenant.ID]map[string]*RegisteredDomain
+	sessions     map[tenant.ID]map[string]*RegisteredSession
 	broadcasters map[string]*broadcaster.Broadcaster
 }
 
 // NewState constructs an empty application state.
 func NewState() *State {
 	return &State{
-		domains:      map[string]*RegisteredDomain{},
-		sessions:     map[string]*RegisteredSession{},
+		domains:      map[tenant.ID]map[string]*RegisteredDomain{},
+		sessions:     map[tenant.ID]map[string]*RegisteredSession{},
 		broadcasters: map[string]*broadcaster.Broadcaster{},
 	}
 }
 
-// RegisterDomain inserts or replaces a domain.
-func (s *State) RegisterDomain(d *RegisteredDomain) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.domains[d.ID] = d
+func (s *State) tenantDomains(t tenant.ID) map[string]*RegisteredDomain {
+	if s.domains[t] == nil {
+		s.domains[t] = map[string]*RegisteredDomain{}
+	}
+	return s.domains[t]
 }
 
-// LookupDomain returns a domain by ID.
-func (s *State) LookupDomain(id string) (*RegisteredDomain, bool) {
+func (s *State) tenantSessions(t tenant.ID) map[string]*RegisteredSession {
+	if s.sessions[t] == nil {
+		s.sessions[t] = map[string]*RegisteredSession{}
+	}
+	return s.sessions[t]
+}
+
+// RegisterDomain inserts or replaces a domain for the given tenant.
+func (s *State) RegisterDomain(t tenant.ID, d *RegisteredDomain) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tenantDomains(t)[d.ID] = d
+}
+
+// LookupDomain returns a domain by ID within a tenant.
+func (s *State) LookupDomain(t tenant.ID, id string) (*RegisteredDomain, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	d, ok := s.domains[id]
+	d, ok := s.tenantDomains(t)[id]
 	return d, ok
 }
 
-// ListDomains returns every registered domain.
-func (s *State) ListDomains() []*RegisteredDomain {
+// ListDomains returns every registered domain for the given tenant.
+func (s *State) ListDomains(t tenant.ID) []*RegisteredDomain {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]*RegisteredDomain, 0, len(s.domains))
-	for _, d := range s.domains {
+	m := s.tenantDomains(t)
+	out := make([]*RegisteredDomain, 0, len(m))
+	for _, d := range m {
 		out = append(out, d)
 	}
 	return out
 }
 
-// DeleteDomain removes a domain by ID.
-func (s *State) DeleteDomain(id string) {
+// DeleteDomain removes a domain by ID within a tenant.
+func (s *State) DeleteDomain(t tenant.ID, id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.domains, id)
+	delete(s.tenantDomains(t), id)
 }
 
-// RegisterSession inserts or replaces a session.
-func (s *State) RegisterSession(sess *RegisteredSession) {
+// RegisterSession inserts or replaces a session for the given tenant.
+func (s *State) RegisterSession(t tenant.ID, sess *RegisteredSession) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.sessions[sess.ID] = sess
+	s.tenantSessions(t)[sess.ID] = sess
 }
 
-// LookupSession returns a session by ID.
-func (s *State) LookupSession(id string) (*RegisteredSession, bool) {
+// LookupSession returns a session by ID within a tenant.
+func (s *State) LookupSession(t tenant.ID, id string) (*RegisteredSession, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	sess, ok := s.sessions[id]
+	sess, ok := s.tenantSessions(t)[id]
 	return sess, ok
 }
 
-// ListSessions returns every registered session.
-func (s *State) ListSessions() []*RegisteredSession {
+// ListSessions returns every registered session for the given tenant.
+func (s *State) ListSessions(t tenant.ID) []*RegisteredSession {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]*RegisteredSession, 0, len(s.sessions))
-	for _, sess := range s.sessions {
+	m := s.tenantSessions(t)
+	out := make([]*RegisteredSession, 0, len(m))
+	for _, sess := range m {
 		out = append(out, sess)
 	}
 	return out
 }
 
-// UpdateSessionState updates the in-memory session state. Terminal states
-// stamp CompletedAt.
-func (s *State) UpdateSessionState(sessionID, state string) {
+// UpdateSessionState updates the in-memory session state for the given tenant.
+// Terminal states stamp CompletedAt.
+func (s *State) UpdateSessionState(t tenant.ID, sessionID, state string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	sess, ok := s.sessions[sessionID]
+	sess, ok := s.tenantSessions(t)[sessionID]
 	if !ok {
 		return
 	}
@@ -134,11 +151,11 @@ func (s *State) UpdateSessionState(sessionID, state string) {
 	}
 }
 
-// SetSessionResult stores the final result on a session.
-func (s *State) SetSessionResult(sessionID string, result *runtime.Result) {
+// SetSessionResult stores the final result on a session for the given tenant.
+func (s *State) SetSessionResult(t tenant.ID, sessionID string, result *runtime.Result) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	sess, ok := s.sessions[sessionID]
+	sess, ok := s.tenantSessions(t)[sessionID]
 	if !ok {
 		return
 	}
@@ -146,7 +163,8 @@ func (s *State) SetSessionResult(sessionID string, result *runtime.Result) {
 }
 
 // AttachBroadcaster returns the existing broadcaster for a session or creates
-// a new one.
+// a new one. Broadcasters are keyed by session ID, which is already unique
+// across tenants.
 func (s *State) AttachBroadcaster(sessionID string) *broadcaster.Broadcaster {
 	s.mu.Lock()
 	defer s.mu.Unlock()

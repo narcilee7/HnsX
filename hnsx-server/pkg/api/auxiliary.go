@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 )
@@ -20,7 +21,7 @@ func (s *Server) ListTraces(w http.ResponseWriter, r *http.Request) {
 	limit := intQuery(r, "limit", 50)
 	offset := intQuery(r, "offset", 0)
 
-	items := queries.ListSessions(s.AppState)
+	items := queries.ListSessions(s.AppState, tenant.FromContext(r.Context()))
 	out := make([]map[string]any, 0, len(items))
 	for _, sess := range items {
 		if domainFilter != "" && sess.DomainID != domainFilter {
@@ -55,7 +56,7 @@ func (s *Server) ListTraces(w http.ResponseWriter, r *http.Request) {
 // GetTrace handles GET /api/v1/traces/{traceId}.
 func (s *Server) GetTrace(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "traceId")
-	sess, ok := queries.GetSession(s.AppState, id)
+	sess, ok := queries.GetSession(s.AppState, tenant.FromContext(r.Context()), id)
 	if !ok {
 		writeError(w, r, NewSessionNotFound(id))
 		return
@@ -166,7 +167,7 @@ func (s *Server) CreateEvalSet(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, NewValidation(errors.New("set_id and domain_id are required")))
 		return
 	}
-	_, _, ok := queries.GetDomain(s.AppState, body.DomainID)
+	_, _, ok := queries.GetDomain(s.AppState, tenant.FromContext(r.Context()), body.DomainID)
 	if !ok {
 		writeError(w, r, NewDomainNotFound(body.DomainID))
 		return
@@ -263,7 +264,7 @@ func (s *Server) RunEval(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, domain, ok := queries.GetDomain(s.AppState, set.DomainID)
+	_, domain, ok := queries.GetDomain(s.AppState, tenant.FromContext(r.Context()), set.DomainID)
 	if !ok {
 		writeError(w, r, NewDomainNotFound(set.DomainID))
 		return
@@ -390,7 +391,7 @@ func (s *Server) ListAudit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	domainFilter := q.Get("domain")
-	sessions := queries.ListSessions(s.AppState)
+	sessions := queries.ListSessions(s.AppState, tenant.FromContext(r.Context()))
 	total := 0
 	completed := 0
 	failed := 0

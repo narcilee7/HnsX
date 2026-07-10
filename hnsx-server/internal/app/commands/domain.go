@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/hnsx-io/hnsx/server/internal/app"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
@@ -57,7 +58,7 @@ type RegisterResult struct {
 
 // RegisterDomain parses a DomainSpec from a reader and registers it in the
 // application state. Returns ErrDomainExists if the ID is already registered.
-func RegisterDomain(state *app.State, r io.Reader, contentType string) (*RegisterResult, error) {
+func RegisterDomain(state *app.State, tenantID tenant.ID, r io.Reader, contentType string) (*RegisterResult, error) {
 	if state == nil {
 		return nil, errors.New("nil app state")
 	}
@@ -66,7 +67,7 @@ func RegisterDomain(state *app.State, r io.Reader, contentType string) (*Registe
 		return nil, err
 	}
 
-	if _, exists := state.LookupDomain(s.ID); exists {
+	if _, exists := state.LookupDomain(tenantID, s.ID); exists {
 		return nil, NewDomainExistsError(s.ID)
 	}
 
@@ -80,17 +81,17 @@ func RegisterDomain(state *app.State, r io.Reader, contentType string) (*Registe
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	state.RegisterDomain(d)
+	state.RegisterDomain(tenantID, d)
 	return &RegisterResult{Domain: d, CreatedAt: now}, nil
 }
 
 // UpdateDomain replaces the fields of an existing registered domain with the
 // parsed body. Returns ErrDomainNotFound / ErrIDMismatch as appropriate.
-func UpdateDomain(state *app.State, id string, r io.Reader, contentType string) (*app.RegisteredDomain, error) {
+func UpdateDomain(state *app.State, tenantID tenant.ID, id string, r io.Reader, contentType string) (*app.RegisteredDomain, error) {
 	if state == nil {
 		return nil, errors.New("nil app state")
 	}
-	existing, ok := state.LookupDomain(id)
+	existing, ok := state.LookupDomain(tenantID, id)
 	if !ok {
 		return nil, ErrDomainNotFound
 	}
@@ -108,19 +109,19 @@ func UpdateDomain(state *app.State, id string, r io.Reader, contentType string) 
 	existing.Spec = s
 	existing.Harness = s.Harness
 	existing.UpdatedAt = time.Now().UTC()
-	state.RegisterDomain(existing) // re-register to refresh map
+	state.RegisterDomain(tenantID, existing) // re-register to refresh map
 	return existing, nil
 }
 
 // DeleteDomain removes a domain from the application state.
-func DeleteDomain(state *app.State, id string) error {
+func DeleteDomain(state *app.State, tenantID tenant.ID, id string) error {
 	if state == nil {
 		return errors.New("nil app state")
 	}
-	if _, ok := state.LookupDomain(id); !ok {
+	if _, ok := state.LookupDomain(tenantID, id); !ok {
 		return ErrDomainNotFound
 	}
-	state.DeleteDomain(id)
+	state.DeleteDomain(tenantID, id)
 	return nil
 }
 
@@ -181,7 +182,7 @@ type TriggerParams struct {
 var NewSessionID = runtime.NewSessionID
 
 // TriggerSession creates a registered session from a domain and trigger.
-func TriggerSession(state *app.State, domain *app.RegisteredDomain, trigger map[string]any, newID func(string) string) (*app.RegisteredSession, error) {
+func TriggerSession(state *app.State, tenantID tenant.ID, domain *app.RegisteredDomain, trigger map[string]any, newID func(string) string) (*app.RegisteredSession, error) {
 	if state == nil {
 		return nil, errors.New("nil app state")
 	}
@@ -198,41 +199,41 @@ func TriggerSession(state *app.State, domain *app.RegisteredDomain, trigger map[
 		Trigger:       trigger,
 		StartedAt:     time.Now().UTC(),
 	}
-	state.RegisterSession(sess)
+	state.RegisterSession(tenantID, sess)
 	return sess, nil
 }
 
 // CancelSession transitions a non-terminal session to cancelled.
-func CancelSession(state *app.State, id string) (*app.RegisteredSession, error) {
+func CancelSession(state *app.State, tenantID tenant.ID, id string) (*app.RegisteredSession, error) {
 	if state == nil {
 		return nil, errors.New("nil app state")
 	}
-	sess, ok := state.LookupSession(id)
+	sess, ok := state.LookupSession(tenantID, id)
 	if !ok {
 		return nil, ErrSessionNotFound
 	}
 	if sess.State == "completed" || sess.State == "failed" {
 		return nil, fmt.Errorf("session is already in terminal state %q", sess.State)
 	}
-	state.UpdateSessionState(id, "canceled")
+	state.UpdateSessionState(tenantID, id, "canceled")
 	state.DetachBroadcaster(id)
 	return sess, nil
 }
 
 // RerunSession creates a new session reusing the trigger of an existing one.
-func RerunSession(state *app.State, prevID string, newID func(string) string) (*app.RegisteredSession, error) {
+func RerunSession(state *app.State, tenantID tenant.ID, prevID string, newID func(string) string) (*app.RegisteredSession, error) {
 	if state == nil {
 		return nil, errors.New("nil app state")
 	}
-	prev, ok := state.LookupSession(prevID)
+	prev, ok := state.LookupSession(tenantID, prevID)
 	if !ok {
 		return nil, ErrSessionNotFound
 	}
-	domain, ok := state.LookupDomain(prev.DomainID)
+	domain, ok := state.LookupDomain(tenantID, prev.DomainID)
 	if !ok {
 		return nil, ErrDomainNotFound
 	}
-	return TriggerSession(state, domain, prev.Trigger, newID)
+	return TriggerSession(state, tenantID, domain, prev.Trigger, newID)
 }
 
 // BuildDomainLocation returns the canonical API location for a domain.

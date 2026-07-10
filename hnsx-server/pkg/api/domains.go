@@ -11,11 +11,12 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 )
 
 // ListDomains handles GET /api/v1/domains.
 func (s *Server) ListDomains(w http.ResponseWriter, r *http.Request) {
-	items := queries.ListDomains(s.AppState)
+	items := queries.ListDomains(s.AppState, tenant.FromContext(r.Context()))
 	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
 
 	out := make([]map[string]any, 0, len(items))
@@ -40,7 +41,7 @@ func (s *Server) ListDomains(w http.ResponseWriter, r *http.Request) {
 // GetDomain handles GET /api/v1/domains/{id}.
 func (s *Server) GetDomain(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	item, d, ok := queries.GetDomain(s.AppState, id)
+	item, d, ok := queries.GetDomain(s.AppState, tenant.FromContext(r.Context()), id)
 	if !ok {
 		writeError(w, r, NewDomainNotFound(id))
 		return
@@ -58,7 +59,7 @@ func (s *Server) GetDomain(w http.ResponseWriter, r *http.Request) {
 
 // RegisterDomain handles POST /api/v1/domains.
 func (s *Server) RegisterDomain(w http.ResponseWriter, r *http.Request) {
-	res, err := commands.RegisterDomain(s.AppState, r.Body, r.Header.Get("Content-Type"))
+	res, err := commands.RegisterDomain(s.AppState, tenant.FromContext(r.Context()), r.Body, r.Header.Get("Content-Type"))
 	if err != nil {
 		if err == commands.ErrDomainExists {
 			writeError(w, r, &APIError{
@@ -72,7 +73,7 @@ func (s *Server) RegisterDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = s.LoadDomainPolicy(res.Domain.ID)
+	_ = s.LoadDomainPolicy(r.Context(), res.Domain.ID)
 
 	w.Header().Set("Location", commands.BuildDomainLocation(res.Domain.ID))
 	writeJSON(w, http.StatusCreated, map[string]any{
@@ -85,7 +86,7 @@ func (s *Server) RegisterDomain(w http.ResponseWriter, r *http.Request) {
 // UpdateDomain handles PUT /api/v1/domains/{id}.
 func (s *Server) UpdateDomain(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	updated, err := commands.UpdateDomain(s.AppState, id, r.Body, r.Header.Get("Content-Type"))
+	updated, err := commands.UpdateDomain(s.AppState, tenant.FromContext(r.Context()), id, r.Body, r.Header.Get("Content-Type"))
 	if err != nil {
 		switch err {
 		case commands.ErrDomainNotFound:
@@ -101,7 +102,7 @@ func (s *Server) UpdateDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = s.LoadDomainPolicy(updated.ID)
+	_ = s.LoadDomainPolicy(r.Context(), updated.ID)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id":         updated.ID,
@@ -113,7 +114,7 @@ func (s *Server) UpdateDomain(w http.ResponseWriter, r *http.Request) {
 // DeleteDomain handles DELETE /api/v1/domains/{id}.
 func (s *Server) DeleteDomain(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := commands.DeleteDomain(s.AppState, id); err != nil {
+	if err := commands.DeleteDomain(s.AppState, tenant.FromContext(r.Context()), id); err != nil {
 		writeError(w, r, NewDomainNotFound(id))
 		return
 	}
@@ -126,7 +127,7 @@ func (s *Server) DeleteDomain(w http.ResponseWriter, r *http.Request) {
 // history is a future PR.
 func (s *Server) ListDomainVersions(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	_, d, ok := queries.GetDomain(s.AppState, id)
+	_, d, ok := queries.GetDomain(s.AppState, tenant.FromContext(r.Context()), id)
 	if !ok {
 		writeError(w, r, NewDomainNotFound(id))
 		return
@@ -159,6 +160,7 @@ func (s *Server) ValidateDomain(w http.ResponseWriter, r *http.Request) {
 		"mode":        summary.Mode,
 		"agent_count": summary.AgentCount,
 		"step_count":  summary.StepCount,
+		"tenant_id":   tenant.FromContext(r.Context()),
 	})
 }
 
@@ -174,7 +176,7 @@ func (s *Server) TriggerDomain(w http.ResponseWriter, r *http.Request) {
 		// Empty body is fine; default to {}.
 		body.Trigger = map[string]any{}
 	}
-	s.triggerSession(w, r, id, body.Trigger)
+	s.triggerSession(w, r, tenant.FromContext(r.Context()), id, body.Trigger)
 }
 
 // decodeJSONBody is a small wrapper kept in this file for handler use.

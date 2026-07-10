@@ -13,6 +13,7 @@ import (
 	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
 	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
 	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
@@ -123,11 +124,11 @@ func (s *Server) WithEvalService(svc *evalservice.Service) *Server {
 
 // LoadDomainPolicy persists the policy for the named domain. It is called
 // automatically after domain registration/update and bootstrap seeding.
-func (s *Server) LoadDomainPolicy(domainID string) error {
+func (s *Server) LoadDomainPolicy(ctx context.Context, domainID string) error {
 	if s.PolicyService == nil {
 		return nil
 	}
-	_, d, ok := queries.GetDomain(s.AppState, domainID)
+	_, d, ok := queries.GetDomain(s.AppState, tenant.FromContext(ctx), domainID)
 	if !ok {
 		return ErrDomainNotFound
 	}
@@ -212,17 +213,17 @@ func (s *Server) PublishObservation(sessionID string, obs runtime.Observation) b
 
 // UpdateSessionState updates the in-memory session state. Called by the
 // scheduler when the worker reports a terminal status update.
-func (s *Server) UpdateSessionState(sessionID, state string) {
+func (s *Server) UpdateSessionState(tenantID tenant.ID, sessionID, state string) {
 	if s.AppState == nil {
 		return
 	}
-	s.AppState.UpdateSessionState(sessionID, state)
+	s.AppState.UpdateSessionState(tenantID, sessionID, state)
 }
 
 // RegisterBootstrapDomain inserts an already-validated *spec.DomainSpec
 // into the in-process registry. Intended for the `seed-from` path in main,
 // not for the public API.
-func (s *Server) RegisterBootstrapDomain(v any) {
+func (s *Server) RegisterBootstrapDomain(tenantID tenant.ID, v any) {
 	if s.AppState == nil {
 		return
 	}
@@ -231,7 +232,7 @@ func (s *Server) RegisterBootstrapDomain(v any) {
 		return
 	}
 	now := time.Now().UTC()
-	s.AppState.RegisterDomain(&app.RegisteredDomain{
+	s.AppState.RegisterDomain(tenantID, &app.RegisteredDomain{
 		ID:          ds.ID,
 		Version:     ds.Version,
 		Description: ds.Description,
@@ -240,5 +241,5 @@ func (s *Server) RegisterBootstrapDomain(v any) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	})
-	_ = s.LoadDomainPolicy(ds.ID)
+	_ = s.LoadDomainPolicy(tenant.NewContext(context.Background(), tenantID), ds.ID)
 }
