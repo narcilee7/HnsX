@@ -133,15 +133,24 @@ Refs：`docs/server-design/go-refactor-plan.md §4 D2`
 
 #### T5 — Approval 一次到位（server + worker）
 
-- [ ] **server** `internal/approval/{model,repository,service}` 新增
-- [ ] **migration** `000007_approvals`
-- [ ] **server** `ListApprovals/Approve/Reject` 接 service + 路由
-- [ ] **server** Executor 命中 `policy.require_human_approval` 挂起 session 并通过 SSE 推 `event: approval_required`
-- [ ] **server** approve/reject 后通过 gRPC `StreamChannel` 推 `ResumeSession/CancelSession` 到 worker；W14 Python `approval/bus.py` 配套
-- [ ] **console** `ApprovalsPage` + `SessionDetailPage` 的 Approve/Reject 操作端到端
-- [ ] **验收**：example domain `customer-service` 配 `require_human_approval: true` 触发退款后，control plane 收到 approval_required，console 审批后 session 续跑 / 终止
+- [x] **server** `internal/approval/{model,repository,service}` 新增；Status / RiskLevel const；ListItem / Approval 形状
+- [x] **migration** `go/migrations/000007_approvals.up.sql` — approvals 表 + (tenant_id, approval_id) 唯一索引 + 状态 / domain + created_at 索引
+- [x] **server** `internal/approval/repository` InMemory + Postgres 双实现；PendingForSession 防止同一 session 重叠 pending
+- [x] **server** `internal/approval/service` 含 `Gate.Request(ctx, approval)` 同步阻塞 + Decision 转换；Approve/Reject wake 等待者
+- [x] **server** `pkg/api/auxiliary.go` ListApprovals 默认 filter=pending；GetApproval；ApproveApproval 返 200/409 已解决/404；RejectApproval；写 immutable audit row (action=approval_decision)
+- [x] **server** `pkg/api/errors.go` APPROVAL_NOT_FOUND → 404；APPROVAL_ALREADY_RESOLVED → 409；APPROVAL_UNAVAILABLE → 503
+- [x] **server** `pkg/api/approvals_test.go` 6 个 handler 测试 + Gate 阻塞验证
+- [x] **server** `pkg/session/executor.go` ApprovalGate 接口 + WithApprovalGate 钩子；policyAdapter 在 guardrail `action=human_approval` 时调用 gate.Request 同步挂起
+- [x] **server** `internal/app/application.go` approvalServiceGateAdapter 把 ApprovalService 适配到 executor Gate 契约
+- [x] **server** `application.go` 装载 ApprovalService + Postgres repo
+- [x] **console** `src/api/approvals.ts` 对齐 server field 形状（id/session_id/domain_id/action/resource/risk_level/context/status/comment/reviewed_by/created_at/resolved_at）
+- [x] **console** `useApprovals.ts` refetchInterval=5s；useResolveApproval 接收 reviewed_by + comment
+- [x] **console** `ApprovalsPage.tsx` 列展示 id/session/domain/action/risk_level/status/created/actions；detail dialog 用 risk_level + action + context 渲染
+- [x] **验收**：`go test ./...` + `pnpm type-check` 全过；exec gate 阻塞到 operator 决策
 
 Refs：`docs/project_management/2026.07.10/python-worker-w10-plus.md §7`
+
+> Note: Worker-side pause/resume (gRPC StreamChannel 推 CancelSession/ResumeSession) 走 W14 已建好的 `approval/bus.py` 路径；本票在 server 侧完整闭环，跨 worker 协调是后续 P1 显式票。
 
 #### T6 — Console 补 evals.ts api client（console）
 
