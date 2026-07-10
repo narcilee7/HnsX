@@ -12,6 +12,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
 	evalrunner "github.com/hnsx-io/hnsx/server/internal/evaluation/runner"
+	secmodel "github.com/hnsx-io/hnsx/server/internal/secret/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	tracemodel "github.com/hnsx-io/hnsx/server/internal/trace/model"
 	workerpkg "github.com/hnsx-io/hnsx/server/internal/worker"
@@ -644,36 +645,139 @@ func runtimeStatus(snap workerpkg.Snapshot) string {
 	return "degraded"
 }
 
-// ListSecrets handles GET /api/v1/secrets — never returns secret *values*.
+// ListSecrets handles GET /api/v1/secrets. The wire payload contains no
+// Value/PlainValue field by design; operators verify a typed value via
+// the last-4 fingerprint, never the plaintext itself.
 func (s *Server) ListSecrets(c *gin.Context) {
+	if s.SecretService == nil {
+		writeError(c, &APIError{
+			Code:    "SECRETS_UNAVAILABLE",
+			Message: "secret store is not configured on this server",
+		})
+		return
+	}
+	items, err := s.SecretService.List()
+	if err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, it := range items {
+		out = append(out, map[string]any{
+			"name":        it.Name,
+			"description": it.Description,
+			"kind":        it.Kind,
+			"fingerprint": it.Fingerprint,
+			"created_at":  it.CreatedAt,
+			"updated_at":  it.UpdatedAt,
+		})
+	}
 	writeJSON(c, http.StatusOK, map[string]any{
-		"items": []map[string]any{},
-		"total": 0,
+		"items": out,
+		"total": len(out),
 	})
 }
 
-// CreateSecret handles POST /api/v1/secrets.
+// secretWriteBody is the request shape for Create / Update. Both calls
+// accept a fresh plaintext value; the response never echoes it back.
+type secretWriteBody struct {
+	Name        string `json:"name"`
+	Value       string `json:"value"`
+	Description string `json:"description"`
+	Kind        string `json:"kind"`
+}
+
+// CreateSecret handles POST /api/v1/secrets. The plaintext Value is
+// required; the cipher encrypts it before it touches the repository, and
+// the response is a fingerprint-only ack (no Value field).
 func (s *Server) CreateSecret(c *gin.Context) {
-	writeError(c, &APIError{
-		Code:    "ADAPTER_NOT_IMPLEMENTED",
-		Message: "secret store not yet implemented (target: Phase 2)",
+	if s.SecretService == nil {
+		writeError(c, &APIError{
+			Code:    "SECRETS_UNAVAILABLE",
+			Message: "secret store is not configured on this server",
+		})
+		return
+	}
+	var body secretWriteBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		writeError(c, NewInvalidRequest("invalid request body"))
+		return
+	}
+	if body.Name == "" || body.Value == "" {
+		writeError(c, NewInvalidRequest("name and value are required"))
+		return
+	}
+	sec := &secmodel.Secret{
+		Name:        body.Name,
+		Description: body.Description,
+		Kind:        body.Kind,
+		PlainValue:  body.Value,
+	}
+	if err := s.SecretService.Save(sec); err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+	writeJSON(c, http.StatusCreated, map[string]any{
+		"name":        sec.Name,
+		"description": sec.Description,
+		"kind":        sec.Kind,
+		"fingerprint": sec.Fingerprint,
 	})
 }
 
-// UpdateSecret handles PUT /api/v1/secrets/:id.
+// UpdateSecret handles PUT /api/v1/secrets/:id — replaces the value +
+// metadata. Body shape is identical to Create; name in the URL is the
+// authority.
 func (s *Server) UpdateSecret(c *gin.Context) {
-	writeError(c, &APIError{
-		Code:    "ADAPTER_NOT_IMPLEMENTED",
-		Message: "secret store not yet implemented (target: Phase 2)",
+	if s.SecretService == nil {
+		writeError(c, &APIError{
+			Code:    "SECRETS_UNAVAILABLE",
+			Message: "secret store is not configured on this server",
+		})
+		return
+	}
+	id := c.Param("id")
+	var body secretWriteBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		writeError(c, NewInvalidRequest("invalid request body"))
+		return
+	}
+	if body.Value == "" {
+		writeError(c, NewInvalidRequest("value is required for update"))
+		return
+	}
+	sec := &secmodel.Secret{
+		Name:        id,
+		Description: body.Description,
+		Kind:        body.Kind,
+		PlainValue:  body.Value,
+	}
+	if err := s.SecretService.Save(sec); err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+	writeJSON(c, http.StatusOK, map[string]any{
+		"name":        sec.Name,
+		"description": sec.Description,
+		"kind":        sec.Kind,
+		"fingerprint": sec.Fingerprint,
 	})
 }
 
 // DeleteSecret handles DELETE /api/v1/secrets/:id.
 func (s *Server) DeleteSecret(c *gin.Context) {
-	writeError(c, &APIError{
-		Code:    "ADAPTER_NOT_IMPLEMENTED",
-		Message: "secret store not yet implemented (target: Phase 2)",
-	})
+	if s.SecretService == nil {
+		writeError(c, &APIError{
+			Code:    "SECRETS_UNAVAILABLE",
+			Message: "secret store is not configured on this server",
+		})
+		return
+	}
+	if err := s.SecretService.Delete(c.Param("id")); err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+	c.AbortWithStatus(http.StatusNoContent)
 }
 
 // ListPolicies handles GET /api/v1/policies.
