@@ -80,7 +80,10 @@ func newRouter(s *Server) *gin.Engine {
 			e := evals.Group("/:setId")
 			{
 				e.GET("", s.GetEvalSet)
+				e.PUT("", s.UpdateEvalSet)
+				e.DELETE("", s.DeleteEvalSet)
 				e.POST("/run", s.RunEval)
+				e.GET("/runs", s.ListEvalRuns)
 				e.GET("/runs/:runId", s.GetEvalRun)
 			}
 		}
