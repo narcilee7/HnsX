@@ -34,6 +34,11 @@ type BuildInfo struct {
 // (internal/app) and only handles HTTP protocol concerns: routing, decoding,
 // encoding, and SSE streaming.
 type Server struct {
+	// App is the composed server-side application. Existing transitional
+	// fields below are populated from App in the constructor so that Phase 0
+	// handlers continue to work unchanged; Phase 1 will remove them.
+	App *app.Application
+
 	BuildInfo BuildInfo
 	DB        *db.DB
 	Executor  *pkgexecutor.Executor
@@ -69,23 +74,29 @@ var ErrDomainNotFound = errors.New("domain not found")
 // importing internal/app everywhere.
 type Domain = app.RegisteredDomain
 
-// NewServer constructs an API Server. The BuildInfo should be supplied by
-// the main package; pass an empty struct for tests.
-func NewServer(build BuildInfo, database *db.DB, executor *pkgexecutor.Executor) *Server {
-	return NewServerWithWorkerPool(build, database, executor, nil, nil)
+// NewServer constructs an API Server wired to the supplied Application.
+// BuildInfo should be supplied by the main package; pass an empty struct for tests.
+func NewServer(build BuildInfo, application *app.Application) *Server {
+	return NewServerWithWorkerPool(build, application)
 }
 
 // NewServerWithWorkerPool constructs an API Server wired to the V1.1 worker
-// pool. When WorkerRegistry and SessionQueue are non-nil, session triggers
-// are enqueued for Python workers instead of executed locally.
-func NewServerWithWorkerPool(build BuildInfo, database *db.DB, executor *pkgexecutor.Executor, reg *worker.Registry, q worker.SessionQueue) *Server {
+// pool through the supplied Application. When Application.WorkerRegistry and
+// SessionQueue are non-nil, session triggers are enqueued for Python workers
+// instead of executed locally.
+func NewServerWithWorkerPool(build BuildInfo, application *app.Application) *Server {
 	return &Server{
+		App:            application,
 		BuildInfo:      build,
-		DB:             database,
-		Executor:       executor,
-		AppState:       app.NewState(),
-		WorkerRegistry: reg,
-		SessionQueue:   q,
+		DB:             application.DB,
+		Executor:       application.Executor,
+		AppState:       application.State,
+		WorkerRegistry: application.WorkerRegistry,
+		SessionQueue:   application.SessionQueue,
+		PolicyService:  application.PolicyService,
+		AuditService:   application.AuditService,
+		TraceService:   application.TraceService,
+		EvalService:    application.EvalService,
 	}
 }
 
@@ -94,31 +105,6 @@ func NewServerWithWorkerPool(build BuildInfo, database *db.DB, executor *pkgexec
 func (s *Server) WithWorkerPool(reg *worker.Registry, q worker.SessionQueue) *Server {
 	s.WorkerRegistry = reg
 	s.SessionQueue = q
-	return s
-}
-
-// WithPolicyService wires the policy loader. Domain registration/update will
-// persist the derived policy so the executor can enforce it.
-func (s *Server) WithPolicyService(svc *policyservice.Service) *Server {
-	s.PolicyService = svc
-	return s
-}
-
-// WithAuditService wires the audit log service.
-func (s *Server) WithAuditService(svc *auditservice.Service) *Server {
-	s.AuditService = svc
-	return s
-}
-
-// WithTraceService wires the trace recording/query service.
-func (s *Server) WithTraceService(svc *traceservice.Service) *Server {
-	s.TraceService = svc
-	return s
-}
-
-// WithEvalService wires the evaluation service.
-func (s *Server) WithEvalService(svc *evalservice.Service) *Server {
-	s.EvalService = svc
 	return s
 }
 
