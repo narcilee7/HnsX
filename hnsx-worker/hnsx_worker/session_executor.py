@@ -63,6 +63,16 @@ EmitFn = Callable[[dict], None]
 _DEFAULT_MAX_TURNS = 10
 
 
+def _accumulate_cost(cost: Any, totals: dict[str, Any]) -> None:
+    """Add a per-turn Cost snapshot into running totals."""
+    if cost is None:
+        return
+    totals["prompt_tokens"] += int(getattr(cost, "prompt_tokens", 0) or 0)
+    totals["completion_tokens"] += int(getattr(cost, "completion_tokens", 0) or 0)
+    totals["cost_usd"] += float(getattr(cost, "cost_usd", 0.0) or 0.0)
+    totals["latency_ms"] += int(getattr(cost, "latency_ms", 0) or 0)
+
+
 def execute_session(
     spec: dict[str, Any],
     trigger: dict[str, Any],
@@ -82,23 +92,28 @@ def execute_session(
         emit: Sink for observations (one Python dict per call).
 
     Returns:
-        A result dict with at least ``output`` (the final assistant text).
-        Eval scores are added by the caller (session_runtime) when an
-        ``eval_case`` is present.
+        A result dict with ``output`` and accumulated cost fields.
+        Eval scores are added when an ``eval_case`` is present.
     """
     mode = _read_mode(spec)
-    result: dict[str, Any] = {"output": ""}
+    result: dict[str, Any] = {
+        "output": "",
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0,
+        "latency_ms": 0,
+    }
     if mode in ("single", "single-task"):
         result["output"] = _run_single(
-            spec, trigger, config, stop_event=stop_event, emit=emit
+            spec, trigger, config, stop_event=stop_event, emit=emit, cost_totals=result
         )
     elif mode == "multi-turn":
         result["output"] = _run_multi_turn(
-            spec, trigger, config, stop_event=stop_event, emit=emit
+            spec, trigger, config, stop_event=stop_event, emit=emit, cost_totals=result
         )
     elif mode == "workflow":
         result["output"] = _run_workflow(
-            spec, trigger, config, stop_event=stop_event, emit=emit
+            spec, trigger, config, stop_event=stop_event, emit=emit, cost_totals=result
         )
     elif mode in ("supervisor", "hierarchical", "autonomous"):
         run_orchestration(
@@ -130,6 +145,7 @@ def _run_single(
     *,
     stop_event: threading.Event,
     emit: EmitFn,
+    cost_totals: dict[str, Any],
 ) -> str:
     harness = spec.get("harness", {})
     agents: dict = harness.get("agents", {})
@@ -177,6 +193,7 @@ def _run_single(
         stop_event=stop_event,
         emit=emit,
     )
+    _accumulate_cost(cost, cost_totals)
     if cost is not None:
         emit(
             {
@@ -220,6 +237,7 @@ def _run_multi_turn(
     *,
     stop_event: threading.Event,
     emit: EmitFn,
+    cost_totals: dict[str, Any],
 ) -> str:
     harness = spec.get("harness", {})
     agents: dict = harness.get("agents", {})
@@ -348,6 +366,7 @@ def _run_multi_turn(
             turn=turn,
         )
         final_text = text
+        _accumulate_cost(cost, cost_totals)
 
         if cost is not None:
             policy.add_cost(cost.cost_usd)
@@ -487,6 +506,7 @@ def _run_workflow(
     *,
     stop_event: threading.Event,
     emit: EmitFn,
+    cost_totals: dict[str, Any],
 ) -> str:
     harness = spec.get("harness", {})
     agents: dict = harness.get("agents", {})
@@ -547,6 +567,7 @@ def _run_workflow(
             emit=emit,
         )
         final_text = text
+        _accumulate_cost(cost, cost_totals)
         if step.get("output"):
             vars_[step["output"]] = text
         if cost is not None:
