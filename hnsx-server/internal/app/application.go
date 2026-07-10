@@ -173,6 +173,9 @@ func NewApplication(ctx context.Context, cfg *config.Config) (*Application, erro
 
 // Close cleans up resources held by the application.
 func (a *Application) Close(ctx context.Context) error {
+	if a.WorkerService != nil {
+		a.WorkerService.Close()
+	}
 	if a.redisClient != nil {
 		_ = a.redisClient.Close()
 	}

@@ -168,6 +168,9 @@ func (s *SchedulerServiceServer) NackSession(ctx context.Context, req *pb.NackSe
 //     commands, periodic pings. The cancel is fed by the worker registry's
 //     inbound channel; we forward those events to the stream as long as the
 //     worker is sending.
+//
+// Recv runs in its own goroutine so the main loop can send pings and inbound
+// cancel/drain events concurrently with waiting for worker messages.
 func (s *SchedulerServiceServer) StreamChannel(stream pb.SchedulerService_StreamChannelServer) error {
 	ctx := stream.Context()
 	workerID := ""
@@ -175,41 +178,30 @@ func (s *SchedulerServiceServer) StreamChannel(stream pb.SchedulerService_Stream
 		if workerID == "" {
 			return
 		}
+		st := s.WorkerSvc.Stats()
 		if requeued := s.RequeueSessions(workerID); len(requeued) > 0 {
-			s.logf("controlplane: worker=%s disconnected; requeued sessions=%v", workerID, requeued)
+			s.logf("controlplane: worker=%s disconnected; requeued sessions=%v (workers=%d healthy=%d queue=%d active=%d)",
+				workerID, requeued, st.Workers, st.HealthyWorkers, st.QueueLen, st.ActiveAssignments)
 		}
 	}()
 
-	// Discover this worker's inbound channel by reading the first
-	// observation whose WorkerId tells us who they are. We accept a
-	// small startup window where we don't know the id yet.
-	inbound := make(chan *pb.StreamChannelResponse, 8)
-	defer close(inbound)
-
-	// Watch the registry for an inbound channel matching this stream's
-	// worker once it identifies itself.
-	var workerInbound <-chan *pb.StreamChannelResponse
-	stopWatch := make(chan struct{})
-	defer close(stopWatch)
+	type recvResult struct {
+		req *pb.StreamChannelRequest
+		err error
+	}
+	recvCh := make(chan recvResult, 1)
+	recvDone := make(chan struct{})
+	defer close(recvDone)
 	go func() {
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
 		for {
+			req, err := stream.Recv()
 			select {
-			case <-stopWatch:
-				return
-			case <-ticker.C:
-				if workerID == "" {
-					continue
-				}
-				if s.WorkerSvc == nil {
-					continue
-				}
-				ch := s.WorkerSvc.Registry().Inbound(workerID)
-				if ch != nil {
-					workerInbound = ch
+			case recvCh <- recvResult{req: req, err: err}:
+				if err != nil {
 					return
 				}
+			case <-recvDone:
+				return
 			}
 		}
 	}()
@@ -218,6 +210,13 @@ func (s *SchedulerServiceServer) StreamChannel(stream pb.SchedulerService_Stream
 	defer pingTicker.Stop()
 
 	for {
+		// Re-resolve the inbound channel every iteration so we pick up a
+		// replacement channel if the worker is evicted and re-registered.
+		var workerInbound <-chan *pb.StreamChannelResponse
+		if workerID != "" && s.WorkerSvc != nil {
+			workerInbound = s.WorkerSvc.Registry().Inbound(workerID)
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -229,28 +228,26 @@ func (s *SchedulerServiceServer) StreamChannel(stream pb.SchedulerService_Stream
 			}
 		case evt, ok := <-workerInbound:
 			if !ok {
-				// worker channel closed (e.g. eviction)
-				workerInbound = nil
 				continue
 			}
 			if err := stream.Send(evt); err != nil {
 				return err
 			}
-		default:
+		case r := <-recvCh:
+			if r.err == io.EOF {
+				return nil
+			}
+			if r.err != nil {
+				return r.err
+			}
+			if wid := r.req.GetWorkerId(); wid != "" && workerID == "" {
+				workerID = wid
+				st := s.WorkerSvc.Stats()
+				s.logf("controlplane: worker=%s stream connected (workers=%d healthy=%d queue=%d active=%d)",
+					workerID, st.Workers, st.HealthyWorkers, st.QueueLen, st.ActiveAssignments)
+			}
+			s.handleWorkerEvent(r.req)
 		}
-
-		// Non-blocking recv from the worker.
-		req, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if wid := req.GetWorkerId(); wid != "" {
-			workerID = wid
-		}
-		s.handleWorkerEvent(req)
 	}
 }
 
