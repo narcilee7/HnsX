@@ -71,10 +71,13 @@ services:
       dockerfile: ../deployments/local/Dockerfile.worker
     environment:
       HNSX_SERVER: "server:50061"
+      HNSX_ECHO_TOOL_CALL: '{"tool_call_id":"mcp-call-1","name":"list_directory","input":{"path":"/tmp"},"text":""}'
     depends_on:
       server:
         condition: service_healthy
     restart: unless-stopped
+    volumes:
+      - ../../example-domains/mcp-demo/mcp_server.py:/app/mcp_server.py:ro
     command:
       - "run"
       - "--server"
@@ -84,7 +87,7 @@ services:
       - "--max-concurrent-sessions"
       - "2"
       - "--providers"
-      - "anthropic,openai,echo"
+      - "anthropic,openai,echo,noop"
       - "--models"
       - "claude-haiku-4-5,gpt-4o-mini"
       - "--sandbox-runtimes"
