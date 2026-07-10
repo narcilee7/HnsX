@@ -9,13 +9,15 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	stdruntime "runtime"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/config"
+	"github.com/hnsx-io/hnsx/server/internal/logger"
 	sessionmodel "github.com/hnsx-io/hnsx/server/internal/session/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/api"
@@ -32,6 +34,7 @@ type Server struct {
 	Application *app.Application
 	APIServer   *api.Server
 	GRPCServer  *controlplane.Server
+	Log         *zap.Logger
 }
 
 // NewServerFromArgs builds a Server from the "server" subcommand arguments.
@@ -48,8 +51,13 @@ func NewServerFromArgs(args []string) (*Server, error) {
 		return nil, fmt.Errorf("config: %w", err)
 	}
 
+	log, err := logger.New(cfg.Log.Level)
+	if err != nil {
+		return nil, fmt.Errorf("logger: %w", err)
+	}
+
 	ctx := context.Background()
-	application, err := app.NewApplication(ctx, cfg)
+	application, err := app.NewApplication(ctx, cfg, log)
 	if err != nil {
 		return nil, fmt.Errorf("application: %w", err)
 	}
@@ -63,13 +71,14 @@ func NewServerFromArgs(args []string) (*Server, error) {
 	apiServer := api.NewServerWithWorkerPool(build, application)
 
 	if *seedFrom != "" {
-		seedFromDir(apiServer, *seedFrom)
+		seedFromDir(log, apiServer, *seedFrom)
 	}
 
 	s := &Server{
 		Config:      cfg,
 		Application: application,
 		APIServer:   apiServer,
+		Log:         log,
 	}
 
 	if cfg.GRPCAddr != "" {
@@ -126,13 +135,19 @@ func (s *Server) Run(ctx context.Context) error {
 		go s.runStaleWorkerGC(stopGC)
 	}
 
-	log.Printf("[hnsx-server] listening on http=%s grpc=%s", s.Config.HTTPAddr, s.Config.GRPCAddr)
-	log.Printf("[hnsx-server] version=%s commit=%s", s.APIServer.BuildInfo.Version, s.APIServer.BuildInfo.Commit)
-	log.Printf("[hnsx-server] otel=%s build=%s", s.Config.OTel.Exporter, s.APIServer.BuildInfo.GoVersion)
+	s.Log.Info("hnsx-server listening",
+		zap.String("http", s.Config.HTTPAddr),
+		zap.String("grpc", s.Config.GRPCAddr))
+	s.Log.Info("hnsx-server build info",
+		zap.String("version", s.APIServer.BuildInfo.Version),
+		zap.String("commit", s.APIServer.BuildInfo.Commit))
+	s.Log.Info("hnsx-server runtime",
+		zap.String("otel", s.Config.OTel.Exporter),
+		zap.String("go", s.APIServer.BuildInfo.GoVersion))
 
 	select {
 	case <-ctx.Done():
-		log.Println("[hnsx-server] shutting down")
+		s.Log.Info("hnsx-server shutting down")
 		if stopGC != nil {
 			close(stopGC)
 		}
@@ -150,18 +165,18 @@ func (s *Server) shutdown() error {
 	defer cancel()
 
 	if err := s.APIServer.Drain(shutdownCtx); err != nil {
-		log.Printf("[hnsx-server] api drain: %v", err)
+		s.Log.Warn("api drain error", zap.Error(err))
 	}
 	if err := s.APIServer.Shutdown(shutdownCtx); err != nil {
-		log.Printf("[hnsx-server] api shutdown: %v", err)
+		s.Log.Warn("api shutdown error", zap.Error(err))
 	}
 	if s.GRPCServer != nil {
 		if err := s.GRPCServer.Shutdown(shutdownCtx); err != nil {
-			log.Printf("[hnsx-server] grpc shutdown: %v", err)
+			s.Log.Warn("grpc shutdown error", zap.Error(err))
 		}
 	}
 	if err := s.Application.Close(shutdownCtx); err != nil {
-		log.Printf("[hnsx-server] application close: %v", err)
+		s.Log.Warn("application close error", zap.Error(err))
 	}
 	return nil
 }
@@ -181,13 +196,13 @@ func (s *Server) runStaleWorkerGC(stop <-chan struct{}) {
 			if len(evicted) == 0 {
 				continue
 			}
-			log.Printf("[hnsx-server] evicted %d stale worker(s): %v", len(evicted), evicted)
+			s.Log.Info("evicted stale workers", zap.Int("count", len(evicted)), zap.Strings("workers", evicted))
 			if s.GRPCServer == nil || s.GRPCServer.Sched == nil {
 				continue
 			}
 			for _, wid := range evicted {
 				if requeued := s.GRPCServer.Sched.RequeueSessions(wid); len(requeued) > 0 {
-					log.Printf("[hnsx-server] requeued %d session(s) from worker %s", len(requeued), wid)
+					s.Log.Info("requeued sessions from worker", zap.Int("count", len(requeued)), zap.String("worker_id", wid))
 				}
 			}
 		}
@@ -197,10 +212,10 @@ func (s *Server) runStaleWorkerGC(stop <-chan struct{}) {
 // seedFromDir walks the given directory and registers every v2 DomainSpec YAML
 // against the API server. It is an explicit operator action (--seed-from) so
 // production deployments never implicitly pull in development fixtures.
-func seedFromDir(s *api.Server, dir string) {
+func seedFromDir(log *zap.Logger, s *api.Server, dir string) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		log.Printf("[seed] cannot read %s: %v (skipping)", dir, err)
+		log.Warn("seed cannot read directory", zap.String("dir", dir), zap.Error(err))
 		return
 	}
 	registered := 0
@@ -211,14 +226,14 @@ func seedFromDir(s *api.Server, dir string) {
 		path := fmt.Sprintf("%s/%s/domain.yaml", dir, e.Name())
 		spec, err := spec.LoadFile(path)
 		if err != nil {
-			log.Printf("[seed] skip %s: %v", path, err)
+			log.Warn("seed skip file", zap.String("path", path), zap.Error(err))
 			continue
 		}
 		s.RegisterBootstrapDomain(tenant.DefaultID, spec)
 		registered++
 	}
 	if registered > 0 {
-		log.Printf("[seed] registered %d domain(s) from %s", registered, dir)
+		log.Info("seed registered domains", zap.Int("count", registered), zap.String("dir", dir))
 	}
 }
 

@@ -177,6 +177,9 @@ func (c *Config) Validate() error {
 	if c.HTTPAddr == "" {
 		return errors.New("config.http_addr is required")
 	}
+	if strings.TrimSpace(c.DatabaseURL) == "" {
+		return errors.New("config.database_url is required")
+	}
 	switch c.OTel.Exporter {
 	case "stdout", "otlp", "none", "":
 		// ok

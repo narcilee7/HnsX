@@ -53,6 +53,15 @@ func FromRuntime(obs runtime.Observation) ObservationRecord {
 	return r
 }
 
+// Aggregate is a rolled-up view of observations across one or more sessions.
+type Aggregate struct {
+	TotalCostUSD          float64
+	TotalPromptTokens     int
+	TotalCompletionTokens int
+	AgentInvocations      int
+	ToolInvocations       int
+}
+
 // Common trace errors.
 var (
 	ErrTraceNotFound = errors.New("trace: not found")
