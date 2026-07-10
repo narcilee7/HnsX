@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 // APIError is the canonical error payload returned by every handler.
@@ -27,8 +29,7 @@ type APIError struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
-// Error implements error so APIError can be returned from helpers that wrap
-// service-layer errors.
+// Error implements error so APIError can be returned from helpers.
 func (e *APIError) Error() string {
 	if e == nil {
 		return ""
@@ -36,8 +37,7 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-// AsAPIError tries to interpret err as an *APIError. Returns false if err is
-// nil or no APIError is in the chain.
+// AsAPIError tries to interpret err as an *APIError.
 func AsAPIError(err error) (*APIError, bool) {
 	if err == nil {
 		return nil, false
@@ -49,9 +49,8 @@ func AsAPIError(err error) (*APIError, bool) {
 	return nil, false
 }
 
-// writeError serializes err onto w with the appropriate HTTP status. If err
-// is not an APIError, a generic INTERNAL_ERROR is returned with status 500.
-func writeError(w http.ResponseWriter, r *http.Request, err error) {
+// writeError serializes err with the appropriate HTTP status.
+func writeError(c *gin.Context, err error) {
 	ae, ok := AsAPIError(err)
 	if !ok {
 		ae = &APIError{
@@ -59,24 +58,15 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 			Message: err.Error(),
 		}
 	}
-	status := HTTPStatusFor(ae.Code)
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(ae)
+	c.JSON(HTTPStatusFor(ae.Code), ae)
 }
 
-// writeJSON is a tiny convenience that handles Content-Type and encoding.
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if v == nil {
-		return
-	}
-	_ = json.NewEncoder(w).Encode(v)
+// writeJSON is a tiny convenience that sends a JSON response.
+func writeJSON(c *gin.Context, status int, v any) {
+	c.JSON(status, v)
 }
 
-// HTTPStatusFor maps a stable code to an HTTP status. Codes not in the table
-// default to 500 / INTERNAL_ERROR.
+// HTTPStatusFor maps a stable code to an HTTP status.
 func HTTPStatusFor(code string) int {
 	switch code {
 	case "INVALID_REQUEST", "VALIDATION_FAILED", "MISSING_PARAMETER",
@@ -97,6 +87,14 @@ func HTTPStatusFor(code string) int {
 	default:
 		return http.StatusInternalServerError
 	}
+}
+
+// decodeJSONBody reads and unmarshals the request body into v.
+func decodeJSONBody(c *gin.Context, v any) error {
+	if err := c.ShouldBindJSON(v); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ----------------------------------------------------------------------------
@@ -138,4 +136,15 @@ func NewInternal(cause error) *APIError {
 		Code:    "INTERNAL_ERROR",
 		Message: cause.Error(),
 	}
+}
+
+// Legacy http.ResponseWriter helpers (kept for any remaining transitional code).
+func writeErrorLegacy(w http.ResponseWriter, status int, err error) {
+	ae, ok := AsAPIError(err)
+	if !ok {
+		ae = &APIError{Code: "INTERNAL_ERROR", Message: err.Error()}
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(ae)
 }
