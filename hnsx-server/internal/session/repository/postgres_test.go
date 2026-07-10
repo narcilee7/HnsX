@@ -4,12 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
 	domainrepo "github.com/hnsx-io/hnsx/server/internal/domain/repository"
 	internalsession "github.com/hnsx-io/hnsx/server/internal/session/model"
 	"github.com/hnsx-io/hnsx/server/internal/testutil"
+	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
 
 func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
@@ -19,20 +19,20 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 	// Ensure a domain exists so the FK constraint is satisfied.
 	domainRepo := domainrepo.NewPostgresRepository(database)
 	_ = domainRepo.Delete("session-test-domain")
-	spec := &spec.DomainSpec{
+	ds := &spec.DomainSpec{
 		ID:      "session-test-domain",
 		Version: "1.0.0",
 		Harness: spec.HarnessSpec{
 			Agents: map[string]spec.AgentSpec{
 				"agent": {ID: "agent", Provider: "noop", Adapter: spec.AdapterConfig{Kind: "noop"}},
 			},
-			Session: spec.SessionSpec{Mode: "single", Agent: "agent"},
+			Session: spec.SessionSpec{Mode: spec.Single, Agent: "agent"},
 		},
 	}
 	if err := domainRepo.Save(&model.RegisteredDomain{
-		ID:      spec.ID,
-		Version: spec.Version,
-		Spec:    spec,
+		ID:      ds.ID,
+		Version: ds.Version,
+		Spec:    ds,
 	}); err != nil {
 		t.Fatalf("seed domain: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 
 	// Update to completed with result.
 	sess.State = internalsession.StateCompleted
-	sess.Result = &runtime.Result{Mode: "single"}
+	sess.Result = &runtime.Result{Mode: spec.Single}
 	completed := time.Now().UTC()
 	sess.CompletedAt = &completed
 	if err := repo.Save(sess); err != nil {
@@ -83,7 +83,7 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 	if got.State != internalsession.StateCompleted {
 		t.Fatalf("state after update = %q", got.State)
 	}
-	if got.Result == nil || got.Result.Mode != "single" {
+	if got.Result == nil || got.Result.Mode != spec.Single {
 		t.Fatal("result not round-tripped")
 	}
 

@@ -18,11 +18,11 @@ import (
 	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
+	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	pkgexecutor "github.com/hnsx-io/hnsx/server/pkg/session"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
-	"github.com/hnsx-io/hnsx/server/pkg/worker"
 )
 
 // BuildInfo describes this build of hnsx-server. Set by main at process start.
@@ -45,11 +45,6 @@ type Server struct {
 	Executor  *pkgexecutor.Executor
 	AppState  *app.State
 
-	// V1.1 worker pool. May be nil when the server is started without the
-	// gRPC control plane (legacy local-executor mode).
-	WorkerRegistry *worker.Registry
-	SessionQueue   worker.SessionQueue
-
 	// PolicyService loads domain policy into the policy repository.
 	PolicyService *policyservice.Service
 
@@ -61,6 +56,9 @@ type Server struct {
 
 	// EvalService manages eval sets and runs.
 	EvalService *evalservice.Service
+
+	// WorkerService manages worker registration, scheduling, and session queueing.
+	WorkerService *workerservice.Service
 
 	// DomainCommands exposes domain lifecycle use cases.
 	DomainCommands *commands.DomainCommands
@@ -85,36 +83,23 @@ var ErrDomainNotFound = errors.New("domain not found")
 type Domain = app.RegisteredDomain
 
 // NewServer constructs an API Server wired to the supplied Application.
+// The worker pool is wired automatically when the Application has one.
 func NewServer(build BuildInfo, application *app.Application) *Server {
-	return NewServerWithWorkerPool(build, application)
-}
-
-// NewServerWithWorkerPool constructs an API Server wired to the V1.1 worker
-// pool through the supplied Application.
-func NewServerWithWorkerPool(build BuildInfo, application *app.Application) *Server {
 	return &Server{
 		App:             application,
 		BuildInfo:       build,
 		DB:              application.DB,
 		Executor:        application.Executor,
 		AppState:        application.State,
-		WorkerRegistry:  application.WorkerRegistry,
-		SessionQueue:    application.SessionQueue,
 		PolicyService:   application.PolicyService,
 		AuditService:    application.AuditService,
 		TraceService:    application.TraceService,
 		EvalService:     application.EvalService,
+		WorkerService:   application.WorkerService,
 		DomainCommands:  commands.NewDomainCommands(application.DomainService),
-		SessionCommands: commands.NewSessionCommands(application.SessionService, application.DomainService, application.SessionQueue, application.Executor),
+		SessionCommands: commands.NewSessionCommands(application.SessionService, application.DomainService, application.WorkerService, application.Executor, application.State),
 		Queries:         queries.NewQueries(application.DomainService, application.SessionService),
 	}
-}
-
-// WithWorkerPool wires an existing server into the V1.1 worker pool.
-func (s *Server) WithWorkerPool(reg *worker.Registry, q worker.SessionQueue) *Server {
-	s.WorkerRegistry = reg
-	s.SessionQueue = q
-	return s
 }
 
 // LoadDomainPolicy persists the policy for the named domain.
@@ -199,16 +184,15 @@ func (s *Server) PublishObservation(sessionID string, obs runtime.Observation) b
 
 // RegisterBootstrapDomain inserts an already-validated *spec.DomainSpec
 // into the domain registry. Intended for the `seed-from` path in main.
-func (s *Server) RegisterBootstrapDomain(tenantID tenant.ID, v any) {
+func (s *Server) RegisterBootstrapDomain(tenantID tenant.ID, v *spec.DomainSpec) {
 	if s.App == nil || s.App.DomainService == nil {
 		return
 	}
-	ds, ok := v.(*spec.DomainSpec)
-	if !ok {
+	if v == nil {
 		return
 	}
-	if _, err := s.App.DomainService.Register(ds); err != nil {
+	if _, err := s.App.DomainService.Register(v); err != nil {
 		return
 	}
-	_ = s.LoadDomainPolicy(tenant.NewContext(context.Background(), tenantID), ds.ID)
+	_ = s.LoadDomainPolicy(tenant.NewContext(context.Background(), tenantID), v.ID)
 }
