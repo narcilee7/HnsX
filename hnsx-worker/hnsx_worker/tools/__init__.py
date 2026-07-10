@@ -21,6 +21,7 @@ from .base import (
     ToolDecision,
     ToolResult,
 )
+from .factory import build_tool, tool_schemas_for_adapter
 from .registry import ToolRegistry
 
 __all__ = [
@@ -31,4 +32,6 @@ __all__ = [
     "ToolDecision",
     "ToolRegistry",
     "ToolResult",
+    "build_tool",
+    "tool_schemas_for_adapter",
 ]

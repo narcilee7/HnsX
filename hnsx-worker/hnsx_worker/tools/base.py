@@ -19,7 +19,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Result / decision types
 # ---------------------------------------------------------------------------
