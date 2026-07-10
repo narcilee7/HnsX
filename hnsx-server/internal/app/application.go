@@ -91,8 +91,7 @@ func NewApplication(ctx context.Context, cfg *config.Config) (*Application, erro
 
 	appState := NewState()
 
-	// Repositories: domain/session use Postgres when DB is enabled; the rest
-	// stay InMemory until Phase 2 adds their Postgres implementations.
+	// Repositories: GORM/Postgres when DB is enabled; InMemory fallback in no-db mode.
 	var domainRepo domainrepository.Repository
 	if store != nil && !store.IsNoDB() {
 		domainRepo = domainrepository.NewPostgresRepository(store)
