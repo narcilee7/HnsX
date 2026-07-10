@@ -676,7 +676,7 @@ def _run_workflow(
         if agent_name not in agents:
             raise KeyError(f"step {step['id']!r} references unknown agent {agent_name!r}")
         agent = agents[agent_name]
-        prompt = _resolve_prompt(spec, agent)
+        prompt = _resolve_prompt_for_step(spec, agent, step)
         adapter = AdapterRegistry.get(agent.get("adapter", {}).get("kind", "noop"))
         step_input = _build_step_input(step.get("input"), vars_)
 
@@ -1485,6 +1485,28 @@ def _resolve_prompt(spec: dict, agent: dict) -> str:
     if sp in prompts:
         return prompts[sp].get("template", "")
     return sp
+
+
+def _resolve_prompt_for_step(spec: dict, agent: dict, step: dict) -> str:
+    """Return the prompt for a workflow step.
+
+    Step-level configuration takes precedence over the agent's default
+    system prompt so that individual steps can specialize their instructions.
+    Supports:
+
+      - ``step.prompt`` (literal template string)
+      - ``step.prompt_ref`` (reference to ``harness.prompts``)
+      - fallback to ``agent.system_prompt``
+    """
+    if "prompt" in step:
+        return str(step["prompt"] or "")
+    prompt_ref = step.get("prompt_ref")
+    if prompt_ref:
+        prompts = spec.get("harness", {}).get("prompts", {}) or {}
+        if prompt_ref in prompts:
+            return prompts[prompt_ref].get("template", "")
+        return ""
+    return _resolve_prompt(spec, agent)
 
 
 def _input_to_user_content(input: dict) -> str:
