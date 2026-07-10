@@ -1,5 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listApprovals, approveApproval, rejectApproval } from '@/api/approvals'
+import {
+  listApprovals,
+  approveApproval,
+  rejectApproval,
+} from '@/api/approvals'
 import type { ApprovalListParams } from '@/api/approvals'
 
 const approvalKeys = {
@@ -16,14 +20,22 @@ export function useApprovals(params: ApprovalListParams = {}) {
   })
 }
 
+interface ResolveInput {
+  id: string
+  decision: 'approve' | 'reject'
+  reviewed_by?: string
+  comment?: string
+}
+
 export function useResolveApproval() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, decision, comment }: { id: string; decision: 'approve' | 'reject'; comment?: string }) => {
+    mutationFn: ({ id, decision, reviewed_by, comment }: ResolveInput) => {
+      const body = { reviewed_by, comment }
       if (decision === 'approve') {
-        return approveApproval(id, comment)
+        return approveApproval(id, body)
       }
-      return rejectApproval(id, comment)
+      return rejectApproval(id, body)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: approvalKeys.lists() })

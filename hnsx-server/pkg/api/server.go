@@ -13,6 +13,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
+	approvalservice "github.com/hnsx-io/hnsx/server/internal/approval/service"
 	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
 	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
 	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
@@ -58,6 +59,10 @@ type Server struct {
 	// EvalService manages eval sets and runs.
 	EvalService *evalservice.Service
 
+	// ApprovalService implements the human-in-the-loop gate; nil is OK
+	// only if the operator never wires any domain with require_human_approval.
+	ApprovalService *approvalservice.Service
+
 	// SecretService resolves ${secret:name} placeholders and persists
 	// AES-GCM encrypted values; nil means the operator did not configure
 	// HNSX_SECRET_KEY and the control plane refused to start.
@@ -101,6 +106,7 @@ func NewServer(build BuildInfo, application *app.Application) *Server {
 		AuditService:    application.AuditService,
 		TraceService:    application.TraceService,
 		EvalService:     application.EvalService,
+		ApprovalService: application.ApprovalService,
 		SecretService:   application.SecretService,
 		WorkerService:   application.WorkerService,
 		DomainCommands:  commands.NewDomainCommands(application.DomainService),
