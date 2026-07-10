@@ -308,6 +308,43 @@ func (r *Registry) SessionWorker(sessionID string) (string, bool) {
 	return wid, ok
 }
 
+// RegistryStats is a point-in-time snapshot of registry state.
+type RegistryStats struct {
+	Workers        int
+	Healthy        int
+	ActiveSessions int
+}
+
+// Stats returns a snapshot of registry state.
+func (r *Registry) Stats() RegistryStats {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	st := RegistryStats{
+		Workers:        len(r.workers),
+		ActiveSessions: len(r.sessionAssignments),
+	}
+	now := r.now()
+	for _, rec := range r.workers {
+		if now.Sub(rec.LastSeen) < 30*time.Second {
+			st.Healthy++
+		}
+	}
+	return st
+}
+
+// Close evicts all workers and closes their inbound channels. Safe to call
+// multiple times; intended for graceful shutdown and tests.
+func (r *Registry) Close() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, rec := range r.workers {
+		close(rec.Inbound)
+	}
+	r.workers = map[string]*WorkerRecord{}
+	r.sessionAssignments = map[string]string{}
+	r.workerSessions = map[string]map[string]struct{}{}
+}
+
 // Len returns the number of registered workers (including stale).
 func (r *Registry) Len() int {
 	r.mu.RLock()

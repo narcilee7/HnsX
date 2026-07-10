@@ -201,6 +201,11 @@ func cmdServer(args []string) int {
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			log.Printf("[hnsx-server] api shutdown: %v", err)
 		}
+		if grpcSrv != nil {
+			if err := grpcSrv.Shutdown(shutdownCtx); err != nil {
+				log.Printf("[hnsx-server] grpc shutdown: %v", err)
+			}
+		}
 		return 0
 	case err := <-serveErr:
 		log.Fatalf("http: %v", err)

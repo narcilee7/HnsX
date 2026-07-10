@@ -143,6 +143,39 @@ func (s *Service) DequeueSession(ctx context.Context, required []string) (*worke
 	return s.queue.Dequeue(ctx, required)
 }
 
+// ServiceStats is a point-in-time snapshot of the worker pool.
+type ServiceStats struct {
+	Workers          int
+	HealthyWorkers   int
+	QueueLen         int
+	ActiveAssignments int
+}
+
+// Stats returns a snapshot of the worker pool and queue.
+func (s *Service) Stats() ServiceStats {
+	st := ServiceStats{}
+	if s.reg != nil {
+		rs := s.reg.Stats()
+		st.Workers = rs.Workers
+		st.HealthyWorkers = rs.Healthy
+		st.ActiveAssignments = rs.ActiveSessions
+	}
+	if s.queue != nil {
+		st.QueueLen = s.queue.Len()
+	}
+	return st
+}
+
+// Close releases registry resources. Safe to call on a nil service.
+func (s *Service) Close() {
+	if s == nil {
+		return
+	}
+	if s.reg != nil {
+		s.reg.Close()
+	}
+}
+
 // QueueLen returns the current pending session count.
 func (s *Service) QueueLen() int {
 	if s.queue == nil {
