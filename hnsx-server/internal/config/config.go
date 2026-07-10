@@ -87,7 +87,7 @@ func Default() *Config {
 		HTTPAddr:      "127.0.0.1:50051",
 		GRPCAddr:      "127.0.0.1:50061",
 		DatabaseURL:   "",
-		MigrationsDir: "migrations",
+		MigrationsDir: "go/migrations",
 		OTel: OTelConfig{
 			Exporter:     "stdout",
 			OTLPEndpoint: "127.0.0.1:4317",
