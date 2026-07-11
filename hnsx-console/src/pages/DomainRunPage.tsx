@@ -9,9 +9,10 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Loading } from '@/components/ui/Loading'
 import { ErrorState } from '@/components/ui/Error'
 import { useCreateSession, useSessions } from '@/hooks/useSessions'
-import { useDomain } from '@/hooks/useDomains'
+import { useDomainYaml } from '@/hooks/useDomains'
 import { cn } from '@/lib/utils'
 import { ArrowLeft, FileCode2, History, Sparkles, AlertCircle, CheckCircle2, ChevronRight } from 'lucide-react'
+import { load } from 'js-yaml'
 
 const TEMPLATES: { id: string; label: string; description: string; payload: Record<string, unknown> }[] = [
   {
@@ -60,10 +61,23 @@ const RECENT_KEY_PREFIX = 'hnsx.run.recent.'
 export default function DomainRunPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { data: domain, isLoading: domainLoading, error: domainError } = useDomain(id)
+  const { data: yamlText, isLoading: domainLoading, error: domainError } = useDomainYaml(id)
   const { data: sessions } = useSessions({ domain: id, limit: 5 })
   const createSession = useCreateSession()
   const isPending = createSession.isPending
+
+  const domain = useMemo(() => {
+    if (!yamlText) return null
+    try {
+      const obj = load(yamlText) as Record<string, unknown>
+      return {
+        id: String(obj.id),
+        version: String(obj.version),
+      }
+    } catch {
+      return null
+    }
+  }, [yamlText])
 
   const [trigger, setTrigger] = useState<string>('{\n  \n}')
   const [parseError, setParseError] = useState<string | null>(null)

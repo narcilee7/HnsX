@@ -43,7 +43,7 @@ harness:
           template: Always greet warmly. Return ``Hello, <name>!``.
       tools:
         - name: greet
-          type: python
+          kind: python
           config:
             code: |
               name = input.get("name", "world")
@@ -54,7 +54,7 @@ harness:
       description: Current-time helper (UTC).
       tools:
         - name: now
-          type: python
+          kind: python
           config:
             code: |
               import time

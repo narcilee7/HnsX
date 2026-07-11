@@ -24,7 +24,7 @@ harness:
         you have enough information to answer concisely.
   tools:
     fetch_url:
-      type: http
+      kind: http
       name: fetch_url
       description: Fetch a URL and return the response body.
       config:

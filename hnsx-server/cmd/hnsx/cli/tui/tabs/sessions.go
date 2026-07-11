@@ -22,10 +22,12 @@ type SessionsTab struct {
 	height int
 	theme  common.Theme
 
-	sessions []client.SessionListItem
-	selected int
-	err      error
-	detail   *sessionDetail
+	sessions    []client.SessionListItem
+	filtered    []client.SessionListItem
+	selected    int
+	filterQuery string
+	err         error
+	detail      *sessionDetail
 
 	// view toggles
 	inDetail bool
@@ -59,15 +61,43 @@ func (t SessionsTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sessionsLoadedMsg:
 		t.sessions = msg.items
 		t.err = msg.err
-		if t.selected >= len(t.sessions) {
-			t.selected = len(t.sessions) - 1
+		t.applyFilter()
+		if t.selected >= len(t.filtered) {
+			t.selected = len(t.filtered) - 1
 		}
 		if t.selected < 0 {
 			t.selected = 0
 		}
 		return t, nil
 
-	case tickMsg:
+	case SelectMsg:
+		for i, s := range t.filtered {
+			if s.ID == msg.ID {
+				t.selected = i
+				t.inDetail = true
+				t.detail = newSessionDetail(t.client, s.ID, t.theme)
+				t.detail.setSize(t.width, t.detailHeight())
+				return t, t.detail.Init()
+			}
+		}
+		// If not found in current filtered list, try full list and open directly.
+		for _, s := range t.sessions {
+			if s.ID == msg.ID {
+				t.inDetail = true
+				t.detail = newSessionDetail(t.client, s.ID, t.theme)
+				t.detail.setSize(t.width, t.detailHeight())
+				return t, t.detail.Init()
+			}
+		}
+		return t, nil
+
+	case FilterMsg:
+		t.filterQuery = strings.ToLower(msg.Query)
+		t.applyFilter()
+		return t, nil
+
+	case RefreshMsg:
+		return t, t.fetchSessions()
 		if !t.inDetail {
 			return t, tea.Batch(t.fetchSessions(), tickSessions())
 		}
@@ -90,13 +120,13 @@ func (t SessionsTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.selected--
 			}
 		case "down", "j":
-			if t.selected < len(t.sessions)-1 {
+			if t.selected < len(t.filtered)-1 {
 				t.selected++
 			}
 		case "enter":
-			if t.selected >= 0 && t.selected < len(t.sessions) {
+			if t.selected >= 0 && t.selected < len(t.filtered) {
 				t.inDetail = true
-				t.detail = newSessionDetail(t.client, t.sessions[t.selected].ID, t.theme)
+				t.detail = newSessionDetail(t.client, t.filtered[t.selected].ID, t.theme)
 				t.detail.setSize(t.width, t.detailHeight())
 				return t, t.detail.Init()
 			}
@@ -128,7 +158,7 @@ func (t SessionsTab) View() string {
 
 	headers := []string{"STATE", "DOMAIN", "ID", "AGE"}
 	var rows []components.Row
-	for _, s := range t.sessions {
+	for _, s := range t.filtered {
 		rows = append(rows, components.Row{Cells: []string{
 			s.State,
 			s.DomainID,
@@ -158,22 +188,37 @@ func (t SessionsTab) fetchSessions() tea.Cmd {
 }
 
 func (t SessionsTab) rerun() tea.Cmd {
-	if t.selected < 0 || t.selected >= len(t.sessions) {
+	if t.selected < 0 || t.selected >= len(t.filtered) {
 		return nil
 	}
 	return func() tea.Msg {
-		_, err := t.client.RerunSession(t.sessions[t.selected].ID)
+		_, err := t.client.RerunSession(t.filtered[t.selected].ID)
 		return actionMsg{err: err, kind: "rerun"}
 	}
 }
 
 func (t SessionsTab) cancel() tea.Cmd {
-	if t.selected < 0 || t.selected >= len(t.sessions) {
+	if t.selected < 0 || t.selected >= len(t.filtered) {
 		return nil
 	}
 	return func() tea.Msg {
-		_, err := t.client.CancelSession(t.sessions[t.selected].ID)
+		_, err := t.client.CancelSession(t.filtered[t.selected].ID)
 		return actionMsg{err: err, kind: "cancel"}
+	}
+}
+
+func (t *SessionsTab) applyFilter() {
+	if t.filterQuery == "" {
+		t.filtered = append([]client.SessionListItem(nil), t.sessions...)
+		return
+	}
+	t.filtered = t.filtered[:0]
+	for _, s := range t.sessions {
+		if strings.Contains(strings.ToLower(s.State), t.filterQuery) ||
+			strings.Contains(strings.ToLower(s.DomainID), t.filterQuery) ||
+			strings.Contains(strings.ToLower(s.ID), t.filterQuery) {
+			t.filtered = append(t.filtered, s)
+		}
 	}
 }
 

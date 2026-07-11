@@ -23,7 +23,7 @@ harness:
         directional 4-sentence analysis at the end.
   tools:
     yahoo_quote:
-      type: http
+      kind: http
       name: yahoo_quote
       description: Fetch a stock quote from the Yahoo Finance v8 API.
       config:

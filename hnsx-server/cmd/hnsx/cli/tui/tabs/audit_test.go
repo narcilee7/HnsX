@@ -11,9 +11,9 @@ import (
 
 func TestAuditTab_FilterPrompt(t *testing.T) {
 	tab := NewAuditTab("http://127.0.0.1:1")
-	tab = updateAuditTab(tab, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	tab = updateAuditTab(tab, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
 	if !tab.filtering {
-		t.Fatal("expected filter prompt after '/'")
+		t.Fatal("expected filter prompt after 'f'")
 	}
 }
 

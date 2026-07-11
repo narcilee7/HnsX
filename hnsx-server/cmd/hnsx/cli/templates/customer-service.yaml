@@ -1,0 +1,68 @@
+id: {{domain_id}}
+version: 0.1.0
+description: |
+  Customer service triage for {{company_name}}.
+
+harness:
+  agents:
+    triage:
+      id: triage
+      provider: anthropic
+      model: claude-haiku-4-5
+      adapter:
+        kind: anthropic
+        timeout_seconds: 30
+      system_prompt: triage-prompt
+      skill_refs:
+        - customer-service
+    billing:
+      id: billing
+      provider: openai
+      model: gpt-4o-mini
+      adapter:
+        kind: openai
+        timeout_seconds: 60
+      system_prompt: billing-prompt
+      skill_refs:
+        - customer-service
+  prompts:
+    triage-prompt:
+      type: system
+      template: |
+        You are a triage agent for {{company_name}} customer service.
+        Classify the user's question into one of {billing, technical, other}
+        and reply with JSON only.
+    billing-prompt:
+      type: system
+      template: |
+        You are the billing specialist for {{company_name}}.
+        Be concise and never invent refund confirmations.
+  skills:
+    customer-service:
+      description: Shared customer service context.
+      prompts:
+        - id: style
+          template: |
+            Always be polite and helpful. Company: {{company_name}}.
+  session:
+    mode: workflow
+    workflow:
+      entry: classify
+      steps:
+        - id: classify
+          agent: triage
+          next: respond
+          output: classification
+        - id: respond
+          agent: billing
+          input:
+            classification: "${classification}"
+          output: response
+  policy:
+    budget:
+      max_cost_usd: 1.0
+      max_turns: 10
+    permissions:
+      allow_network: false
+      allow_file_write: false
+      allow_shell: false

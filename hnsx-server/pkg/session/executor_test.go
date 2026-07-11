@@ -92,7 +92,7 @@ func TestExecutor_Execute_PermissionDenied(t *testing.T) {
 				"a": {
 					Provider: "echo",
 					Adapter:  spec.AdapterConfig{Kind: "echo"},
-					Tools:    []string{"writer"},
+					ToolRefs: []string{"writer"},
 				},
 			},
 			Tools: map[string]spec.ToolConfig{
