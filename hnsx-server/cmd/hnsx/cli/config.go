@@ -30,6 +30,8 @@ type Config struct {
 	ComposeFile string
 	// ServerURL is the base URL of the running hnsx-server (read by remote commands).
 	ServerURL string
+	// NoTui disables the default TUI when hnsx is run without arguments.
+	NoTui bool
 	// ConfigFile is the user-level config file path (currently informational; v0.5+).
 	ConfigFile string
 }
@@ -41,6 +43,7 @@ func Default() Config {
 	return Config{
 		Output:      envOr("HNSX_OUTPUT", "human"),
 		Verbose:     envOr("HNSX_VERBOSE", "false") == "true",
+		NoTui:       envOr("HNSX_NO_TUI", "false") == "true",
 		RepoRoot:    root,
 		ComposeFile: envOr("HNSX_COMPOSE_FILE", filepath.Join(root, "deployments/local/docker-compose.yaml")),
 		ServerURL:   envOr("HNSX_SERVER_URL", "http://127.0.0.1:50052"),
@@ -96,6 +99,7 @@ func BindPersistentFlags(root *cobra.Command, cfg *Config) {
 	pf.BoolVar(&cfg.Verbose, "verbose", cfg.Verbose, "enable verbose logging")
 	pf.StringVar(&cfg.ServerURL, "server", cfg.ServerURL, "hnsx-server base URL")
 	pf.StringVar(&cfg.ComposeFile, "compose-file", cfg.ComposeFile, "docker-compose file for lifecycle commands")
+	pf.BoolVar(&cfg.NoTui, "no-tui", cfg.NoTui, "disable the default TUI when running without arguments")
 }
 
 // ResolveOutput returns the effective output mode, validating the flag value.
