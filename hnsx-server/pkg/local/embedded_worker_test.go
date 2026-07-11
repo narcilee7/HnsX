@@ -114,6 +114,15 @@ func findProjectRoot(python string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Walk up until we find the repo root (identified by go.work or go.mod).
+	for dir := cwd; dir != "" && dir != string(filepath.Separator); dir = filepath.Dir(dir) {
+		if _, err := os.Stat(filepath.Join(dir, "go.work")); err == nil {
+			return dir, nil
+		}
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+	}
 	return cwd, nil
 }
 
