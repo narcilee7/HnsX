@@ -12,26 +12,34 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/client"
 )
 
-// newRemoteCmd preserves the original "remote <x>" command tree. Each subcommand
-// prints a one-time deprecation hint pointing at the new resource-oriented
-// vocabulary (hnsx domain list, hnsx session trigger, ...). The remote tree will
-// be removed in v1.0.
+// newRemoteCmd in v1.0 is a hidden alias group that prints a clear
+// migration message and re-exports the canonical resource commands. The
+// tree will be removed in v1.1 (one-cycle grace window per the roadmap's
+// deprecation policy).
 func newRemoteCmd(cfg *Config) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "remote",
-		Short: "Talk to a running hnsx-server (deprecated, use resource commands)",
-		Long: `DEPRECATION: as of v0.3 the resource-oriented commands are preferred:
+		Use:    "remote",
+		Short:  "Deprecated alias tree; use resource commands (hnsx domain, session, eval, trace)",
+		Hidden: true,
+		Long: `DEPRECATION (v1.0): 'hnsx remote <x>' has been folded into the
+resource-oriented command tree. As of v1.0 the supported equivalents are:
 
   hnsx remote domains list          →  hnsx domain list
+  hnsx remote domains get <id>      →  hnsx domain show <id>
+  hnsx remote domains register      →  hnsx domain register
+  hnsx remote sessions list         →  hnsx session list
+  hnsx remote sessions get <id>     →  hnsx session show <id>
   hnsx remote sessions trigger      →  hnsx session trigger
-  hnsx remote evals run             →  hnsx eval run
-  ...
+  hnsx remote sessions cancel       →  hnsx session cancel
+  hnsx remote sessions rerun        →  hnsx session rerun
+  hnsx remote sessions events <id>  →  hnsx session tail <id>
+  hnsx remote evals list            →  hnsx eval set list
+  hnsx remote evals run             →  hnsx eval run start
 
-The "remote" tree remains for backwards compatibility and will be removed in v1.0.
-`,
+This 'remote' tree will be removed in v1.1.`,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			fmt.Fprintln(os.Stderr,
-				"⚠ 'hnsx remote <x>' is deprecated; prefer the resource-oriented command (e.g. `hnsx domain list`).")
+				"⚠ 'hnsx remote <x>' is deprecated and hidden; prefer the resource-oriented command (e.g. `hnsx domain list`). Removal: v1.1.")
 		},
 	}
 	cmd.AddCommand(newRemoteDomains(cfg))
