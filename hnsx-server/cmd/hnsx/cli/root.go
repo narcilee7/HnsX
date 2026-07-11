@@ -56,6 +56,12 @@ Use "hnsx <command> --help" for per-command details.
 	cmd.AddCommand(newValidateCmd(&cfg))
 	cmd.AddCommand(newRunCmd(&cfg))
 
+	// v0.4 Operator: resource-oriented command groups.
+	cmd.AddCommand(newDomainCmd(&cfg))
+	cmd.AddCommand(newSessionCmd(&cfg))
+	cmd.AddCommand(newTraceCmd(&cfg))
+	cmd.AddCommand(newEvalCmd(&cfg))
+
 	// Remote commands (preserved; deprecation warnings begin in v0.4).
 	cmd.AddCommand(newRemoteCmd(&cfg))
 

@@ -74,4 +74,31 @@ if [[ -n "$list" ]]; then
   ok "session visible via REST"
 fi
 
-bold "all v0.3 CLI smoke checks passed"
+bold "[v0.4/1] resource commands"
+# domain list
+"$HNSX" --server "$SERVER_URL" domain list --limit 1 >/dev/null \
+  || fail "domain list failed"
+ok "domain list works"
+
+# session list with --filter --limit
+"$HNSX" --server "$SERVER_URL" session list --limit 5 --filter domain_id=noop-smoke >/dev/null \
+  || fail "session list (with filters) failed"
+ok "session list --filter works"
+
+# session trigger (returns a new id)
+new_sid="$("$HNSX" --server "$SERVER_URL" session trigger --domain noop-smoke \
+  --trigger '{"question":"v0.4 smoke"}' --output quiet 2>/dev/null || true)"
+[[ -n "$new_sid" ]] || fail "session trigger did not return an id"
+ok "session trigger → $new_sid"
+
+# trace list
+"$HNSX" --server "$SERVER_URL" trace list --limit 3 >/dev/null \
+  || fail "trace list failed"
+ok "trace list works"
+
+# eval set list
+"$HNSX" --server "$SERVER_URL" eval set list >/dev/null \
+  || fail "eval set list failed"
+ok "eval set list works"
+
+bold "all v0.3 + v0.4 CLI smoke checks passed"
