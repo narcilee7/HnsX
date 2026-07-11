@@ -148,10 +148,12 @@ hnsx audit list [--actor ...] [--resource ...]
 ### 2.8 Surfaces（v0.5+）
 
 ```text
+hnsx                 # 启动 TUI（TTY 下默认入口；--no-tui 禁用）
 hnsx console         # 启 Console dev/prod，打开浏览器
-hnsx tui             # 进 TUI（需实现 v0.5+）
 hnsx mcp <sub>...    # MCP Server 管理（v0.6+，预留）
 ```
+
+TUI 不是 `hnsx` 的子命令，而是 CLI 产品本身的默认交互面；`hnsx <command>` 继续作为精确命令层供 CI / 脚本 / Agent 使用。详见 `docs/cli-tui-roadmap.md`。
 
 ### 2.9 工具 / 自省
 
@@ -214,17 +216,17 @@ hnsx plugin  list | install      # 插件预留（v1.0）
 
 ### v0.5 — "Bridge"
 
-**主题**：把 Console / TUI / example-domains 收编为 `hnsx` 的一等子命令。
+**主题**：把 Console / TUI / example-domains 收编为 `hnsx` 的一等能力。
 
 **新增**：
 - `hnsx console`：内嵌启 Vite prod build → 自动 `open http://127.0.0.1:<port>`；支持 `--dev`（Vite dev server）
-- `hnsx tui`：启动 bubbletea-based TUI（独立可装 binary 或 subcommand）
+- **TUI 作为默认入口**：`hnsx` 无参数且 TTY 时启动 bubbletea-based TUI；`hnsx <cmd>` 继续作为精确命令
 - `hnsx examples` 进化为画廊：本地 + GitHub source
 - `hnsx update`：自更新到最新稳定版
 - shell completion 默认装（首次 `hnsx up` 后探测 shell 提示安装）
 
 **Done 标准**：
-- 一次 `hnsx up` 后，`hnsx console` 一键拉起 GUI；`hnsx tui` 一键进终端
+- 一次 `hnsx up` 后，`hnsx console` 一键拉起 GUI；`hnsx` 一键进终端 TUI
 - `hnsx examples` 在 Console / TUI / CLI 三处呈现一致
 
 **估时**：1.5 周
@@ -316,7 +318,7 @@ hnsx plugin  list | install      # 插件预留（v1.0）
 | 资源命令 human 输出 | ⬜ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Session tail / watch | ⬜ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Eval diff | ⬜ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Console / TUI 启动 | ⬜ | ⬜ | ✅ | ✅ | ✅ | ✅ |
+| Console 启动 / TUI 作为默认入口 | ⬜ | ⬜ | ✅ | ✅ | ✅ | ✅ |
 | Policy / Secret / Approval | ⬜ | ⬜ | ⬜ | ✅ | ✅ | ✅ |
 | Domain format / diff / replay | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | ✅ |
 | install / upgrade / signing | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ✅ |
@@ -392,7 +394,7 @@ Sprint 2 (下周) — v0.3 收尾 + v0.4 起手
 - [ ] 命名（资源导向）是否符合团队习惯？是否需要 `domains` 复数形式？
 - [ ] v0.3 "Lifesaver" 的 Done 标准是不是太低/太高？
 - [ ] `hnsx up` 是否要默认 detach？是否要 `--foreground`？
-- [ ] TUI 与 Console 谁先做？RoadMap 里是 Console → TUI，可否反过来？
+- [ ] **TUI 作为默认入口**：`hnsx` 无参数进 TUI 是否可接受？是否保留 `hnsx tui` 作为兼容命令？
 - [ ] Governance 子树（policy/secret/approval）v0.6 的优先级是否合理？
 - [ ] 迁移计划里 `hnsx remote *` 完全 alias 还是 deprecate-warn？
 - [ ] 是否要把 §2 命令词表拆成 `docs/cli/vocabulary.md` 作为独立维护文件？

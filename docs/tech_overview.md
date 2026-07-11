@@ -148,7 +148,7 @@ CLI 是独立的用户入口，**专门设计为可被 AI Agent 调用和理解*
   - **Discovery**：`hnsx examples`、`hnsx try <name>` —— 一键跑示例 Domain
   - **Resource**：`hnsx domain|session|trace|eval {list,show,trigger,...}` —— 资源命令（资源导向命名）
   - **Governance**：`hnsx governance {policy,secret,approval,audit,auth} ...`
-  - **Surface**：`hnsx console`（启 GUI）、`hnsx tui`、`hnsx update`
+  - **Surface**：`hnsx`（默认启动 TUI）、`hnsx console`（启 GUI）、`hnsx update`
   - **Power**：`hnsx power {format,diff,replay,debug-bundle}`
   - **Local**：`hnsx validate`、`hnsx run`
 - **配置三层**：`--flag` > `HNSX_*` env > `~/.config/hnsx/*.yaml`
