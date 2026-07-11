@@ -244,6 +244,17 @@ func putFile(cfg *Config, path string, body *os.File) error {
 	return nil
 }
 
+// httpNewDelete builds a DELETE request (used by resource commands that need
+// an HTTP verb the legacy client doesn't expose).
+func httpNewDelete(url string) (*http.Request, error) {
+	return http.NewRequest(http.MethodDelete, url, nil)
+}
+
+// httpDo executes an http.Request and returns the response.
+func httpDo(req *http.Request) (*http.Response, error) {
+	return http.DefaultClient.Do(req)
+}
+
 // registerOrUpdate registers the domain. If it already exists (server returns
 // 400 with VALIDATION_FAILED / "already exists"), we treat that as success to
 // keep `hnsx try` idempotent. This makes re-running the same example work
