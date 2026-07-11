@@ -52,9 +52,10 @@ type Config struct {
 }
 
 // Default returns a Config populated from (in order of precedence):
-//   1. Built-in defaults.
-//   2. ~/.config/hnsx/config.yaml (or HNSX_CONFIG / --config).
-//   3. HNSX_* environment variables.
+//  1. Built-in defaults.
+//  2. ~/.config/hnsx/config.yaml (or HNSX_CONFIG / --config).
+//  3. HNSX_* environment variables.
+//
 // Command-line flags, when parsed, override all of the above.
 func Default() Config {
 	cwd, _ := os.Getwd()

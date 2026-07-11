@@ -264,11 +264,11 @@ func (s *ConnectServer) RecordInvocation(ctx context.Context, req *connect.Reque
 	}
 	inv := req.Msg
 	obs := runtime.Observation{
-		Kind:          "invocation",
-		SessionID:     inv.GetSessionId(),
-		DomainID:      inv.GetDomainId(),
-		TraceID:       inv.GetSessionId(),
-		Timestamp:     time.Now().UTC(),
+		Kind:      "invocation",
+		SessionID: inv.GetSessionId(),
+		DomainID:  inv.GetDomainId(),
+		TraceID:   inv.GetSessionId(),
+		Timestamp: time.Now().UTC(),
 		Cost: &runtime.Cost{
 			CostUSD:          inv.GetTotalCostUsd(),
 			PromptTokens:     int(inv.GetPromptTokens()),

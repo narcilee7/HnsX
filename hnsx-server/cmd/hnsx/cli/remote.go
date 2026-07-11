@@ -52,7 +52,7 @@ func newRemoteDomains(cfg *Config) *cobra.Command {
 	c := client.New()
 	cmd := &cobra.Command{Use: "domains", Short: "Domain operations"}
 	list := &cobra.Command{
-		Use:  "list",
+		Use: "list",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			items, err := c.ListDomains()
 			if err != nil {
@@ -74,7 +74,7 @@ func newRemoteDomains(cfg *Config) *cobra.Command {
 	}
 	var file string
 	register := &cobra.Command{
-		Use:  "register --file <path>",
+		Use: "register --file <path>",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if file == "" {
 				return fmt.Errorf("--file is required")
@@ -100,7 +100,7 @@ func newRemoteSessions(cfg *Config) *cobra.Command {
 	c := client.New()
 	cmd := &cobra.Command{Use: "sessions", Short: "Session operations"}
 	list := &cobra.Command{
-		Use:  "list",
+		Use: "list",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			items, err := c.ListSessions()
 			if err != nil {
@@ -122,7 +122,7 @@ func newRemoteSessions(cfg *Config) *cobra.Command {
 	}
 	var domainID, trigger string
 	triggerCmd := &cobra.Command{
-		Use:  "trigger --domain <id> [--trigger <json>]",
+		Use: "trigger --domain <id> [--trigger <json>]",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if domainID == "" {
 				return fmt.Errorf("--domain is required")
@@ -196,7 +196,7 @@ func newRemoteEvals(cfg *Config) *cobra.Command {
 	c := client.New()
 	cmd := &cobra.Command{Use: "evals", Short: "Eval operations"}
 	list := &cobra.Command{
-		Use:  "list",
+		Use: "list",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			items, err := c.ListEvalSets()
 			if err != nil {

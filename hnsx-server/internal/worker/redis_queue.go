@@ -14,9 +14,10 @@ import (
 // Plane instances can share the same scheduling queue.
 //
 // Key layout (all keys share the prefix):
-//   {prefix}:pending  -> Redis List of session IDs (head = newest)
-//   {prefix}:ids      -> Redis Set of queued session IDs (idempotency)
-//   {prefix}:req:{id} -> Redis Hash with SessionRequest fields
+//
+//	{prefix}:pending  -> Redis List of session IDs (head = newest)
+//	{prefix}:ids      -> Redis Set of queued session IDs (idempotency)
+//	{prefix}:req:{id} -> Redis Hash with SessionRequest fields
 //
 // Operations use Lua scripts to keep matching + deletion atomic.
 type RedisSessionQueue struct {

@@ -8,13 +8,13 @@ import (
 
 // EvalSet is a collection of test cases for a domain.
 type EvalSet struct {
-	ID          string    `json:"id"`
-	DomainID    string    `json:"domain_id"`
-	SetID       string    `json:"set_id"`
-	Description string    `json:"description"`
+	ID          string     `json:"id"`
+	DomainID    string     `json:"domain_id"`
+	SetID       string     `json:"set_id"`
+	Description string     `json:"description"`
 	Cases       []EvalCase `json:"cases"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 // EvalCase is one test case inside an EvalSet.

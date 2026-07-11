@@ -89,13 +89,13 @@ func (noopGate) Request(context.Context, ApprovalRequest) (bool, string, error) 
 //   - Record policy decisions and lifecycle events to the audit log.
 //   - Block on policy-approved human gates via the optional ApprovalGate.
 type Executor struct {
-	adapter    runtime.Adapter
-	sinks      []runtime.Sink
-	broadcast  *broadcaster.Broadcaster
-	policies   PolicyEngineProvider
-	audit      AuditRecorder
-	approval   ApprovalGate
-	mu         sync.Mutex
+	adapter   runtime.Adapter
+	sinks     []runtime.Sink
+	broadcast *broadcaster.Broadcaster
+	policies  PolicyEngineProvider
+	audit     AuditRecorder
+	approval  ApprovalGate
+	mu        sync.Mutex
 }
 
 // NewExecutor constructs an Executor bound to a single runtime.Adapter and zero or

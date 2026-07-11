@@ -27,9 +27,9 @@ type Repository interface {
 
 // InMemoryRepository is a thread-safe in-memory implementation.
 type InMemoryRepository struct {
-	mu      sync.RWMutex
-	sets    map[string]*model.EvalSet
-	runs    map[string]*model.EvalRun
+	mu   sync.RWMutex
+	sets map[string]*model.EvalSet
+	runs map[string]*model.EvalRun
 }
 
 // NewInMemoryRepository constructs an empty repository.

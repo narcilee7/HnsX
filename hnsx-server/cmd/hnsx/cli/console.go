@@ -17,15 +17,16 @@ import (
 
 // newConsoleCmd starts the HnsX Web Console (hnsx-console/) and opens the
 // browser. It supports two modes:
-//   --dev      run `pnpm dev` (Vite dev server, hot reload)
-//   default    run `pnpm preview` against an existing build, or `pnpm build`
-//               first if dist/ is missing
+//
+//	--dev      run `pnpm dev` (Vite dev server, hot reload)
+//	default    run `pnpm preview` against an existing build, or `pnpm build`
+//	            first if dist/ is missing
 func newConsoleCmd(cfg *Config) *cobra.Command {
 	var (
-		dev      bool
-		port     int
-		noOpen   bool
-		host     string
+		dev    bool
+		port   int
+		noOpen bool
+		host   string
 	)
 	cmd := &cobra.Command{
 		Use:   "console",

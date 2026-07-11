@@ -58,13 +58,13 @@ func NewModel(serverURL string) Model {
 	ti.Prompt = "/ "
 	ti.Placeholder = "session id, approve id, quit ..."
 	return Model{
-		serverURL: serverURL,
-		client:    common.NewClient(serverURL),
-		theme:     th,
-		keys:      DefaultKeyMap(),
-		statusBar: NewStatusBar(th),
-		help:      components.NewHelp(th.Help),
-		serverOK:  true, // optimistic until first health check
+		serverURL:    serverURL,
+		client:       common.NewClient(serverURL),
+		theme:        th,
+		keys:         DefaultKeyMap(),
+		statusBar:    NewStatusBar(th),
+		help:         components.NewHelp(th.Help),
+		serverOK:     true, // optimistic until first health check
 		commandInput: ti,
 		commandList:  components.NewCommandList(th),
 		tabs: []tea.Model{
@@ -575,4 +575,3 @@ func parseTriggerJSON(s string) (map[string]any, error) {
 	}
 	return out, nil
 }
-

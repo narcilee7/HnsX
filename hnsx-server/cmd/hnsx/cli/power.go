@@ -198,8 +198,8 @@ func diffAny(section string, a, b any, out *[]diffChange) {
 // dispatching.
 func newSessionReplayCmd(cfg *Config) *cobra.Command {
 	var (
-		with     string
-		dryRun   bool
+		with   string
+		dryRun bool
 	)
 	cmd := &cobra.Command{
 		Use:   "replay <session-id> [--with trigger.json] [--dry-run]",
@@ -220,10 +220,10 @@ func newSessionReplayCmd(cfg *Config) *cobra.Command {
 			}
 			if dryRun {
 				NewOutput(cfg.Output).Print(map[string]any{
-					"session_id":      orig.ID,
-					"domain_id":       orig.DomainID,
-					"domain_version":  orig.DomainVersion,
-					"would_trigger":   payload,
+					"session_id":       orig.ID,
+					"domain_id":        orig.DomainID,
+					"domain_version":   orig.DomainVersion,
+					"would_trigger":    payload,
 					"would_use_domain": orig.DomainID,
 				})
 				return nil
