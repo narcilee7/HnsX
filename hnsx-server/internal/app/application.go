@@ -13,28 +13,28 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
-	"github.com/hnsx-io/hnsx/server/internal/audit/model"
-	auditrepository "github.com/hnsx-io/hnsx/server/internal/audit/repository"
-	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
 	approvalmodel "github.com/hnsx-io/hnsx/server/internal/approval/model"
 	approvalrepo "github.com/hnsx-io/hnsx/server/internal/approval/repository"
 	approvalservice "github.com/hnsx-io/hnsx/server/internal/approval/service"
+	"github.com/hnsx-io/hnsx/server/internal/audit/model"
+	auditrepository "github.com/hnsx-io/hnsx/server/internal/audit/repository"
+	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
 	"github.com/hnsx-io/hnsx/server/internal/config"
-	secretcrypto "github.com/hnsx-io/hnsx/server/internal/secret/crypto"
 	domainrepository "github.com/hnsx-io/hnsx/server/internal/domain/repository"
 	domainservice "github.com/hnsx-io/hnsx/server/internal/domain/service"
 	evalrepository "github.com/hnsx-io/hnsx/server/internal/evaluation/repository"
 	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
 	policyrepository "github.com/hnsx-io/hnsx/server/internal/policy/repository"
 	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
+	secretcrypto "github.com/hnsx-io/hnsx/server/internal/secret/crypto"
 	secretrepository "github.com/hnsx-io/hnsx/server/internal/secret/repository"
 	secretservice "github.com/hnsx-io/hnsx/server/internal/secret/service"
 	sessionrepository "github.com/hnsx-io/hnsx/server/internal/session/repository"
 	sessionservice "github.com/hnsx-io/hnsx/server/internal/session/service"
+	storeservice "github.com/hnsx-io/hnsx/server/internal/store/service"
 	"github.com/hnsx-io/hnsx/server/internal/telemetry"
 	tracerepository "github.com/hnsx-io/hnsx/server/internal/trace/repository"
 	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
-	storeservice "github.com/hnsx-io/hnsx/server/internal/store/service"
 	"github.com/hnsx-io/hnsx/server/internal/worker"
 	workerrepository "github.com/hnsx-io/hnsx/server/internal/worker/repository"
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
@@ -51,16 +51,16 @@ type Application struct {
 	OTelProv *telemetry.Provider
 	Log      *zap.Logger
 
-	DomainService  *domainservice.Service
-	SessionService *sessionservice.Service
-	WorkerService  *workerservice.Service
-	PolicyService  *policyservice.Service
-	AuditService   *auditservice.Service
-	TraceService   *traceservice.Service
-	EvalService    *evalservice.Service
-	SecretService  *secretservice.Service
+	DomainService   *domainservice.Service
+	SessionService  *sessionservice.Service
+	WorkerService   *workerservice.Service
+	PolicyService   *policyservice.Service
+	AuditService    *auditservice.Service
+	TraceService    *traceservice.Service
+	EvalService     *evalservice.Service
+	SecretService   *secretservice.Service
 	ApprovalService *approvalservice.Service
-	StoreService   *storeservice.Service
+	StoreService    *storeservice.Service
 
 	Executor *pkgexecutor.Executor
 
@@ -175,23 +175,23 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 	}
 
 	return &Application{
-		Config:         cfg,
-		DB:             store,
-		OTelProv:       otelProv,
-		Log:            log,
-		DomainService:  domainSvc,
-		SessionService: sessionSvc,
-		WorkerService:  workerSvc,
+		Config:          cfg,
+		DB:              store,
+		OTelProv:        otelProv,
+		Log:             log,
+		DomainService:   domainSvc,
+		SessionService:  sessionSvc,
+		WorkerService:   workerSvc,
 		ApprovalService: approvalSvc,
-		PolicyService:  policySvc,
-		AuditService:   auditSvc,
-		TraceService:   traceSvc,
-		EvalService:    evalSvc,
-		SecretService:  secretSvc,
-		StoreService:   storeSvc,
-		Executor:       exec,
-		State:          appState,
-		redisClient:    rdb,
+		PolicyService:   policySvc,
+		AuditService:    auditSvc,
+		TraceService:    traceSvc,
+		EvalService:     evalSvc,
+		SecretService:   secretSvc,
+		StoreService:    storeSvc,
+		Executor:        exec,
+		State:           appState,
+		redisClient:     rdb,
 	}, nil
 }
 
@@ -267,11 +267,11 @@ func (b approvalStateBroadcaster) PublishApproval(event string, a *approvalmodel
 			DomainID:  a.DomainID,
 			Timestamp: now,
 			Payload: map[string]any{
-				"id":          a.ID,
-				"action":      a.Action,
-				"resource":    a.Resource,
-				"risk_level":  a.RiskLevel,
-				"context":     a.Context,
+				"id":           a.ID,
+				"action":       a.Action,
+				"resource":     a.Resource,
+				"risk_level":   a.RiskLevel,
+				"context":      a.Context,
 				"requested_by": a.RequestedBy,
 			},
 		})

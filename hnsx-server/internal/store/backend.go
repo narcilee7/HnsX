@@ -2,7 +2,7 @@
 //
 // It provides namespace-aware key/value storage (context, knowledge,
 // ephemeral) with swappable backends: in-memory for tests/no-db mode and
-// Postgres for production persistence. The DomainSpec ``store`` block selects
+// Postgres for production persistence. The DomainSpec “store“ block selects
 // the backend per namespace.
 package store
 

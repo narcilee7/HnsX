@@ -12,8 +12,8 @@ import (
 	"time"
 
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
-	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
 	"github.com/hnsx-io/hnsx/server/internal/evaluation/scorer"
+	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )

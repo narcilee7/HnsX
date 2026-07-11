@@ -37,12 +37,12 @@ type TemplateIndex struct {
 
 // TemplateEntry describes one template in the index.
 type TemplateEntry struct {
-	ID           string              `yaml:"id"`
-	Name         string              `yaml:"name"`
-	Description  string              `yaml:"description"`
-	Tags         []string            `yaml:"tags"`
-	Source       string              `yaml:"source"`
-	Variables    []TemplateVariable  `yaml:"variables"`
+	ID           string               `yaml:"id"`
+	Name         string               `yaml:"name"`
+	Description  string               `yaml:"description"`
+	Tags         []string             `yaml:"tags"`
+	Source       string               `yaml:"source"`
+	Variables    []TemplateVariable   `yaml:"variables"`
 	Requirements TemplateRequirements `yaml:"requirements"`
 }
 
@@ -239,21 +239,21 @@ func (s *Server) GetTrace(c *gin.Context) {
 	}
 
 	writeJSON(c, http.StatusOK, map[string]any{
-		"trace_id":      detail.TraceID,
-		"session_id":    detail.SessionID,
-		"domain_id":     detail.DomainID,
-		"domain_version": detail.DomainVersion,
-		"status":        detail.Status,
-		"started_at":    formatTimePtr(detail.StartedAt),
-		"completed_at":  formatTimePtr(detail.CompletedAt),
-		"duration_ms":   detail.DurationMs,
-		"observation_count":     detail.ObservationCount,
-		"total_cost_usd":        detail.TotalCostUSD,
-		"prompt_tokens":         detail.TotalPromptTokens,
-		"completion_tokens":     detail.TotalCompletionTokens,
-		"agent_invocations":     detail.AgentInvocations,
-		"tool_invocations":      detail.ToolInvocations,
-		"observations":          observations,
+		"trace_id":          detail.TraceID,
+		"session_id":        detail.SessionID,
+		"domain_id":         detail.DomainID,
+		"domain_version":    detail.DomainVersion,
+		"status":            detail.Status,
+		"started_at":        formatTimePtr(detail.StartedAt),
+		"completed_at":      formatTimePtr(detail.CompletedAt),
+		"duration_ms":       detail.DurationMs,
+		"observation_count": detail.ObservationCount,
+		"total_cost_usd":    detail.TotalCostUSD,
+		"prompt_tokens":     detail.TotalPromptTokens,
+		"completion_tokens": detail.TotalCompletionTokens,
+		"agent_invocations": detail.AgentInvocations,
+		"tool_invocations":  detail.ToolInvocations,
+		"observations":      observations,
 	})
 }
 
@@ -1147,6 +1147,7 @@ func runtimeSnapshotToJSON(snap workerpkg.Snapshot) map[string]any {
 //   - healthy       : last heartbeat within 30s
 //   - degraded      : older but not yet evicted
 //   - offline       : beyond the soft-eviction threshold (60s)
+//
 // Note: the registry's EvictStale policy decides when a worker is
 // actually removed; this function only labels, it does not mutate state.
 func runtimeStatus(snap workerpkg.Snapshot) string {
@@ -1467,10 +1468,10 @@ func (s *Server) BindPolicy(c *gin.Context) {
 }
 
 type policyWriteBody struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Budget      policymodel.Budget     `json:"budget"`
+	ID          string                  `json:"id"`
+	Name        string                  `json:"name"`
+	Description string                  `json:"description"`
+	Budget      policymodel.Budget      `json:"budget"`
 	Permissions policymodel.Permissions `json:"permissions"`
 	Guardrails  []policymodel.Guardrail `json:"guardrails"`
 }

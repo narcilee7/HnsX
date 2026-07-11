@@ -47,20 +47,20 @@ type Session struct {
 
 // TraceSummary is the list view of a trace.
 type TraceSummary struct {
-	TraceID            string  `json:"trace_id"`
-	SessionID          string  `json:"session_id"`
-	DomainID           string  `json:"domain_id"`
-	DomainVersion      string  `json:"domain_version,omitempty"`
-	Status             string  `json:"status"`
-	StartedAt          string  `json:"started_at,omitempty"`
-	CompletedAt        string  `json:"completed_at,omitempty"`
-	DurationMs         int64   `json:"duration_ms,omitempty"`
-	ObservationCount   int64   `json:"observation_count,omitempty"`
-	TotalCostUSD       float64 `json:"total_cost_usd,omitempty"`
-	PromptTokens       int64   `json:"prompt_tokens,omitempty"`
-	CompletionTokens   int64   `json:"completion_tokens,omitempty"`
-	AgentInvocations   int64   `json:"agent_invocations,omitempty"`
-	ToolInvocations    int64   `json:"tool_invocations,omitempty"`
+	TraceID          string  `json:"trace_id"`
+	SessionID        string  `json:"session_id"`
+	DomainID         string  `json:"domain_id"`
+	DomainVersion    string  `json:"domain_version,omitempty"`
+	Status           string  `json:"status"`
+	StartedAt        string  `json:"started_at,omitempty"`
+	CompletedAt      string  `json:"completed_at,omitempty"`
+	DurationMs       int64   `json:"duration_ms,omitempty"`
+	ObservationCount int64   `json:"observation_count,omitempty"`
+	TotalCostUSD     float64 `json:"total_cost_usd,omitempty"`
+	PromptTokens     int64   `json:"prompt_tokens,omitempty"`
+	CompletionTokens int64   `json:"completion_tokens,omitempty"`
+	AgentInvocations int64   `json:"agent_invocations,omitempty"`
+	ToolInvocations  int64   `json:"tool_invocations,omitempty"`
 }
 
 // Trace is the full trace detail including observations.
@@ -170,7 +170,7 @@ type EvalRun struct {
 // ListEnvelope is the standard list response shape.
 type ListEnvelope[T any] struct {
 	Items  []T `json:"items"`
-	Total int `json:"total"`
-	Limit int `json:"limit,omitempty"`
+	Total  int `json:"total"`
+	Limit  int `json:"limit,omitempty"`
 	Offset int `json:"offset,omitempty"`
 }

@@ -170,4 +170,3 @@ func executeCommand(cmd *cobra.Command, args ...string) (string, error) {
 	err := cmd.Execute()
 	return buf.String(), err
 }
-

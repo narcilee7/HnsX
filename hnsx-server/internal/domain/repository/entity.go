@@ -23,15 +23,15 @@ func (DomainRecord) TableName() string { return "domains" }
 
 // DomainVersionRecord is the GORM entity for the `domain_versions` table.
 type DomainVersionRecord struct {
-	ID           string         `gorm:"column:id;type:uuid;primary_key;default:gen_random_uuid()"`
-	TenantID     string         `gorm:"column:tenant_id;type:uuid;not null"`
-	DomainUUID   string         `gorm:"column:domain_uuid;type:uuid;not null;index:idx_domain_versions_domain_uuid"`
-	Version      string         `gorm:"column:version;type:varchar(64);not null"`
-	YAMLBody     string         `gorm:"column:yaml_body;type:text;not null"`
-	JSONBody     datatypes.JSON `gorm:"column:json_body;type:jsonb"`
-	HarnessHash  string         `gorm:"column:harness_hash;type:varchar(64);not null"`
-	CreatedBy    *string        `gorm:"column:created_by;type:uuid"`
-	CreatedAt    time.Time
+	ID          string         `gorm:"column:id;type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID    string         `gorm:"column:tenant_id;type:uuid;not null"`
+	DomainUUID  string         `gorm:"column:domain_uuid;type:uuid;not null;index:idx_domain_versions_domain_uuid"`
+	Version     string         `gorm:"column:version;type:varchar(64);not null"`
+	YAMLBody    string         `gorm:"column:yaml_body;type:text;not null"`
+	JSONBody    datatypes.JSON `gorm:"column:json_body;type:jsonb"`
+	HarnessHash string         `gorm:"column:harness_hash;type:varchar(64);not null"`
+	CreatedBy   *string        `gorm:"column:created_by;type:uuid"`
+	CreatedAt   time.Time
 }
 
 // TableName returns the table name for GORM.

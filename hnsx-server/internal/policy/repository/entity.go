@@ -9,7 +9,7 @@ import (
 // PolicyRecord is the GORM entity for the `policies` table.
 //
 // DomainUUID is *string so an unbound policy carries SQL NULL instead of
-// the empty-string sentinel — GORM treats "domain_uuid = ''" as a
+// the empty-string sentinel — GORM treats "domain_uuid = ”" as a
 // distinct value from NULL and that divergence broke earlier 1:1
 // binding checks.
 type PolicyRecord struct {
