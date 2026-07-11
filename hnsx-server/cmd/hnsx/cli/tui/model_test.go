@@ -71,6 +71,24 @@ func TestModel_Quit(t *testing.T) {
 	}
 }
 
+func TestModel_HealthUpdate(t *testing.T) {
+	m := NewModel("http://127.0.0.1:1")
+	m.serverOK = true
+	m = updateModel(m, healthMsg{ok: false})
+	if m.serverOK {
+		t.Fatal("expected serverOK to become false")
+	}
+}
+
+func TestModel_TickTriggersHealthCheck(t *testing.T) {
+	m := NewModel("http://127.0.0.1:1")
+	_, cmd := m.Update(tickMsg{})
+	if cmd == nil {
+		t.Fatal("expected cmd after tick")
+	}
+	// The command is a batch; we just verify it exists.
+}
+
 func TestModel_ViewNonZero(t *testing.T) {
 	m := NewModel("http://127.0.0.1:50052")
 	m.width = 120

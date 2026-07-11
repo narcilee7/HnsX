@@ -27,6 +27,7 @@ var tabNames = []string{
 // Model is the root bubbletea model for the HnsX TUI.
 type Model struct {
 	serverURL string
+	client    *common.Client
 	width     int
 	height    int
 	theme     common.Theme
@@ -36,6 +37,7 @@ type Model struct {
 
 	activeTab int
 	helpOpen  bool
+	serverOK  bool
 	tabs      []tea.Model
 }
 
@@ -44,10 +46,12 @@ func NewModel(serverURL string) Model {
 	th := common.NewTheme()
 	return Model{
 		serverURL: serverURL,
+		client:    common.NewClient(serverURL),
 		theme:     th,
 		keys:      DefaultKeyMap(),
 		statusBar: NewStatusBar(th),
 		help:      components.NewHelp(th.Help),
+		serverOK:  true, // optimistic until first health check
 		tabs: []tea.Model{
 			tabs.NewSessionsTab(serverURL),
 			tabs.NewTracesTab(serverURL),
@@ -64,6 +68,7 @@ func NewModel(serverURL string) Model {
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		tickCmd(),
+		healthCheck(m.client),
 	}
 	for _, t := range m.tabs {
 		cmds = append(cmds, t.Init())
@@ -112,13 +117,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		return m, tickCmd()
+		return m, tea.Batch(tickCmd(), healthCheck(m.client))
+
+	case healthMsg:
+		m.serverOK = msg.ok
+
+	// Let active tab handle its own messages.
+	default:
+		var cmd tea.Cmd
+		m.tabs[m.activeTab], cmd = m.tabs[m.activeTab].Update(msg)
+		return m, cmd
 	}
 
-	// Delegate to active tab.
-	var cmd tea.Cmd
-	m.tabs[m.activeTab], cmd = m.tabs[m.activeTab].Update(msg)
-	return m, cmd
+	return m, nil
 }
 
 // View renders the full TUI layout.
@@ -128,7 +139,7 @@ func (m Model) View() string {
 	}
 
 	// Header
-	header := m.statusBar.View(m.width, m.serverURL, true)
+	header := m.statusBar.View(m.width, m.serverURL, m.serverOK)
 	headerHeight := lipgloss.Height(header)
 
 	// Tab bar
@@ -264,6 +275,17 @@ func tickCmd() tea.Cmd {
 	return tea.Tick(tickInterval, func(_ time.Time) tea.Msg {
 		return tickMsg{}
 	})
+}
+
+// healthMsg carries the latest server health status.
+type healthMsg struct {
+	ok bool
+}
+
+func healthCheck(c *common.Client) tea.Cmd {
+	return func() tea.Msg {
+		return healthMsg{ok: c.Health()}
+	}
 }
 
 var tickInterval = 2 * time.Second
