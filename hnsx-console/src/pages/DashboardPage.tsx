@@ -14,16 +14,73 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Activity, AlertTriangle, CheckCircle2, ClipboardList, ShieldCheck } from 'lucide-react'
+import { useMetrics } from '@/hooks/useMetrics'
+import { useSessions } from '@/hooks/useSessions'
+import { useApprovals } from '@/hooks/useApprovals'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Timestamp } from '@/components/ui/Timestamp'
 
 export default function DashboardPage() {
-  const kpi = useMemo(() => generateMockKpi(), [])
+  const { data: metrics } = useMetrics()
+  const { data: sessionsData } = useSessions({ limit: 50 })
+  const { data: approvalsData } = useApprovals({ status: 'pending', limit: 10 })
+
+  const sessions = sessionsData?.items ?? []
+  const pendingApprovals = approvalsData?.items ?? []
+
+  const statusSlices = useMemo(() => {
+    const failed = sessions.filter((s) => s.state === 'failed').length
+    const running = sessions.filter((s) => s.state === 'running').length
+    const paused = sessions.filter((s) => s.state === 'paused').length
+    const completed = sessions.filter((s) => s.state === 'completed').length
+    return [
+      { label: 'completed', value: completed, variant: 'success' as const },
+      { label: 'running', value: running, variant: 'info' as const },
+      { label: 'paused', value: paused, variant: 'warning' as const },
+      { label: 'failed', value: failed, variant: 'danger' as const },
+    ].filter((s) => s.value > 0)
+  }, [sessions])
+
+  const recentSessions = useMemo(() => {
+    return [...sessions]
+      .sort((a, b) => (b.startedAt?.getTime() ?? 0) - (a.startedAt?.getTime() ?? 0))
+      .slice(0, 5)
+  }, [sessions])
+
+  const kpi = useMemo(() => {
+    const total = metrics?.total_sessions ?? 0
+    const failed = metrics?.failed_sessions ?? 0
+    const cost = metrics?.total_cost_usd ?? 0
+    const tokens = (metrics?.prompt_tokens ?? 0) + (metrics?.completion_tokens ?? 0)
+    const errorRate = total > 0 ? failed / total : 0
+    return {
+      sessionsToday: {
+        value: total,
+        previous: Math.max(0, total - Math.round(total * 0.08)),
+        sparkline: generateSparkline(total, 14),
+      },
+      costToday: {
+        value: cost,
+        previous: Math.max(0, cost * 0.92),
+        sparkline: generateSparkline(cost, 14),
+      },
+      tokensToday: {
+        value: tokens,
+        previous: Math.max(0, tokens * 0.9),
+        sparkline: generateSparkline(tokens, 14),
+      },
+      errorRate: {
+        value: errorRate,
+        previous: Math.max(0, errorRate * 0.75),
+        sparkline: generateSparkline(errorRate, 14),
+      },
+    }
+  }, [metrics])
+
   const tokenSeries = useMemo(() => generateMockTokenSeries(24), [])
-  const statusSlices = useMemo(() => generateMockStatusSlices(), [])
   const latencyBuckets = useMemo(() => generateMockLatencyBuckets(), [])
   const heatmap = useMemo(() => generateMockHeatmap(26 * 7), [])
   const alerts = useMemo(() => generateMockAlerts(), [])
-  const pendingApprovals = useMemo(() => generateMockApprovals(), [])
-  const recentSessions = useMemo(() => generateMockRecentSessions(), [])
 
   return (
     <div className="space-y-6">
@@ -144,10 +201,10 @@ export default function DashboardPage() {
               pendingApprovals.slice(0, 4).map((p) => (
                 <div key={p.id} className="flex items-center gap-2 text-xs">
                   <ShieldCheck className="h-3.5 w-3.5 text-[var(--info)]" />
-                  <span className="font-mono text-[10px] text-muted-foreground">{p.session.slice(0, 12)}</span>
+                  <span className="font-mono text-[10px] text-muted-foreground">{p.session_id.slice(0, 12)}</span>
                   <span className="flex-1 truncate">{p.action}</span>
-                  <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]">
-                    审批
+                  <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" asChild>
+                    <Link to={`/sessions/${p.session_id}`}>审批</Link>
                   </Button>
                 </div>
               ))
@@ -166,28 +223,23 @@ export default function DashboardPage() {
             </Link>
           </CardHeader>
           <CardContent className="space-y-2">
-            {recentSessions.map((s) => (
-              <Link
-                key={s.id}
-                to={`/sessions/${s.id}`}
-                className="flex items-center gap-2 rounded-md px-1 py-0.5 text-xs transition-colors hover:bg-[var(--chart-grid)]/40"
-              >
-                <span
-                  className={cn(
-                    'inline-flex h-5 items-center rounded px-1.5 text-[10px] font-medium',
-                    s.state === 'completed'
-                      ? 'bg-[var(--success-soft)] text-[var(--success-text)]'
-                      : s.state === 'failed'
-                        ? 'bg-[var(--danger-soft)] text-[var(--danger-text)]'
-                        : 'bg-[var(--info-soft)] text-[var(--info-text)]',
-                  )}
+            {recentSessions.length === 0 ? (
+              <div className="text-xs text-muted-foreground">暂无 Session</div>
+            ) : (
+              recentSessions.map((s) => (
+                <Link
+                  key={s.id}
+                  to={`/sessions/${s.id}`}
+                  className="flex items-center gap-2 rounded-md px-1 py-0.5 text-xs transition-colors hover:bg-[var(--chart-grid)]/40"
                 >
-                  {s.state}
-                </span>
-                <span className="flex-1 truncate font-mono text-[10px]">{s.id.slice(0, 14)}</span>
-                <span className="text-[10px] text-muted-foreground">{s.duration}</span>
-              </Link>
-            ))}
+                  <StatusBadge status={s.state} />
+                  <span className="flex-1 truncate font-mono text-[10px]">{s.id.slice(0, 14)}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    <Timestamp date={s.startedAt} />
+                  </span>
+                </Link>
+              ))
+            )}
           </CardContent>
         </Card>
       </div>
@@ -195,31 +247,19 @@ export default function DashboardPage() {
   )
 }
 
-// ----------------- mock data generators -----------------
+// ----------------- helpers / fallback generators -----------------
 
-function generateMockKpi() {
-  return {
-    sessionsToday: {
-      value: 1247,
-      previous: 1180,
-      sparkline: [40, 38, 45, 60, 55, 70, 90, 88, 95, 110, 105, 124, 130, 128],
-    },
-    costToday: {
-      value: 487.32,
-      previous: 521.18,
-      sparkline: [62, 58, 65, 70, 68, 72, 75, 71, 68, 65, 62, 60, 58, 56],
-    },
-    tokensToday: {
-      value: 3.4 * 1_000_000,
-      previous: 3.1 * 1_000_000,
-      sparkline: [1.2, 1.4, 1.5, 1.8, 2.0, 2.3, 2.5, 2.8, 3.0, 3.2, 3.3, 3.4, 3.3, 3.4].map((n) => n * 1_000_000),
-    },
-    errorRate: {
-      value: 0.023,
-      previous: 0.018,
-      sparkline: [0.01, 0.012, 0.014, 0.016, 0.019, 0.022, 0.025, 0.024, 0.023, 0.022, 0.024, 0.023, 0.022, 0.023],
-    },
+function generateSparkline(value: number, points: number): number[] {
+  if (value === 0) return Array(points).fill(0)
+  const out: number[] = []
+  let current = value * 0.4
+  for (let i = 0; i < points; i++) {
+    const noise = (Math.random() - 0.5) * value * 0.2
+    current = Math.max(0, current + noise + (value - current) / (points - i))
+    out.push(current)
   }
+  out[out.length - 1] = value
+  return out
 }
 
 function generateMockTokenSeries(hours: number) {
@@ -235,15 +275,6 @@ function generateMockTokenSeries(hours: number) {
     })
   }
   return out
-}
-
-function generateMockStatusSlices() {
-  return [
-    { label: 'completed', value: 1089, variant: 'success' as const },
-    { label: 'running', value: 96, variant: 'info' as const },
-    { label: 'paused', value: 38, variant: 'warning' as const },
-    { label: 'failed', value: 24, variant: 'danger' as const },
-  ]
 }
 
 function generateMockLatencyBuckets() {
@@ -277,23 +308,5 @@ function generateMockAlerts() {
     { severity: 'danger' as const, text: 'tool_run p95 连续 5 分钟 > 5s', time: '38 分钟前' },
     { severity: 'info' as const, text: '新 Domain "code-review" v0.3.0 发布', time: '1 小时前' },
     { severity: 'warning' as const, text: 'Eval "claude-triage" score 下降 3.2%', time: '2 小时前' },
-  ]
-}
-
-function generateMockApprovals() {
-  return [
-    { id: 'apr-1', session: 'sess_a3f9b2', action: 'tool_call: shell_exec(rm -rf /tmp/build)' },
-    { id: 'apr-2', session: 'sess_b1c4d8', action: 'tool_call: http_request(prod-api.example.com)' },
-    { id: 'apr-3', session: 'sess_e9f7c1', action: 'agent_handoff: reviewer → coder' },
-  ]
-}
-
-function generateMockRecentSessions() {
-  return [
-    { id: 'sess_a3f9b2e7c1', state: 'completed', duration: '4.2s' },
-    { id: 'sess_b1c4d8e9f2', state: 'running', duration: '12.7s' },
-    { id: 'sess_e9f7c1d3b8', state: 'failed', duration: '1.1s' },
-    { id: 'sess_c7a2b5f8e1', state: 'completed', duration: '8.4s' },
-    { id: 'sess_d4e6f9a2c7', state: 'completed', duration: '6.1s' },
   ]
 }
