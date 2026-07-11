@@ -44,8 +44,8 @@ dev = [
 hnsx-worker = "hnsx_worker.__main__:cli"
 
 [project.urls]
-Homepage = "https://github.com/hnsx-io/hnsx"
-Issues = "https://github.com/hnsx-io/hnsx/issues"
+Homepage = "https://github.com/narcilee7/HnsX"
+Issues = "https://github.com/narcilee7/HnsX/issues"
 
 [tool.setuptools]
 include-package-data = true

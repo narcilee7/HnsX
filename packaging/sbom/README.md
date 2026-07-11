@@ -13,7 +13,7 @@ Verification (consumer-side):
 
 ```bash
 cosign verify-blob \
-  --certificate-identity-regexp 'https://github.com/hnsx-io/hnsx' \
+  --certificate-identity-regexp 'https://github.com/narcilee7/HnsX' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   hnsx_0.8.0_darwin_arm64.tar.gz
 ```
