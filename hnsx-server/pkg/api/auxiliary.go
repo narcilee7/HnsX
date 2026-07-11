@@ -870,24 +870,15 @@ func (s *Server) RunEval(c *gin.Context) {
 		return
 	}
 
-	// The eval runner drives one synchronous session per case via the local
-	// executor. When the server runs in pure worker-pool mode (no executor),
-	// batch eval is not yet available.
-	if s.Executor == nil {
-		writeError(c, &APIError{
-			Code:    "ADAPTER_NOT_IMPLEMENTED",
-			Message: "eval runner requires the local executor in this build",
-		})
-		return
-	}
-
+	// The eval runner dispatches each case as a session. Prefer the worker pool
+	// when available; fall back to the local executor for single-process tests.
 	specForRun := domain.Spec
 	budget := 0.0
 	if specForRun != nil {
 		budget = specForRun.Harness.Policy.Budget.MaxCostUSD
 	}
 	traceSvc := s.TraceService
-	er := evalrunner.New(s.Executor, s.EvalService, evalrunner.WithCostFunc(func(sessionID string) float64 {
+	costFn := func(sessionID string) float64 {
 		if traceSvc == nil {
 			return 0
 		}
@@ -896,7 +887,21 @@ func (s *Server) RunEval(c *gin.Context) {
 			return 0
 		}
 		return agg.TotalCostUSD
-	}))
+	}
+
+	var er evalrunner.EvalRunner
+	if s.WorkerService != nil && s.SessionCommands != nil {
+		er = evalrunner.NewWorkerPoolRunner(s.SessionCommands, s.App.SessionService, s.EvalService, costFn)
+	} else if s.Executor != nil {
+		er = evalrunner.New(s.Executor, s.EvalService, evalrunner.WithCostFunc(costFn))
+	} else {
+		writeError(c, &APIError{
+			Code:    "ADAPTER_NOT_IMPLEMENTED",
+			Message: "eval runner requires a worker pool or local executor",
+		})
+		return
+	}
+
 	tenantID := tenantFromGin(c)
 	go func() {
 		ctx := tenant.NewContext(context.Background(), tenantID)
