@@ -67,6 +67,9 @@ Use "hnsx <command> --help" for per-command details.
 	cmd.AddCommand(newTuiCmd(&cfg))
 	cmd.AddCommand(newUpdateCmd(&cfg))
 
+	// v0.6 Governance: policy / secret / approval / audit / auth.
+	cmd.AddCommand(newGovernanceCmd(&cfg))
+
 	// Remote commands (preserved; deprecation warnings begin in v0.4).
 	cmd.AddCommand(newRemoteCmd(&cfg))
 
