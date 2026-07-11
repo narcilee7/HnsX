@@ -99,6 +99,50 @@ func TestModel_ViewNonZero(t *testing.T) {
 	}
 }
 
+func TestModel_CommandMode(t *testing.T) {
+	m := NewModel("http://127.0.0.1:50052")
+	m.width = 100
+	m.height = 30
+
+	m = updateModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	if !m.commandMode {
+		t.Fatal("expected command mode after '/'")
+	}
+
+	m = updateModel(m, tea.KeyMsg{Type: tea.KeyEscape})
+	if m.commandMode {
+		t.Fatal("expected command mode to close after esc")
+	}
+}
+
+func TestModel_CommandQuit(t *testing.T) {
+	m := NewModel("http://127.0.0.1:50052")
+	m.width = 100
+	m.height = 30
+
+	m.commandMode = true
+	m.commandInput.SetValue("quit")
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected command after enter")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatalf("expected tea.QuitMsg, got %T", cmd())
+	}
+}
+
+func TestParseCommand(t *testing.T) {
+	cmd := parseCommand("/session abc123")
+	if cmd.name != "session" || len(cmd.args) != 1 || cmd.args[0] != "abc123" {
+		t.Fatalf("parse failed: %+v", cmd)
+	}
+
+	cmd = parseCommand("reject id1 reason=foo")
+	if cmd.name != "reject" || len(cmd.args) != 1 || cmd.kwargs["reason"] != "foo" {
+		t.Fatalf("parse kwargs failed: %+v", cmd)
+	}
+}
+
 func updateModel(m Model, msg tea.Msg) Model {
 	out, _ := m.Update(msg)
 	return out.(Model)

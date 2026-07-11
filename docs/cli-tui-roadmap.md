@@ -106,11 +106,11 @@ $ HNSX_NO_TUI=1 hnsx       # 环境变量永久禁用
 │                                                                        │
 ├────────────────────────────────────────────────────────────────────────┤
 │ tab:1/7  │  ↑↓/jk 选择  │  enter 详情  │  a approve  │  r rerun       │
-│ refresh: 2s  │  q quit  │  ? help  │  / filter  │  esc back        │
+│ refresh: 2s  │  q quit  │  ? help  │  / command  │  esc back        │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-三段式：**Header（状态） + Tab Bar（导航） + Body（视图） + Footer（快捷键）**。
+三段式：**Header（状态） + Tab Bar（导航） + Body（视图） + Footer（快捷键 / 命令行）**。按 `/` 时 Footer 变为命令输入行。
 
 ---
 
@@ -140,8 +140,9 @@ $ HNSX_NO_TUI=1 hnsx       # 环境变量永久禁用
 | `tab` / `shift+tab` | 下一个 / 上一个 tab |
 | `?` | 帮助浮层 |
 | `q` / `ctrl+c` | 退出 TUI |
-| `/` | 当前 tab 内搜索/过滤 |
-| `esc` | 返回 / 关闭浮层 |
+| `/` | 进入命令模式（输入 `/session <id>` 等） |
+| `esc` | 返回 / 关闭浮层 / 取消命令模式 |
+| `f` | 当前 tab 内快速过滤（等价 `/filter`） |
 | `g` / `G` | 跳到第一/最后一行 |
 | `r` | 刷新当前视图 |
 
@@ -167,6 +168,7 @@ $ HNSX_NO_TUI=1 hnsx       # 环境变量永久禁用
 - **单字母为常用动作**（`a/r/x/q/g`），不需要 modifier
 - **破坏性操作必二次确认**（reject / cancel / rerun 弹 y/n）
 - **`?` 永远显示当前 tab 的快捷键**
+- **`/` 是命令模式入口**，把"记不住快捷键"转化为"打得出的命令"；命令与 CLI 词表保持一致
 
 ---
 
@@ -335,6 +337,40 @@ TUI 按键 ──► action handler ──► cobra command / client call ──
 - `--record <file>` 回放 + 分享
 - mouse 支持（bubbletea v1 支持）
 - 自适应暗色
+
+### Phase T-6：Command Mode（`/command`）
+
+把 `/` 从"当前 tab 内过滤"升级为全局 **命令模式入口**。按 `/` 弹出底部命令行，输入 `/session <id>`、`/approve <id>` 等直接跳转或执行动作，降低纯快捷键的学习成本。
+
+**命令词表**：
+
+| 命令 | 行为 |
+|---|---|
+| `/session <id>` | 切到 Sessions tab，选中并打开 tail |
+| `/domain <id>` | 切到 Domains tab，定位 domain |
+| `/trace <id>` | 切到 Traces tab，打开 trace 详情 |
+| `/approve <id>` | 直接通过指定 approval |
+| `/reject <id> [reason]` | 直接拒绝指定 approval |
+| `/trigger <domain> [json]` | 触发指定 domain 的 session |
+| `/filter <text>` | 当前 tab 内过滤 |
+| `/refresh` | 刷新当前 tab |
+| `/quit` | 退出 TUI |
+
+**实现要点**：
+
+- Root Model 持有 `commandMode bool` + `textinput.Model`
+- `/` 进入命令模式，`esc` 取消，`enter` 解析执行
+- 命令解析后分两类：
+  - **跳转类**：切 tab + 发送 `SelectMsg` / `FilterMsg` 给目标 tab
+  - **动作类**：直接调用 `common.Client` 并显示结果
+- Footer 在命令模式下切换为命令提示
+- 保留原有单键快捷方式作为高效路径
+
+**验收**：
+
+- `hnsx` 进入 TUI → 按 `/session <id>` → 自动切到 Sessions tab 并 tail
+- `/approve <id>` → approval 被通过，页面刷新
+- `/quit` → 退出 TUI
 
 ---
 
