@@ -100,6 +100,12 @@ Use "hnsx <command> --help" for per-command details.
 
 // Execute is the entrypoint used by main.go.
 func Execute() error {
+	// Allow external plugins to shadow future built-in commands. If a plugin
+	// matches the first positional argument we exec it and never start cobra.
+	if ran, err := TryPluginExec(); ran {
+		return err
+	}
+
 	cmd := NewRootCmd()
 	if err := cmd.Execute(); err != nil {
 		// cobra already prints the error; main only needs the exit code.

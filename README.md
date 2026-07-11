@@ -1,5 +1,9 @@
 # HnsX — Harness as a Service
 
+```bash
+curl -sSL hnsx.dev/install.sh | sh && hnsx try customer-service
+```
+
 > **Don't build weaker agents. Harness stronger ones.**
 
 HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI、Anthropic、Ollama 等最强 Agent。它不是又一个 Agent 底座，而是一层**声明式 Harness**：把领域知识、约束策略、执行沙箱、观测审计、评估体系整合在一起，让 Agent 在明确边界内为企业工作。
@@ -49,9 +53,9 @@ HnsX 不自己造 Agent，而是把最好的 Agent 接入企业场景，用 YAML
 
 ```bash
 # 0. 装好 hnsx（任选其一）
-make build-cli                       # 源码内构建
-brew install hnsx                   # macOS（formula 见 packaging/homebrew/）
-curl -sSL hnsx.dev/install.sh | sh  # Linux
+curl -sSL hnsx.dev/install.sh | sh      # 推荐：自动下载并校验 checksum
+brew install hnsx-io/hnsx/hnsx          # macOS
+make build-cli                           # 源码内构建
 
 # 1. 启动本地全栈（Postgres + Server + Worker，可选 Tempo + Grafana）
 hnsx up                              # 等 /healthz 通过后返回

@@ -331,12 +331,12 @@ Refs：`hnsx-server/internal/evaluation/runner/runner.go`、`hnsx-server/pkg/con
 
 ### C6 — 插件机制与发布工程
 
-- [ ] **cli** 实现 `hnsx plugin list/install/uninstall`：扫描 `~/.config/hnsx/plugins/` 外部子命令
-- [ ] **ci** GitHub Actions release workflow：构建 `hnsx_<os>_<arch>.tar.gz`、计算 sha256、cosign 签名、SBOM
-- [ ] **packaging** 替换 `packaging/homebrew/hnsx.rb` 占位值，创建 `hnsx-io/homebrew-hnsx` tap
-- [ ] **scripts** `scripts/install.sh` 启用 checksum 校验，修正 `REPO` 指向真实仓库
-- [ ] **repo** `Makefile` `VERSION` 提升至 1.0.0，发布 v1.0.0 tag
-- [ ] **docs** README 首行改为 `curl -sSL hnsx.dev/install.sh | sh` + `hnsx try customer-service`
+- [x] **cli** 实现 `hnsx plugin list/install/uninstall`：扫描 `~/.config/hnsx/plugins/` 外部子命令
+- [x] **ci** GitHub Actions release workflow：构建 `hnsx_<os>_<arch>.tar.gz`、计算 sha256、cosign 签名与 SBOM 脚手架
+- [x] **packaging** 替换 `packaging/homebrew/hnsx.rb` 占位值，支持 4 平台通用 formula
+- [x] **scripts** `scripts/install.sh` 启用 checksum 校验，同时安装 `hnsx` 与 `hnsx-server`
+- [x] **repo** `Makefile` `VERSION` 提升至 1.0.0，准备发布 v1.0.0 tag
+- [x] **docs** README 首行改为 `curl -sSL hnsx.dev/install.sh | sh` + `hnsx try customer-service`
 
 #### 验收
 
