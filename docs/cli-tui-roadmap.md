@@ -340,7 +340,7 @@ TUI 按键 ──► action handler ──► cobra command / client call ──
 
 ### Phase T-6：Command Mode（`/command`）
 
-把 `/` 从"当前 tab 内过滤"升级为全局 **命令模式入口**。按 `/` 弹出底部命令行，输入 `/session <id>`、`/approve <id>` 等直接跳转或执行动作，降低纯快捷键的学习成本。
+把 `/` 从"当前 tab 内过滤"升级为全局 **命令模式入口**。按 `/` 在底部弹出 **命令面板（Command Palette）**：命令输入行 + 可筛选的命令列表，输入 `/session <id>`、`/approve <id>` 等直接跳转或执行动作，降低纯快捷键的学习成本。
 
 **命令词表**：
 
@@ -358,17 +358,23 @@ TUI 按键 ──► action handler ──► cobra command / client call ──
 
 **实现要点**：
 
-- Root Model 持有 `commandMode bool` + `textinput.Model`
+- Root Model 持有 `commandMode bool` + `textinput.Model` + `commandList`
 - `/` 进入命令模式，`esc` 取消，`enter` 解析执行
+- 命令面板行为：
+  - 按 `/` 立即列出全部命令并高亮第一项
+  - 输入字符实时过滤命令列表
+  - `↑/↓` 在列表中移动，`enter` 选中当前命令并填充到输入行（无参数命令直接执行）
+  - 命令名后带空格进入参数输入，列表自动收起
 - 命令解析后分两类：
   - **跳转类**：切 tab + 发送 `SelectMsg` / `FilterMsg` 给目标 tab
   - **动作类**：直接调用 `common.Client` 并显示结果
-- Footer 在命令模式下切换为命令提示
+- Footer 在命令模式下切换为命令输入行
 - 保留原有单键快捷方式作为高效路径
 
 **验收**：
 
-- `hnsx` 进入 TUI → 按 `/session <id>` → 自动切到 Sessions tab 并 tail
+- `hnsx` 进入 TUI → 按 `/` → 看到命令列表；继续输入 `se` 过滤到 `session`
+- 按 `enter` 选中 `session`，输入 `<id>` 再按 `enter` → 自动切到 Sessions tab 并 tail
 - `/approve <id>` → approval 被通过，页面刷新
 - `/quit` → 退出 TUI
 
