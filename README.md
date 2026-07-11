@@ -122,6 +122,7 @@ open http://127.0.0.1:3002
 |---|---|
 | [`docs/vision.md`](docs/vision.md) | 项目愿景与产品方向 |
 | [`docs/tech_overview.md`](docs/tech_overview.md) | 技术总览、架构与阶段规划 |
+| [`docs/cli-roadmap.md`](docs/cli-roadmap.md) | CLI 产品化路线图（v0.3 → v1.0） |
 | [`docs/server-design/api-design.md`](docs/server-design/api-design.md) | REST API 完整契约 |
 | [`docs/web-console-design/整体设计.md`](docs/web-console-design/整体设计.md) | Web Console 设计定位与页面 |
 | [`docs/know-how/`](docs/know-how/) | 建模、编排、观测、评测四篇 know-how |
