@@ -65,6 +65,19 @@ export function validateDomainYaml(id: string, yaml: string): Promise<{ valid: b
   return requestText('POST', `/domains/${id}/validate`, yaml, 'application/yaml')
 }
 
+export interface DomainSchemaResponse {
+  id: string
+  version: string
+  mode: string
+  agent: string
+  trigger_schema?: unknown
+  output_schema?: string
+}
+
+export function getDomainSchema(id: string): Promise<DomainSchemaResponse> {
+  return get<unknown>(`/domains/${id}/schema`).then((res) => res as DomainSchemaResponse)
+}
+
 export function listDomainVersions(id: string): Promise<{ version: string; created_at: string }[]> {
   return get(`/domains/${id}/versions`)
 }

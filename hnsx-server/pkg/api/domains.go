@@ -189,6 +189,25 @@ func (s *Server) GetDomainVersion(c *gin.Context) {
 	})
 }
 
+// GetDomainSchema handles GET /api/v1/domains/:id/schema.
+// Returns the workspace-oriented schema view (trigger/output schema, mode, agent).
+func (s *Server) GetDomainSchema(c *gin.Context) {
+	id := c.Param("id")
+	schema, ok := s.Queries.GetDomainSchema(tenantFromGin(c), id)
+	if !ok {
+		writeError(c, NewDomainNotFound(id))
+		return
+	}
+	writeJSON(c, http.StatusOK, map[string]any{
+		"id":             schema.ID,
+		"version":        schema.Version,
+		"mode":           schema.Mode,
+		"agent":          schema.Agent,
+		"trigger_schema": schema.TriggerSchema,
+		"output_schema":  schema.OutputSchema,
+	})
+}
+
 // ValidateDomain handles POST /api/v1/domains/:id/validate.
 func (s *Server) ValidateDomain(c *gin.Context) {
 	summary, err := local.ValidateDomain(c.Request.Body, c.ContentType())
