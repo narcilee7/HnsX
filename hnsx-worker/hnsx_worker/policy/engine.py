@@ -26,6 +26,7 @@ Spec shape::
 from __future__ import annotations
 
 import logging
+import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -151,6 +152,22 @@ class PolicyEngine:
         self.agent_id = agent_id
         self.emit = emit
 
+        # CLI local runs can request a completely permissive policy engine for
+        # debugging sessions that would otherwise be blocked by guardrails or
+        # budget limits.
+        self._disabled = os.environ.get("HNSX_DISABLE_POLICY", "").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        if self._disabled:
+            self.budget = Budget()
+            self.tool_policy = ToolPolicy()
+            self.output_guardrails = OutputGuardrails()
+            self.approval_policy = ApprovalPolicy()
+            return
+
         policy = (spec.get("harness", {}) or {}).get("policy", {}) or {}
         budget_cfg = policy.get("budget", {}) or {}
         self.budget = Budget(
@@ -195,6 +212,9 @@ class PolicyEngine:
 
     def check_output(self, text: str) -> Decision:
         """Check final agent output against configured guardrails."""
+        if self._disabled:
+            return Decision(allow=True, decision="allow", reason="policy disabled")
+
         g = self.output_guardrails
         text_str = str(text)
 
@@ -240,6 +260,9 @@ class PolicyEngine:
         Call at the start of each turn. Pass the *estimated* cost of the turn
         if known (usually 0 until the adapter returns a cost observation).
         """
+        if self._disabled:
+            return Decision(allow=True, decision="allow", reason="policy disabled")
+
         projected = self.budget.cumulative_cost_usd + incremental_cost_usd
         if self.budget.cost_exceeded or (
             self.budget.max_cost_usd > 0 and projected > self.budget.max_cost_usd
@@ -300,6 +323,9 @@ class PolicyEngine:
         ctx: ToolContext | None = None,
     ) -> Decision:
         """Check whether a tool call is allowed by policy."""
+        if self._disabled:
+            return Decision(allow=True, decision="allow", reason="policy disabled")
+
         tp = self.tool_policy
 
         if tool_name in tp.denied_tools:

@@ -109,6 +109,7 @@ class ReActAgent(Agent):
             agent_cfg=self.agent_cfg,
             config=session_cfg,
             memory=memory,
+            approval_stop_event=stop_event,
         )
 
         cost_totals: dict[str, Any] = {

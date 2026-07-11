@@ -39,6 +39,7 @@ export function useResolveApproval() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: approvalKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: ['sessions'] })
     },
   })
 }

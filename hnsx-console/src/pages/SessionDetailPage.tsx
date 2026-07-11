@@ -17,6 +17,8 @@ import {
   AgentFlowDiagram,
 } from '@hnsx/observability'
 import { useSession, useSessionEvents } from '@/hooks/useSessions'
+import { useResolveApproval, useApprovals } from '@/hooks/useApprovals'
+import { useDomain } from '@/hooks/useDomains'
 import {
   ObservationTimeline,
   useObservationFilters,
@@ -39,6 +41,24 @@ export default function SessionDetailPage() {
   const [agentFilter, setAgentFilter] = useState('')
   const [kindFilter, setKindFilter] = useState('')
 
+  const { data: pendingApprovals } = useApprovals({ session: id, status: 'pending', limit: 1 })
+  const resolve = useResolveApproval()
+  const pendingApprovalId = pendingApprovals?.items[0]?.id
+  const { data: domain } = useDomain(session?.domainId)
+
+  const budget = useMemo(() => {
+    if (!domain) return null
+    const d = domain as Record<string, unknown>
+    const policy = d.policy as Record<string, unknown> | undefined
+    const budgetSpec = policy?.budget as Record<string, unknown> | undefined
+    const maxCostUsd = typeof budgetSpec?.max_cost_usd === 'number' ? budgetSpec.max_cost_usd : undefined
+    return {
+      maxCostUsd,
+      requireHumanApproval: !!policy?.require_human_approval,
+      guardrails: typeof policy?.guardrails === 'string' ? policy.guardrails : undefined,
+    }
+  }, [domain])
+
   const { agents, kinds } = useObservationFilters(observations)
 
   const stats = useMemo(() => summarize(observations), [observations])
@@ -56,6 +76,8 @@ export default function SessionDetailPage() {
     return <ErrorState description={error?.message || 'Session not found'} onRetry={refetch} />
   }
 
+  const isPaused = (state || session.state) === 'paused'
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -66,12 +88,20 @@ export default function SessionDetailPage() {
         ]}
       >
         <div className="flex items-center gap-2">
-          {(state || session.state) === 'paused' && (
+          {isPaused && pendingApprovalId && (
             <>
-              <button className={cn(buttonVariants({ variant: 'default' }))}>
+              <button
+                className={cn(buttonVariants({ variant: 'default' }))}
+                onClick={() => resolve.mutate({ id: pendingApprovalId, decision: 'approve' })}
+                disabled={resolve.isPending}
+              >
                 <Check className="mr-2 h-4 w-4" /> Approve
               </button>
-              <button className={cn(buttonVariants({ variant: 'outline' }))}>
+              <button
+                className={cn(buttonVariants({ variant: 'outline' }))}
+                onClick={() => resolve.mutate({ id: pendingApprovalId, decision: 'reject' })}
+                disabled={resolve.isPending}
+              >
                 <X className="mr-2 h-4 w-4" /> Reject
               </button>
             </>
@@ -125,7 +155,7 @@ export default function SessionDetailPage() {
         />
       </div>
 
-      {/* 上下文 + 成本/token 拆解 */}
+      {/* 上下文 + Budget/Policy + 成本/token 拆解 */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader>
@@ -156,7 +186,40 @@ export default function SessionDetailPage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-4 lg:col-span-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Budget & Policy</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {budget ? (
+              <>
+                <Row
+                  label="Budget"
+                  value={
+                    budget.maxCostUsd !== undefined
+                      ? `$${budget.maxCostUsd.toFixed(2)}`
+                      : <span className="text-muted-foreground">unset</span>
+                  }
+                />
+                <Row
+                  label="Human Approval"
+                  value={
+                    budget.requireHumanApproval
+                      ? <span className="text-[var(--warning-text)]">Required</span>
+                      : <span className="text-muted-foreground">Optional</span>
+                  }
+                />
+                {budget.guardrails && (
+                  <Row label="Guardrails" value={<span className="text-xs">{budget.guardrails}</span>} />
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">Loading…</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-4 lg:col-span-1">
           <TokenUsageChart data={tokenSeries} height={220} />
           <div className="grid gap-4 lg:grid-cols-2">
             <LatencyHistogram data={latencyBuckets} height={200} />

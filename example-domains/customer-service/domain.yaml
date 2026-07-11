@@ -50,7 +50,7 @@ harness:
         technical question concisely.
   tools:
     request_human_approval:
-      type: human_approval
+      kind: human_approval
       name: request_human_approval
       description: |
         Pause the session and ask a human operator to approve, deny, or
@@ -86,6 +86,23 @@ harness:
         cost_threshold_usd: 0.25
   session:
     mode: workflow
+    trigger_schema:
+      type: object
+      properties:
+        question:
+          type: string
+          title: 客户问题
+          description: 客户输入的原始问题
+        user_id:
+          type: string
+          title: 用户 ID
+        channel:
+          type: string
+          enum: [email, chat, phone]
+          title: 渠道
+      required: [question]
+    output_schema: |
+      { "type": "object", "properties": { "response": { "type": "string" } } }
     workflow:
       entry: classify
       steps:

@@ -47,6 +47,8 @@ func (t DashboardTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.summary = msg.summary
 		t.err = msg.err
 		return t, nil
+	case RefreshMsg:
+		return t, t.fetchSummary()
 	case tickMsg:
 		return t, tea.Batch(t.fetchSummary(), tickDashboard())
 	}

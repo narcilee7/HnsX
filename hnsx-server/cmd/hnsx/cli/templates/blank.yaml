@@ -1,0 +1,22 @@
+id: {{domain_id}}
+version: 0.1.0
+description: |
+  A minimal blank domain to get started.
+
+harness:
+  agents:
+    agent:
+      id: agent
+      provider: noop
+      model: noop-1
+      adapter:
+        kind: noop
+      system_prompt: default
+  prompts:
+    default:
+      type: system
+      template: |
+        You are a helpful assistant.
+  session:
+    mode: single
+    agent: agent

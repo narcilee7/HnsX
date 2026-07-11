@@ -37,8 +37,8 @@ type AgentSpec struct {
 	APIKeyEnv    string        `json:"api_key_env,omitempty" yaml:"api_key_env,omitempty"`
 	SystemPrompt string        `json:"system_prompt,omitempty" yaml:"system_prompt,omitempty"`
 	Description  string        `json:"description,omitempty" yaml:"description,omitempty"`
-	Skills       []string      `json:"skills,omitempty" yaml:"skills,omitempty"`
-	Tools        []string      `json:"tools,omitempty" yaml:"tools,omitempty"`
+	SkillRefs    []string      `json:"skill_refs,omitempty" yaml:"skill_refs,omitempty"`
+	ToolRefs     []string      `json:"tool_refs,omitempty" yaml:"tool_refs,omitempty"`
 }
 
 // AdapterConfig declares adapter-specific parameters. Add fields here as new
@@ -62,10 +62,19 @@ type PromptSpec struct {
 type SkillSpec struct {
 	Name         string       `json:"name,omitempty" yaml:"name,omitempty"`
 	Description  string       `json:"description,omitempty" yaml:"description,omitempty"`
-	Prompt       string       `json:"prompt" yaml:"prompt"`
-	Tools        []string     `json:"tools,omitempty" yaml:"tools,omitempty"`
+	Prompts      []PromptSpec `json:"prompts,omitempty" yaml:"prompts,omitempty"`
+	Tools        []ToolConfig `json:"tools,omitempty" yaml:"tools,omitempty"`
+	McpRefs      []string     `json:"mcp_refs,omitempty" yaml:"mcp_refs,omitempty"`
+	Examples     []ExampleSpec `json:"examples,omitempty" yaml:"examples,omitempty"`
 	Sandbox      *SandboxSpec `json:"sandbox,omitempty" yaml:"sandbox,omitempty"`
 	OutputSchema string       `json:"output_schema,omitempty" yaml:"output_schema,omitempty"`
+}
+
+// ExampleSpec is a few-shot example for a skill.
+type ExampleSpec struct {
+	ID     string `json:"id,omitempty" yaml:"id,omitempty"`
+	Input  string `json:"input" yaml:"input"`
+	Output string `json:"output" yaml:"output"`
 }
 
 // ToolConfig defines an available tool for agents.
@@ -132,6 +141,20 @@ type PolicySpec struct {
 	Budget      BudgetSpec      `json:"budget,omitempty" yaml:"budget,omitempty"`
 	Permissions PermissionSpec  `json:"permissions,omitempty" yaml:"permissions,omitempty"`
 	Guardrails  []GuardrailSpec `json:"guardrails,omitempty" yaml:"guardrails,omitempty"`
+	Approval    ApprovalSpec    `json:"approval,omitempty" yaml:"approval,omitempty"`
+}
+
+// ApprovalSpec defines human-in-the-loop gates.
+type ApprovalSpec struct {
+	DefaultTimeoutSeconds int              `json:"default_timeout_seconds,omitempty" yaml:"default_timeout_seconds,omitempty"`
+	RequiredFor           RequiredForSpec  `json:"required_for,omitempty" yaml:"required_for,omitempty"`
+}
+
+// RequiredFor specifies which operations require approval.
+type RequiredForSpec struct {
+	Tools           []string `json:"tools,omitempty" yaml:"tools,omitempty"`
+	Resources       []string `json:"resources,omitempty" yaml:"resources,omitempty"`
+	CostThresholdUSD float64 `json:"cost_threshold_usd,omitempty" yaml:"cost_threshold_usd,omitempty"`
 }
 
 // BudgetSpec constraints.
