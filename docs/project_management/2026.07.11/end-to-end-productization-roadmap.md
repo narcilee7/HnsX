@@ -96,12 +96,12 @@ Refs：`cli/discovery.go`、`hnsx-server/pkg/domain/format/`（新增）
 
 ### A3 — `hnsx run` 真实执行（走 embedded Python worker）
 
-- [ ] **cli** `hnsx run` 改为：加载 DomainSpec → 启动/复用 embedded Python worker → 触发执行 → tail SSE/observations
-- [ ] **worker** 支持 CLI 本地模式传入 domain spec（stdin 或临时文件），不走 server registry
-- [ ] **adapters** 本地模式支持 `openai` / `anthropic` / `claudecode` / `codex` / `mcp`（复用 worker adapters）
-- [ ] **orchestration** 本地模式支持 `workflow` / `supervisor` / `multi-turn`（复用 Python runner）
-- [ ] **policy** 本地模式启用 budget / permission / guardrail / approval（可配 `--no-policy` 调试用）
-- [ ] **smoke** `scripts/smoke-cli.sh` 增加 `hnsx run --domain example-domains/mcp-demo/domain.yaml` 真实 MCP 调用断言
+- [x] **cli** `hnsx run` 改为：加载 DomainSpec → 启动/复用 embedded Python worker → 触发执行 → tail SSE/observations
+- [x] **worker** 支持 CLI 本地模式传入 domain spec（stdin 或临时文件），不走 server registry
+- [x] **adapters** 本地模式支持 `openai` / `anthropic` / `claudecode` / `codex` / `mcp`（复用 worker adapters）
+- [x] **orchestration** 本地模式支持 `workflow` / `supervisor` / `multi-turn`（复用 Python runner）
+- [x] **policy** 本地模式启用 budget / permission / guardrail / approval（可配 `--no-policy` 调试用）
+- [x] **smoke** `scripts/smoke-cli.sh` 增加 `hnsx run --domain example-domains/mcp-demo/domain.yaml` 真实 MCP 调用断言
 
 #### 验收
 

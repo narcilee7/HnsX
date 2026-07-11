@@ -6,8 +6,10 @@
 #   - doctor (all green)
 #   - status
 #   - examples (lists ≥3)
-#   - try (end-to-end: register + trigger + capture SSE)
 #   - validate (parses an example)
+#   - run (embedded Python worker, local)
+#   - try (end-to-end: register + trigger + capture SSE)
+#   - resource, governance and power commands
 #
 # Pre-conditions:
 #   - bin/hnsx exists (run `make build-cli` if not)
@@ -59,6 +61,13 @@ for domain_file in "$ROOT"/example-domains/*/domain.yaml; do
     || fail "validate failed for $name"
   ok "$name validates"
 done
+
+bold "[5a/6] run an example locally via the embedded worker"
+out="$("$HNSX" run --domain "$ROOT/example-domains/noop-smoke/domain.yaml" --adapter noop \
+  --trigger '{"question":"smoke-run"}' 2>&1)" \
+  || fail "hnsx run failed: $out"
+echo "$out" | grep -q "completed" || fail "local run did not complete: $out"
+ok "hnsx run completed locally"
 
 bold "[6/6] try an example (register + trigger + tail SSE briefly)"
 # Run `hnsx try` against noop-smoke with --detach so the SSE consumer doesn't
