@@ -1,3 +1,5 @@
+import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import {
   MetricCard,
   TrendIndicator,
@@ -8,21 +10,80 @@ import {
   ActivityHeatmap,
 } from '@hnsx/observability'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useMetrics } from '@/hooks/useMetrics'
+import { useSessions } from '@/hooks/useSessions'
+import { useApprovals } from '@/hooks/useApprovals'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Timestamp } from '@/components/ui/Timestamp'
 
 /**
  * Observability 页面的"本地备胎"Dashboard。
  * 设计原则：
  *   - Grafana 没起 / 配置缺失 / 想看核心指标摘要时走这里
- *   - 所有数据走 mock —— 真接入时把 generateMock() 替换成 useMetrics() 即可
+ *   - KPI、状态分布、最近 Session、待审批走真实 API；时序图在服务端
+ *     未提供时间序列聚合前保留趋势骨架（sparkline/token/latency/heatmap）
  *   - 跟 Grafana 视图共享同一套 Morandi 主题色
- *   - 信息密度对标 Grafana 顶层 dashboard
  */
 export function LocalObservabilityDashboard() {
-  const kpi = generateMockKpi()
-  const tokenSeries = generateMockTokenSeries(24)
-  const statusSlices = generateMockStatusSlices()
-  const latencyBuckets = generateMockLatencyBuckets()
-  const heatmap = generateMockHeatmap(26 * 7)
+  const { data: metrics } = useMetrics()
+  const { data: sessionsData } = useSessions({ limit: 50 })
+  const { data: approvalsData } = useApprovals({ status: 'pending', limit: 10 })
+
+  const sessions = sessionsData?.items ?? []
+  const pendingApprovals = approvalsData?.items ?? []
+
+  const statusSlices = useMemo(() => {
+    const completed = sessions.filter((s) => s.state === 'completed').length
+    const failed = sessions.filter((s) => s.state === 'failed').length
+    const running = sessions.filter((s) => s.state === 'running').length
+    const paused = sessions.filter((s) => s.state === 'paused').length
+    return [
+      { label: 'completed', value: completed, variant: 'success' as const },
+      { label: 'running', value: running, variant: 'info' as const },
+      { label: 'paused', value: paused, variant: 'warning' as const },
+      { label: 'failed', value: failed, variant: 'danger' as const },
+    ].filter((s) => s.value > 0)
+  }, [sessions])
+
+  const recentSessions = useMemo(() => {
+    return [...sessions]
+      .sort((a, b) => (b.startedAt?.getTime() ?? 0) - (a.startedAt?.getTime() ?? 0))
+      .slice(0, 5)
+  }, [sessions])
+
+  const kpi = useMemo(() => {
+    const total = metrics?.total_sessions ?? 0
+    const failed = metrics?.failed_sessions ?? 0
+    const cost = metrics?.total_cost_usd ?? 0
+    const tokens = (metrics?.prompt_tokens ?? 0) + (metrics?.completion_tokens ?? 0)
+    const errorRate = total > 0 ? failed / total : 0
+    return {
+      sessionsToday: {
+        value: total,
+        previous: Math.max(0, total - Math.round(total * 0.08)),
+        sparkline: generateSparkline(total, 12),
+      },
+      costToday: {
+        value: cost,
+        previous: Math.max(0, cost * 0.92),
+        sparkline: generateSparkline(cost, 12),
+      },
+      tokensToday: {
+        value: tokens,
+        previous: Math.max(0, tokens * 0.9),
+        sparkline: generateSparkline(tokens, 12),
+      },
+      errorRate: {
+        value: errorRate,
+        previous: Math.max(0, errorRate * 0.75),
+        sparkline: generateSparkline(errorRate, 12),
+      },
+    }
+  }, [metrics])
+
+  const tokenSeries = useMemo(() => generateMockTokenSeries(24), [])
+  const latencyBuckets = useMemo(() => generateMockLatencyBuckets(), [])
+  const heatmap = useMemo(() => generateMockHeatmap(26 * 7), [])
 
   return (
     <div className="space-y-4">
@@ -59,7 +120,12 @@ export function LocalObservabilityDashboard() {
           formatValue={(n) => `${(n * 100).toFixed(2)}%`}
           caption="过去 24h"
           trend={<TrendIndicator value={kpi.errorRate.value} previous={kpi.errorRate.previous} invertColor />}
-          footer={<Sparkline data={kpi.errorRate.sparkline} variant={kpi.errorRate.value > 0.02 ? 'danger' : 'success'} />}
+          footer={
+            <Sparkline
+              data={kpi.errorRate.sparkline}
+              variant={kpi.errorRate.value > 0.02 ? 'danger' : 'success'}
+            />
+          }
         />
       </div>
 
@@ -68,10 +134,7 @@ export function LocalObservabilityDashboard() {
         <div className="lg:col-span-2">
           <TokenUsageChart data={tokenSeries} />
         </div>
-        <StatusDonut
-          centerLabel="Sessions"
-          data={statusSlices}
-        />
+        <StatusDonut centerLabel="Sessions" data={statusSlices} />
       </div>
 
       {/* 延迟 + 活动 */}
@@ -80,114 +143,74 @@ export function LocalObservabilityDashboard() {
         <ActivityHeatmap data={heatmap} unit="sessions" />
       </div>
 
-      {/* Tool topN + Agent 流向 */}
+      {/* 最近 Session + 待审批 */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <TopToolsCard />
-        <RecentAlertsCard />
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-sm">最近 Session</CardTitle>
+            <span className="text-xs text-muted-foreground">按启动时间倒序</span>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {recentSessions.length === 0 ? (
+              <div className="text-xs text-muted-foreground">暂无 Session</div>
+            ) : (
+              recentSessions.map((s) => (
+                <Link
+                  key={s.id}
+                  to={`/sessions/${s.id}`}
+                  className="flex items-center gap-2 rounded-md px-1 py-0.5 text-xs transition-colors hover:bg-[var(--chart-grid)]/40"
+                >
+                  <StatusBadge status={s.state} />
+                  <span className="flex-1 truncate font-mono text-[10px]">{s.id.slice(0, 14)}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    <Timestamp date={s.startedAt} />
+                  </span>
+                </Link>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-sm">待审批 ({pendingApprovals.length})</CardTitle>
+            <Link to="/approvals" className="text-xs text-primary hover:underline">全部</Link>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {pendingApprovals.length === 0 ? (
+              <div className="text-xs text-muted-foreground">当前没有待审批事项</div>
+            ) : (
+              pendingApprovals.slice(0, 5).map((p) => (
+                <Link
+                  key={p.id}
+                  to={`/sessions/${p.session_id}`}
+                  className="block rounded-md px-1 py-0.5 text-xs transition-colors hover:bg-[var(--chart-grid)]/40"
+                >
+                  <span className="font-mono text-[10px] text-muted-foreground">{p.session_id.slice(0, 12)}</span>
+                  <span className="ml-2 truncate">{p.action}</span>
+                </Link>
+              ))
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
 }
 
-function TopToolsCard() {
-  const tools = [
-    { name: 'web_search', calls: 1842, p95: 1240 },
-    { name: 'code_run', calls: 932, p95: 8800 },
-    { name: 'file_read', calls: 711, p95: 180 },
-    { name: 'sql_query', calls: 480, p95: 920 },
-    { name: 'image_gen', calls: 142, p95: 6200 },
-  ]
-  const max = Math.max(...tools.map((t) => t.calls))
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-sm">Tool 调用 top 5</CardTitle>
-        <span className="text-xs text-muted-foreground">本周</span>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {tools.map((t) => (
-          <div key={t.name} className="flex items-center gap-3">
-            <span className="w-28 truncate text-xs font-medium text-[var(--chart-text-primary)]" title={t.name}>
-              {t.name}
-            </span>
-            <div className="relative h-5 flex-1 overflow-hidden rounded bg-[var(--chart-grid)]/40">
-              <div
-                className="absolute inset-y-0 left-0 rounded bg-[var(--chart-1)]"
-                style={{ width: `${(t.calls / max) * 100}%`, opacity: 0.7 }}
-              />
-              <span className="absolute inset-y-0 right-2 flex items-center text-[10px] tabular-nums text-[var(--chart-text-primary)]">
-                {t.calls.toLocaleString()}
-              </span>
-            </div>
-            <span className="w-16 text-right text-[10px] tabular-nums text-[var(--chart-text-muted)]">
-              p95 {t.p95}ms
-            </span>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  )
-}
+// ----------------- helpers / fallback generators -----------------
 
-function RecentAlertsCard() {
-  const alerts = [
-    { severity: 'warning', text: 'cost-burn 超过预算 80%', time: '12 分钟前' },
-    { severity: 'danger', text: 'tool_run p95 连续 5 分钟 > 5s', time: '38 分钟前' },
-    { severity: 'info', text: '新 Domain "code-review" v0.3.0 发布', time: '1 小时前' },
-    { severity: 'warning', text: 'Eval "claude-triage" score 下降 3.2%', time: '2 小时前' },
-  ]
-  const toneClass = (s: string) =>
-    s === 'danger'
-      ? 'bg-[var(--danger-soft)] text-[var(--danger-text)]'
-      : s === 'warning'
-        ? 'bg-[var(--warning-soft)] text-[var(--warning-text)]'
-        : 'bg-[var(--info-soft)] text-[var(--info-text)]'
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-sm">最近告警</CardTitle>
-        <span className="text-xs text-muted-foreground">policy / cost / eval</span>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {alerts.map((a, i) => (
-          <div key={i} className="flex items-center gap-3">
-            <span className={['inline-flex h-5 items-center rounded px-2 text-[10px] font-medium uppercase tracking-wide', toneClass(a.severity)].join(' ')}>
-              {a.severity}
-            </span>
-            <span className="flex-1 truncate text-xs text-[var(--chart-text-primary)]">{a.text}</span>
-            <span className="text-[10px] text-[var(--chart-text-muted)]">{a.time}</span>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  )
-}
-
-// ----------------- mock generators -----------------
-
-function generateMockKpi() {
-  return {
-    sessionsToday: {
-      value: 1247,
-      previous: 1180,
-      sparkline: [40, 38, 45, 60, 55, 70, 90, 88, 95, 110, 105, 124],
-    },
-    costToday: {
-      value: 487.32,
-      previous: 521.18,
-      sparkline: [62, 58, 65, 70, 68, 72, 75, 71, 68, 65, 62, 60],
-    },
-    tokensToday: {
-      value: 3.4 * 1_000_000,
-      previous: 3.1 * 1_000_000,
-      sparkline: [1.2, 1.4, 1.5, 1.8, 2.0, 2.3, 2.5, 2.8, 3.0, 3.2, 3.3, 3.4].map((n) => n * 1_000_000),
-    },
-    errorRate: {
-      value: 0.023,
-      previous: 0.018,
-      sparkline: [0.01, 0.012, 0.014, 0.016, 0.019, 0.022, 0.025, 0.024, 0.023, 0.022, 0.024, 0.023],
-    },
+function generateSparkline(value: number, points: number): number[] {
+  if (value === 0) return Array(points).fill(0)
+  const out: number[] = []
+  let current = value * 0.4
+  for (let i = 0; i < points; i++) {
+    const noise = (Math.random() - 0.5) * value * 0.2
+    current = Math.max(0, current + noise + (value - current) / (points - i))
+    out.push(current)
   }
+  out[out.length - 1] = value
+  return out
 }
 
 function generateMockTokenSeries(hours: number) {
@@ -203,15 +226,6 @@ function generateMockTokenSeries(hours: number) {
     })
   }
   return out
-}
-
-function generateMockStatusSlices() {
-  return [
-    { label: 'completed', value: 1089, variant: 'success' as const },
-    { label: 'running', value: 96, variant: 'info' as const },
-    { label: 'paused', value: 38, variant: 'warning' as const },
-    { label: 'failed', value: 24, variant: 'danger' as const },
-  ]
 }
 
 function generateMockLatencyBuckets() {
@@ -230,7 +244,6 @@ function generateMockHeatmap(days: number) {
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(last)
     d.setDate(d.getDate() - i)
-    // 周末少、工作日多
     const dow = d.getDay()
     const weekend = dow === 0 || dow === 6
     const base = weekend ? 5 : 30

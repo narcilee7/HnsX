@@ -27,3 +27,12 @@ harness:
     mode: single
     agent: assistant
     max_turns: 5
+    trigger_schema:
+      type: object
+      properties:
+        question:
+          type: string
+          title: 问题
+      required: [question]
+    output_schema: |
+      { "type": "object", "properties": { "response": { "type": "string" } } }

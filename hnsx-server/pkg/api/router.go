@@ -47,9 +47,12 @@ func newRouter(s *Server) *gin.Engine {
 			d := domains.Group("/:id")
 			{
 				d.GET("", s.GetDomain)
+				d.GET("/yaml", s.GetDomainYAML)
 				d.PUT("", s.UpdateDomain)
 				d.DELETE("", s.DeleteDomain)
 				d.GET("/versions", s.ListDomainVersions)
+				d.GET("/versions/:version", s.GetDomainVersion)
+				d.GET("/schema", s.GetDomainSchema)
 				d.POST("/validate", s.ValidateDomain)
 				d.POST("/run", s.TriggerDomain)
 				d.POST("/policies", s.BindPolicy)
@@ -79,8 +82,10 @@ func newRouter(s *Server) *gin.Engine {
 		approvals := v1.Group("/approvals")
 		{
 			approvals.GET("", s.ListApprovals)
+			approvals.POST("", s.CreateApproval)
 			ap := approvals.Group("/:id")
 			{
+				ap.GET("", s.GetApproval)
 				ap.POST("/approve", s.ApproveApproval)
 				ap.POST("/reject", s.RejectApproval)
 			}

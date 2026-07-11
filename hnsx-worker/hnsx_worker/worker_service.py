@@ -327,11 +327,15 @@ class WorkerService:
         Inherits the worker's environment and forwards any ``HNSX_SECRET_*``
         variables so the session runtime can resolve ``{secret.X}`` placeholders
         without the values passing through the gRPC payload.
+
+        Also forwards ``HNSX_SERVER`` and ``HNSX_SERVER_HTTP_URL`` so the
+        session runtime can reach the control-plane REST API for approvals.
         """
         env = dict(os.environ)
         for key, value in os.environ.items():
             if key.startswith("HNSX_SECRET_"):
                 env[key] = value
+        env.setdefault("HNSX_SERVER", self.config.server_addr)
         return env
 
     # ------------------------------------------------------------------ W7 pool

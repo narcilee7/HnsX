@@ -50,7 +50,7 @@ eval:
 | **MCPs** | 外部 MCP Server 配置 | 否 |
 | **Sandbox** | 执行隔离策略 | 否（默认 none） |
 | **Policy** | 预算、权限、guardrails、人工审批 | 否（默认放行） |
-| **Memory** | 跨 session 上下文存储策略 | 否（默认 in_memory） |
+| **Store** | 跨 session 上下文存储策略 | 否（默认 in_memory） |
 | **Session** | 编排策略和运行模式 | 是 |
 | **Eval** | 评测集 | 否 |
 
@@ -110,14 +110,14 @@ prompts:
 
 ```yaml
 skills:
-  - id: intent-extraction
+  intent-extraction:
     description: Extracts user intent from messages.
     prompts:
       - id: intent-prompt
         template: "Extract intent from: {message}"
     tools:
-      - id: search
-        type: http
+      - name: search
+        kind: http
         config: ...
     mcp_refs: [crm-mcp]
     examples:
@@ -128,7 +128,7 @@ skills:
 Skill 包含：
 
 - Prompts
-- Tools
+- Tools（使用 `kind` 指定工具类型）
 - MCP refs
 - 示例 / few-shot
 - 评估用例（可选）
@@ -141,9 +141,9 @@ Skill 包含：
 
 ```yaml
 tools:
-  - id: search
+  search:
     description: Search internal knowledge base.
-    type: http
+    kind: http
     config:
       method: GET
       url: https://kb.example.com/search
@@ -169,12 +169,15 @@ Tool 的 `config` 可以引用 secret：`{secret.SECRET_NAME}`，由控制面注
 **MCP 是外部 Model Context Protocol Server 的配置**。
 
 ```yaml
-mcps:
-  - id: crm-mcp
-    command: npx
-    args: ["-y", "@example/crm-mcp"]
-    env:
-      CRM_API_KEY: "{secret.crm_api_key}"
+harness:
+  mcp:
+    servers:
+      - name: crm-mcp
+        transport: stdio
+        command: npx
+        args: ["-y", "@example/crm-mcp"]
+        headers:
+          CRM_API_KEY: "{secret.crm_api_key}"
 ```
 
 MCP 让 Agent 获得动态、外部化的能力，而不需要在 Domain 里定义所有 Tool。
@@ -200,16 +203,27 @@ sandbox:
 
 ```yaml
 policy:
-  budget_usd: 10.0
-  allowed_tools: [search, file_read]
-  denied_tools: [shell]
-  require_human_approval: true
+  budget:
+    max_cost_usd: 10.0
+    max_turns: 20
+  permissions:
+    allow_network: true
+    allow_file_write: false
+    allow_shell: false
   guardrails:
-    - rule: prevent_data_exfiltration
+    - id: prevent_data_exfiltration
       type: tool_deny
-      tools: [http]
-      unless:
-        - domain: "*.example.com"
+      on: tool_call
+      action: block
+      config:
+        tools: [http]
+      message: HTTP tool is not allowed unless destination is allowlisted
+  approval:
+    default_timeout_seconds: 600
+    required_for:
+      tools: [issue_refund, export_customer_data]
+      resources: ["billing:write", "customer:*"]
+      cost_threshold_usd: 0.25
 ```
 
 Policy 在以下时机生效：
@@ -219,16 +233,21 @@ Policy 在以下时机生效：
 3. **运行时预算检查**：超预算时暂停或失败。
 4. **运行时敏感操作前**：触发 human-in-the-loop。
 
-### 2.10 Memory
+### 2.10 Store（原 Memory）
 
-**Memory 定义上下文存储策略**。
+**Store 定义跨 session 上下文存储策略**，按用途分为 context / knowledge / ephemeral 三个命名空间。
 
 ```yaml
-memory:
-  backend: postgres
-  config:
-    connection_string: "{secret.pg_conn}"
-    retention: 30d
+store:
+  context:
+    backend: in_memory
+  knowledge:
+    backend: postgres
+    config:
+      connection_string: "{secret.pg_conn}"
+      retention: 30d
+  ephemeral:
+    backend: in_memory
 ```
 
 类型：
@@ -236,7 +255,7 @@ memory:
 - `in_memory`：当前 session 内有效。
 - `postgres` / `redis`：跨 session 长期记忆。
 
-Memory 内容对 Agent 可见的方式由 Adapter 决定。
+Store 内容对 Agent 可见的方式由 Adapter 决定。
 
 ### 2.11 Session
 

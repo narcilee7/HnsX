@@ -57,6 +57,7 @@ from hnsx_worker.tools import (
     ToolDecision,
     ToolRegistry,
     ToolResult,
+    build_human_approval_tool,
     build_tool,
     tool_schemas_for_adapter,
 )
@@ -94,10 +95,12 @@ def execute_session(
     *,
     stop_event: threading.Event,
     emit: EmitFn,
+    approval_bus: Any | None = None,
 ) -> dict[str, Any]:
     """Dispatch to the right mode-specific runner."""
     mode = _read_mode(spec)
     strategy = _read_strategy(spec)
+    config["_approval_bus"] = approval_bus
     result: dict[str, Any] = {
         "output": "",
         "prompt_tokens": 0,
@@ -394,6 +397,7 @@ def _run_multi_turn(
 
     session_id = config.get("session_id", "")
     domain_id = spec.get("id", "")
+    approval_bus = config.get("_approval_bus")
 
     # W6 runtime services: policy, sandbox, store.
     policy = PolicyEngine(
@@ -428,6 +432,8 @@ def _run_multi_turn(
         policy_decision=policy.check_tool,
         memory=memory,
         extra_tool_specs=skill_tool_specs,
+        approval_bus=approval_bus,
+        stop_event=stop_event,
     )
     if schema_failures:
         for failure in schema_failures:
@@ -596,7 +602,7 @@ def _run_multi_turn(
                 # W14: gate ``policy.approval.required_for`` before dispatch.
                 gated = _maybe_gate_for_approval(
                     approval_policy=getattr(policy, "approval_policy", None),
-                    approval_bus=None,
+                    approval_bus=approval_bus,
                     session_id=session_id,
                     domain_id=domain_id,
                     agent_id=agent_name,
@@ -974,6 +980,8 @@ def _build_tool_registry(
     policy_decision: Any = None,
     memory: MemoryStore | None = None,
     extra_tool_specs: list[dict[str, Any]] | None = None,
+    approval_bus: Any | None = None,
+    stop_event: threading.Event | None = None,
 ) -> tuple[ToolRegistry, list[str]]:
     """Build a ToolRegistry from ``agent.tools`` + optional skill tools.
 
@@ -1051,6 +1059,21 @@ def _build_tool_registry(
         # Pass through name-only references unchanged (CLI-agent / W4).
         if "type" not in entry:
             continue
+        # W14: human_approval tool needs the live ApprovalBus.
+        if entry.get("type") == "human_approval" and approval_bus is not None:
+            name = str(entry.get("name", "request_human_approval"))
+            try:
+                tool = build_human_approval_tool(
+                    name,
+                    entry.get("config") or {},
+                    bus=approval_bus,
+                    stop_event=stop_event or threading.Event(),
+                )
+                registry.register(tool)
+                continue
+            except ValueError as e:
+                failures.append(str(e))
+                continue
         try:
             tool = build_tool(
                 entry,
@@ -1698,7 +1721,9 @@ def build_agent_loop_context(
     on top of the agent's declared ``tools:`` entries.
 
     Pass ``approval_bus`` (W14) so the loop can gate tool calls that match
-    ``policy.approval.required_for``.
+    ``policy.approval.required_for``. When ``approval_bus`` is ``None`` but
+    ``config["_approval_bus"]`` was set by ``execute_session``, the latter
+    is used so strategy agents inherit the session bus automatically.
     """
     harness = spec.get("harness", {})
     session_id = config.get("session_id", "")
@@ -1716,6 +1741,10 @@ def build_agent_loop_context(
         or (harness.get("session", {}) or {}).get("max_turns")
         or _DEFAULT_MAX_TURNS
     )
+
+    # W14: inherit the session approval bus when the caller did not pass one
+    # explicitly (e.g. strategy agents created inside execute_session).
+    bus = approval_bus if approval_bus is not None else config.get("_approval_bus")
 
     policy = PolicyEngine(
         spec, session_id=session_id, domain_id=domain_id, agent_id=agent_id, emit=_noop_emit
@@ -1736,6 +1765,8 @@ def build_agent_loop_context(
         policy_decision=policy.check_tool,
         memory=memory,
         extra_tool_specs=skill_tool_specs,
+        approval_bus=bus,
+        stop_event=approval_stop_event,
     )
     if extra_tools:
         for tool in extra_tools:
@@ -1758,7 +1789,7 @@ def build_agent_loop_context(
         domain_id=domain_id,
         agent_id=agent_id,
         max_turns=max_turns,
-        approval_bus=approval_bus,
+        approval_bus=bus,
         approval_stop_event=approval_stop_event,
     )
 

@@ -78,6 +78,14 @@ func (t AuditTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.err = msg.err
 		t.applyFilter()
 		return t, nil
+	case FilterMsg:
+		t.filter.SetValue(msg.Query)
+		t.applyFilter()
+		return t, nil
+
+	case RefreshMsg:
+		return t, t.fetchAudit()
+
 	case tickMsg:
 		return t, tea.Batch(t.fetchAudit(), tickAudit())
 	case tea.KeyMsg:
@@ -90,7 +98,7 @@ func (t AuditTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if t.selected < len(t.filtered)-1 {
 				t.selected++
 			}
-		case "/":
+		case "f":
 			t.filtering = true
 			t.filter.Focus()
 			return t, nil

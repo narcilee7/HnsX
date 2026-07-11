@@ -20,11 +20,13 @@ type TracesTab struct {
 	height  int
 	theme   common.Theme
 
-	traces   []common.TraceListItem
-	selected int
-	err      error
-	detail   *traceDetail
-	inDetail bool
+	traces      []common.TraceListItem
+	filtered    []common.TraceListItem
+	selected    int
+	filterQuery string
+	err         error
+	detail      *traceDetail
+	inDetail    bool
 }
 
 // NewTracesTab creates a traces tab connected to the given server URL.
@@ -55,13 +57,42 @@ func (t TracesTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tracesLoadedMsg:
 		t.traces = msg.items
 		t.err = msg.err
-		if t.selected >= len(t.traces) {
-			t.selected = len(t.traces) - 1
+		t.applyFilter()
+		if t.selected >= len(t.filtered) {
+			t.selected = len(t.filtered) - 1
 		}
 		if t.selected < 0 {
 			t.selected = 0
 		}
 		return t, nil
+
+	case SelectMsg:
+		for i, tr := range t.filtered {
+			if tr.ID == msg.ID {
+				t.selected = i
+				t.inDetail = true
+				t.detail = newTraceDetail(t.client, tr.ID, t.theme)
+				t.detail.setSize(t.width, t.height)
+				return t, t.detail.Init()
+			}
+		}
+		for _, tr := range t.traces {
+			if tr.ID == msg.ID {
+				t.inDetail = true
+				t.detail = newTraceDetail(t.client, tr.ID, t.theme)
+				t.detail.setSize(t.width, t.height)
+				return t, t.detail.Init()
+			}
+		}
+		return t, nil
+
+	case FilterMsg:
+		t.filterQuery = strings.ToLower(msg.Query)
+		t.applyFilter()
+		return t, nil
+
+	case RefreshMsg:
+		return t, t.fetchTraces()
 
 	case tickMsg:
 		if !t.inDetail {
@@ -86,13 +117,13 @@ func (t TracesTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.selected--
 			}
 		case "down", "j":
-			if t.selected < len(t.traces)-1 {
+			if t.selected < len(t.filtered)-1 {
 				t.selected++
 			}
 		case "enter":
-			if t.selected >= 0 && t.selected < len(t.traces) {
+			if t.selected >= 0 && t.selected < len(t.filtered) {
 				t.inDetail = true
-				t.detail = newTraceDetail(t.client, t.traces[t.selected].ID, t.theme)
+				t.detail = newTraceDetail(t.client, t.filtered[t.selected].ID, t.theme)
 				t.detail.setSize(t.width, t.height)
 				return t, t.detail.Init()
 			}
@@ -120,7 +151,7 @@ func (t TracesTab) View() string {
 
 	headers := []string{"ID", "SESSION", "DOMAIN", "COST"}
 	var rows []components.Row
-	for _, tr := range t.traces {
+	for _, tr := range t.filtered {
 		rows = append(rows, components.Row{Cells: []string{
 			tr.ID,
 			tr.SessionID,
@@ -135,6 +166,21 @@ func (t TracesTab) View() string {
 		body = lipgloss.JoinVertical(lipgloss.Left, errLine, body)
 	}
 	return body
+}
+
+func (t *TracesTab) applyFilter() {
+	if t.filterQuery == "" {
+		t.filtered = append([]common.TraceListItem(nil), t.traces...)
+		return
+	}
+	t.filtered = t.filtered[:0]
+	for _, tr := range t.traces {
+		if strings.Contains(strings.ToLower(tr.ID), t.filterQuery) ||
+			strings.Contains(strings.ToLower(tr.SessionID), t.filterQuery) ||
+			strings.Contains(strings.ToLower(tr.DomainID), t.filterQuery) {
+			t.filtered = append(t.filtered, tr)
+		}
+	}
 }
 
 func (t TracesTab) fetchTraces() tea.Cmd {

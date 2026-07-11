@@ -277,6 +277,57 @@ type approvalDecisionBody struct {
 	Comment    string `json:"comment"`
 }
 
+type createApprovalBody struct {
+	ID          string         `json:"id"`
+	SessionID   string         `json:"session_id"`
+	DomainID    string         `json:"domain_id"`
+	Action      string         `json:"action"`
+	Resource    string         `json:"resource"`
+	RiskLevel   string         `json:"risk_level"`
+	Context     map[string]any `json:"context"`
+	RequestedBy string         `json:"requested_by"`
+}
+
+// CreateApproval handles POST /api/v1/approvals.
+// Used by the remote worker runtime to register a human-approval gate.
+func (s *Server) CreateApproval(c *gin.Context) {
+	if s.ApprovalService == nil {
+		writeError(c, &APIError{
+			Code:    "APPROVAL_UNAVAILABLE",
+			Message: "approval service is not configured on this server",
+		})
+		return
+	}
+	var body createApprovalBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		writeError(c, NewInvalidRequest("invalid request body"))
+		return
+	}
+	if body.ID == "" {
+		body.ID = approvalmodel.NewID(body.SessionID)
+	}
+	risk := approvalmodel.RiskLevel(body.RiskLevel)
+	if risk == "" {
+		risk = approvalmodel.RiskHigh
+	}
+	a := &approvalmodel.Approval{
+		ID:          body.ID,
+		SessionID:   body.SessionID,
+		DomainID:    body.DomainID,
+		Action:      body.Action,
+		Resource:    body.Resource,
+		RiskLevel:   risk,
+		Context:     body.Context,
+		RequestedBy: body.RequestedBy,
+	}
+	if err := s.ApprovalService.Create(a); err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+	c.Header("Location", "/api/v1/approvals/"+a.ID)
+	writeJSON(c, http.StatusCreated, approvalToJSON(a))
+}
+
 // writeApprovalDecisionError centralizes the 404 / 409 mapping so the
 // approve and reject handlers stay symmetric.
 func (s *Server) writeApprovalDecisionError(c *gin.Context, err error) {
