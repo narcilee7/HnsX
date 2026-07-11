@@ -236,11 +236,11 @@ Refs：`hnsx-server/cmd/hnsx/cli/config.go`、`hnsx-server/cmd/hnsx/cli/output.g
 
 ### C1 — Node/TypeScript SDK
 
-- [ ] **sdk/node** 新增 `src/client.ts`：封装 `DomainRegistry`、`Session`、`Eval`、`Trace`、`Approval` REST API
-- [ ] **sdk/node** 新增 SSE 消费 helper：`streamSessionEvents(sessionId)`
-- [ ] **sdk/node** 更新 `package.json` exports：`@hnsx/sdk-node/client`
-- [ ] **sdk/node** 补 README + 使用示例 + 单元测试（msw）
-- [ ] **sdk/node** 与 Console 共享类型：`src/gen/` 已存在，client 复用
+- [x] **sdk/node** 新增 `src/client.ts`：封装 `DomainRegistry`、`Session`、`Eval`、`Trace`、`Approval` REST API
+- [x] **sdk/node** 新增 SSE 消费 helper：`streamSessionEvents(sessionId)`
+- [x] **sdk/node** 更新 `package.json` exports：`@hnsx/sdk-node/client`
+- [x] **sdk/node** 补 README + 使用示例 + 单元测试（msw）
+- [x] **sdk/node** 与 Console 共享类型：`src/gen/` 已存在，client 复用
 
 #### 验收
 
