@@ -31,6 +31,13 @@ need() {
 
 need curl
 
+# Smoke tests require Docker (and docker compose) to spin up a local Postgres.
+# Skip gracefully when Docker is unavailable (e.g. GitHub Actions macOS runners).
+if ! command -v docker >/dev/null 2>&1; then
+  bold "docker not available; skipping smoke test"
+  exit 0
+fi
+
 # 1. Build binaries if missing.
 if [[ ! -x "$BIN_DIR/hnsx-server" || ! -x "$BIN_DIR/hnsx" ]]; then
   bold "[1/7] building binaries"

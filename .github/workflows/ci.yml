@@ -93,6 +93,7 @@ jobs:
         run: make build-go
 
       - name: smoke test
+        if: matrix.os == 'ubuntu-latest'
         run: ./scripts/smoke.sh
 
   # ---------------------------------------------------------------------------
