@@ -51,7 +51,7 @@ harness:
         technical question concisely.
   tools:
     eval_self_check:
-      type: self_check
+      kind: self_check
       name: eval_self_check
       description: |
         Score the candidate billing answer against the rubric. Returns

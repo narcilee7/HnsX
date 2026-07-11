@@ -81,8 +81,8 @@ def build_tool(
     """Construct a ``Tool`` from a spec entry.
 
     Raises:
-        ValueError: when the entry is missing ``name`` / ``type`` or when
-            ``type`` is unknown.
+        ValueError: when the entry is missing ``name`` / ``kind`` or when
+            ``kind`` is unknown.
 
     Returns:
         A configured :class:`Tool` instance ready to register in a
@@ -95,27 +95,27 @@ def build_tool(
     if not name:
         raise ValueError("tool spec requires 'name'")
 
-    tool_type = spec.get("type")
-    if not tool_type:
+    tool_kind = spec.get("kind") or spec.get("type")
+    if not tool_kind:
         # External reference: no built-in implementation. Callers that
         # need this (CLI-agent adapters in W4) can register their own
         # Tool subclass via ToolRegistry.register before the executor
         # dispatches. Here we surface a structured error so a missing
-        # type doesn't silently pass through.
+        # kind doesn't silently pass through.
         raise ValueError(
-            f"tool {name!r}: spec has no 'type'; built-in tools must declare "
+            f"tool {name!r}: spec has no 'kind' or 'type'; built-in tools must declare "
             f"one of {sorted(_BUILTIN_TOOLS)} or be registered externally"
         )
 
-    entry = _BUILTIN_TOOLS.get(str(tool_type))
+    entry = _BUILTIN_TOOLS.get(str(tool_kind))
     if entry is None:
         raise ValueError(
-            f"tool {name!r}: unknown type {tool_type!r} "
+            f"tool {name!r}: unknown kind {tool_kind!r} "
             f"(known: {sorted(_BUILTIN_TOOLS)})"
         )
     config_cls, tool_cls = entry
     try:
-        if tool_type == "mcp_client":
+        if tool_kind == "mcp_client":
             config = config_cls.from_spec(
                 spec.get("config") or {},
                 tool_name=name,
@@ -151,9 +151,9 @@ def tool_schemas_for_adapter(
         name = str(entry.get("name", "")).strip()
         if not name:
             continue
-        tool_type = entry.get("type")
+        tool_kind = entry.get("kind") or entry.get("type")
         # If we can build the tool, ask it for its schema.
-        if tool_type and tool_type in _BUILTIN_TOOLS:
+        if tool_kind and tool_kind in _BUILTIN_TOOLS:
             try:
                 tool = build_tool(
                     entry,
