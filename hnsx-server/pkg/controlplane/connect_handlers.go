@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hnsx-io/hnsx/server/internal/app"
+	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	domainmodel "github.com/hnsx-io/hnsx/server/internal/domain/model"
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
 	evalrunner "github.com/hnsx-io/hnsx/server/internal/evaluation/runner"
@@ -365,7 +366,7 @@ func (s *ConnectServer) RunEval(ctx context.Context, req *connect.Request[pb.Run
 		budget = domain.Spec.Harness.Policy.Budget.MaxCostUSD
 	}
 	traceSvc := s.App.TraceService
-	er := evalrunner.New(s.App.Executor, s.App.EvalService, evalrunner.WithCostFunc(func(sessionID string) float64 {
+	costFn := func(sessionID string) float64 {
 		if traceSvc == nil {
 			return 0
 		}
@@ -374,7 +375,18 @@ func (s *ConnectServer) RunEval(ctx context.Context, req *connect.Request[pb.Run
 			return 0
 		}
 		return agg.TotalCostUSD
-	}))
+	}
+
+	var er evalrunner.EvalRunner
+	if s.App.WorkerService != nil {
+		sessionCmds := commands.NewSessionCommands(s.App.SessionService, s.App.DomainService, s.App.WorkerService, s.App.Executor, s.App.State)
+		er = evalrunner.NewWorkerPoolRunner(sessionCmds, s.App.SessionService, s.App.EvalService, costFn)
+	} else if s.App.Executor != nil {
+		er = evalrunner.New(s.App.Executor, s.App.EvalService, evalrunner.WithCostFunc(costFn))
+	} else {
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New("eval runner requires a worker pool or local executor"))
+	}
+
 	go func() {
 		_ = er.Run(ctx, run, set, domain.Spec, budget)
 	}()
