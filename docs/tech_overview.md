@@ -143,13 +143,16 @@ CLI 是独立的用户入口，**专门设计为可被 AI Agent 调用和理解*
   - 支持 `--dry-run` 让 Agent 在真实执行前预览影响。
   - 支持 `--output-format` 统一输出形状。
   - 环境变量与配置文件一致，Agent 容易注入。
-- **核心命令**：
-  - `hnsx validate`：校验 DomainSpec
-  - `hnsx run`：本地执行一次 Session
-  - `hnsx eval`：运行评测集
-  - `hnsx traces`：查询本地或控制面 Trace
-  - `hnsx domains`：管理本地 Domain
-  - `hnsx login` / `hnsx deploy`：连接控制面
+- **核心命令**（v1.0；完整词表见 [`docs/cli-roadmap.md`](cli-roadmap.md) §2）：
+  - **Lifecycle**：`hnsx up|down|restart|status|doctor|logs|reset` —— 一键拉起 / 停 / 诊断本地栈
+  - **Discovery**：`hnsx examples`、`hnsx try <name>` —— 一键跑示例 Domain
+  - **Resource**：`hnsx domain|session|trace|eval {list,show,trigger,...}` —— 资源命令（资源导向命名）
+  - **Governance**：`hnsx governance {policy,secret,approval,audit,auth} ...`
+  - **Surface**：`hnsx console`（启 GUI）、`hnsx tui`、`hnsx update`
+  - **Power**：`hnsx power {format,diff,replay,debug-bundle}`
+  - **Local**：`hnsx validate`、`hnsx run`
+- **配置三层**：`--flag` > `HNSX_*` env > `~/.config/hnsx/*.yaml`
+- **Output 三态**：human（默认表格）/ json / quiet，CI 友好
 
 CLI 可以是独立产物，也可以作为 Go SDK 的封装。
 

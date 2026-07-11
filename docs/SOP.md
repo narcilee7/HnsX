@@ -14,8 +14,19 @@
 
 - Docker + Docker Compose 已安装
 - 端口未被占用：`5433`（Postgres）、`50052`（HTTP）、`50062`（gRPC）、`3200`（Tempo query）、`3002`（Grafana）、`4317`/`4318`（OTLP）
+- `hnsx` CLI 已构建（`make build-cli` 或 `brew install hnsx`）
 
 ### 操作步骤
+
+**推荐：用 CLI（v1.0+）**
+
+```bash
+hnsx up                  # 起 postgres + server + worker，阻塞至 /healthz 通过
+hnsx up --with-telemetry # 额外起 Tempo + Grafana
+hnsx up --detach         # 后台启动
+```
+
+**等价原始方式**（CLI 不可用时）
 
 ```bash
 cd deployments/local
@@ -25,13 +36,16 @@ docker compose up -d
 ### 验证
 
 ```bash
-# 1. 所有服务 healthy
+# 1. 一键诊断
+hnsx doctor              # 检查 docker / compose file / repo root / server-health
+hnsx status              # 表格列出每个 service 的状态
+```
+
+或用原始方式：
+
+```bash
 docker compose ps
-
-# 2. Server healthz
 curl -fsS http://127.0.0.1:50052/healthz
-
-# 3. Worker 已注册
 curl -fsS http://127.0.0.1:50052/api/v1/runtimes
 ```
 
@@ -45,9 +59,10 @@ curl -fsS http://127.0.0.1:50052/api/v1/runtimes
 
 | 现象 | 处理 |
 |---|---|
-| server 反复 unhealthy | `docker compose logs server` 看 DB 连接或迁移错误 |
+| server 反复 unhealthy | `hnsx logs server` 或 `docker compose logs server` 看 DB 连接或迁移错误 |
 | worker 连不上 server | 检查 `HNSX_SERVER` 是否为 `server:50061`，以及 server gRPC 是否 healthy |
 | Tempo 起不来 | 检查 `deployments/local/tempo.yaml` 是否兼容当前镜像版本 |
+| `hnsx doctor` 报缺 docker | 安装 Docker Desktop；macOS：`brew install --cask docker` |
 
 ---
 
@@ -55,24 +70,40 @@ curl -fsS http://127.0.0.1:50052/api/v1/runtimes
 
 ### 目标
 
-验证从 API 触发到 Worker 执行、SSE 推送、Trace 落库、Grafana 可查的完整链路。
+验证从触发到 Worker 执行、SSE 推送、Trace 落库、Grafana 可查的完整链路。
 
 ### 操作步骤
 
+**推荐：用 CLI（v1.0+）**
+
 ```bash
-# 1. 创建 Session
+# 0. 第一次尝试：直接一键试一个示例
+hnsx try noop-smoke                       # 自动 up + register + trigger + tail
+
+# 1. 触发一个 Session
+SID=$(hnsx session trigger --domain customer-service \
+  --trigger '{"question":"hello"}' --output quiet)
+echo "session=$SID"
+
+# 2. 实时观察 SSE 流（Ctrl-C 退出）
+hnsx session tail "$SID"
+
+# 3. 表格列出最近 Session
+hnsx session list --limit 5 --state completed
+
+# 4. 列 Trace 并查看详情
+hnsx trace list --domain customer-service --limit 5
+hnsx trace show <trace-id>
+```
+
+**等价原始方式**（CLI 不可用时）
+
+```bash
 SID=$(curl -fsS -X POST http://127.0.0.1:50052/api/v1/sessions \
   -H 'Content-Type: application/json' \
   -d '{"domain_id":"customer-service","trigger":{"question":"hello"}}' | jq -r .id)
-echo "session=$SID"
-
-# 2. 实时观看 Observation 流
 curl -N http://127.0.0.1:50052/api/v1/sessions/$SID/events
-
-# 3. 查询 Session 状态
 curl -fsS http://127.0.0.1:50052/api/v1/sessions/$SID
-
-# 4. 查询 Trace 列表
 curl -fsS "http://127.0.0.1:50052/api/v1/traces?domain=customer-service"
 ```
 
@@ -88,9 +119,10 @@ curl -fsS "http://127.0.0.1:50052/api/v1/traces?domain=customer-service"
 | 现象 | 处理 |
 |---|---|
 | Session 状态为 `failed` | 查 DB：`SELECT kind, payload FROM observations WHERE session_id='...' AND kind='session_end';` |
-| Worker 没执行 | 检查 worker 日志：`docker compose logs worker` |
+| Worker 没执行 | `hnsx logs worker` 或 `docker compose logs worker` |
 | SSE 没事件 | 确认请求后 session 还在运行；已完成 session 不会补发历史事件 |
-| Tempo 搜不到 | 等 5-10s 让 live-store flush；或查 `curl -s localhost:3200/metrics \| grep spans_received` |
+| Tempo 搜不到 | 等 5-10s 让 live-store flush；或 `curl -s localhost:3200/metrics \| grep spans_received` |
+| 想看更深的诊断 | `hnsx power debug-bundle -o bug.tar.gz` 一键打包版本/状态/最近 20 个 session+trace |
 
 ---
 
@@ -120,33 +152,31 @@ cd example-domains/my-domain
 
 ```bash
 cd /Users/Zhuanz/business_project/HnsX
-./bin/hnsx validate --domain example-domains/my-domain/domain.yaml --json
+hnsx validate --domain example-domains/my-domain/domain.yaml --json
 ```
 
 4. 本地单测运行（不启动 server）：
 
 ```bash
-./bin/hnsx run \
+hnsx run \
   --domain example-domains/my-domain/domain.yaml \
   --adapter noop \
   --trigger '{"question":"test"}' \
   --json
 ```
 
-5. 启动或重启 docker compose，让 server 从新 seed：
+5. 一键跑一遍（CLI 会自动 up + register + trigger + tail）：
 
 ```bash
-cd deployments/local
-docker compose restart server
+hnsx try my-domain
 ```
 
-6. 通过 API 触发：
+或手动重启 server 让新 domain 从 seed 加载，然后触发：
 
 ```bash
-SID=$(curl -fsS -X POST http://127.0.0.1:50052/api/v1/sessions \
-  -H 'Content-Type: application/json' \
-  -d '{"domain_id":"my-domain","trigger":{"question":"test"}}' | jq -r .id)
-curl -fsS http://127.0.0.1:50052/api/v1/sessions/$SID
+hnsx restart                                              # down + up
+hnsx domain register example-domains/my-domain/domain.yaml
+hnsx session trigger --domain my-domain --trigger '{"question":"test"}'
 ```
 
 ### 预期结果
@@ -171,11 +201,21 @@ curl -fsS http://127.0.0.1:50052/api/v1/sessions/$SID
 
 ### 操作步骤
 
+**Server 链路 smoke**
+
 ```bash
 cd /Users/Zhuanz/business_project/HnsX
 make build-server
 ./scripts/smoke.sh
 ```
+
+**CLI surface smoke（v0.3-v1.0）**
+
+```bash
+./scripts/smoke-cli.sh
+```
+
+后者在 docker compose 栈启动后一键验证 `hnsx doctor` / `hnsx status` / `hnsx examples` / `hnsx try` / `hnsx session {list,trigger}` / `hnsx trace list` / `hnsx eval set list` / `hnsx governance {policy,approval,audit,secret,auth}` / `hnsx power {format,diff,replay,debug-bundle}`。
 
 ### 预期结果
 
@@ -206,21 +246,28 @@ make build-server
 
 ### 操作步骤
 
-1. 获取 session_id 和失败状态：
+1. **一键打包**：把所有诊断资料打包后贴 issue
+
+```bash
+hnsx power debug-bundle -o bug.tar.gz
+```
+
+2. **获取 session 详情**：
+
+```bash
+hnsx session show <sid>
+hnsx trace show <trace-id>
+```
+
+或用 curl：
 
 ```bash
 curl -fsS http://127.0.0.1:50052/api/v1/sessions/$SID
-```
-
-2. 查询该 session 的 observations：
-
-```bash
 curl -fsS "http://127.0.0.1:50052/api/v1/traces?domain=customer-service" | jq
-# 找到对应 trace_id，再查详情
 curl -fsS http://127.0.0.1:50052/api/v1/traces/$TRACE_ID
 ```
 
-3. 直接查 DB（如果 API 无数据）：
+3. **直接查 DB**（如果 API 无数据）：
 
 ```bash
 docker compose -f deployments/local/docker-compose.yaml exec postgres psql -U hnsx -d hnsx -c "
@@ -229,16 +276,11 @@ WHERE session_id='$SID' ORDER BY created_at;
 "
 ```
 
-4. 查看 Worker 日志：
+4. **查看日志**：
 
 ```bash
-docker compose logs worker --tail=50
-```
-
-5. 查看 Server 日志：
-
-```bash
-docker compose logs server --tail=50
+hnsx logs worker --tail 50   # 或 docker compose logs worker --tail=50
+hnsx logs server --tail 50   # 或 docker compose logs server --tail=50
 ```
 
 ### 常见失败原因
@@ -323,6 +365,38 @@ git push origin feat/connection_e2e
 1. 改代码前先确认相关设计文档是否需要更新
 2. 代码 commit 与 docs commit 一起提交（同一主题）
 3. 提交后抽查 README / CLAUDE.md / SOP 是否仍一致
+
+---
+
+## CLI 速查
+
+> 完整命令词表见 [`docs/cli-roadmap.md`](cli-roadmap.md) §2。本节只列最常用。
+
+| 想做什么 | 命令 |
+|---|---|
+| 装好 CLI | `make build-cli` / `brew install hnsx` / `curl -sSL hnsx.dev/install.sh \| sh` |
+| 起 / 停栈 | `hnsx up` / `down` / `status` / `doctor` / `logs [-f] [-s server\|worker]` / `reset --yes` |
+| 列示例 / 一键试 | `hnsx examples` / `hnsx try <name>` |
+| 列 / 注册 / 删 Domain | `hnsx domain list/show/register/delete/export` |
+| 触发 / 看 Session | `hnsx session trigger\|tail\|list\|show\|cancel\|rerun\|approve\|reject` |
+| 看 Trace | `hnsx trace list/show/export` |
+| 跑 Eval | `hnsx eval set list/show/create/delete` / `hnsx eval run start\|list\|show\|diff` |
+| Policy / Secret | `hnsx governance policy apply\|delete --confirm` |
+| Approval | `hnsx governance approval list\|approve\|reject\|watch` |
+| Audit | `hnsx governance audit list --actor ... --csv file.csv` |
+| Auth | `hnsx governance auth login\|status\|logout` |
+| Domain 高级 | `hnsx power format\|diff\|replay\|debug-bundle` |
+| 打开 GUI | `hnsx console` |
+| 自更新 | `hnsx update --check` |
+
+通用 flag（每条 list 命令都支持）：
+
+- `--limit N` — 最大行数
+- `--filter k=v` — 过滤，可重复
+- `--since 5m|1h|2d` — 时间窗
+- `--output human|json|quiet` — 默认 human，CI 用 json/quiet
+
+config 三层：`--flag` > `HNSX_*` env > `~/.config/hnsx/*.yaml`。
 
 ---
 

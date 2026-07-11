@@ -1,8 +1,29 @@
 # HnsX CLI RoadMap
 
-> **起草日期：2026-07-11** · **作者：Claude (与 narcilee7 协作)** · **状态：草案 v0.1，待评审**
+> **起草日期：2026-07-11** · **状态：✅ 全部交付（v0.3 → v1.0，commit `3c27d7b` 起）**
+> **最新 LTS：v1.0** — 见 [CHANGELOG.md](../CHANGELOG.md)
 
 把 `hnsx` 从 "AI Agent SDK" 重塑为**面向人 / CI 的 Operator CLI**，让任何人不读 README 就能在 30 秒内跑通第一个 Session。
+
+---
+
+## 实施状态（v1.0 节点）
+
+| Phase | 状态 | Commit |
+|---|---|---|
+| v0.3 Lifesaver | ✅ | `3a7626b` |
+| v0.4 Operator | ✅ | `15b5d98` |
+| v0.5 Bridge | ✅ | `9877dc8` |
+| v0.6 Governance | ✅ | `acceee3` |
+| v0.7 Power | ✅ | `b4b2351` |
+| v0.8 Ship | ✅ | `4b1eb76` |
+| v1.0 Product | ✅ | `43f625b` |
+
+CLI 实现：`hnsx-server/cmd/hnsx/cli/`（14 个文件，单测全绿）
+安装入口：`scripts/install.sh`、`packaging/homebrew/hnsx.rb`
+端到端 smoke：`scripts/smoke-cli.sh`（v0.3 → v1.0 全部阶段覆盖）
+
+---
 
 ---
 
