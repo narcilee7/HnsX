@@ -52,10 +52,13 @@ count="$(printf '%s' "$out" | grep -o '"name":' | wc -l | tr -d ' ')"
 [[ "$count" -ge 3 ]] || fail "expected ≥3 examples, got $count"
 ok "$count examples discovered"
 
-bold "[5/6] validate an example domain"
-"$HNSX" validate --domain "$ROOT/example-domains/customer-service/domain.yaml" >/dev/null \
-  || fail "validate failed for customer-service"
-ok "customer-service domain.yaml parses"
+bold "[5/6] validate all example domains"
+for domain_file in "$ROOT"/example-domains/*/domain.yaml; do
+  name="$(basename "$(dirname "$domain_file")")"
+  "$HNSX" validate --domain "$domain_file" --output quiet >/dev/null \
+    || fail "validate failed for $name"
+  ok "$name validates"
+done
 
 bold "[6/6] try an example (register + trigger + tail SSE briefly)"
 # Run `hnsx try` against noop-smoke with --detach so the SSE consumer doesn't

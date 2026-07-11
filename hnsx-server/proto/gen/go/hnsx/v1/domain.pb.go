@@ -161,7 +161,7 @@ type Harness struct {
 	Mcps          []*MCPConfig           `protobuf:"bytes,5,rep,name=mcps,proto3" json:"mcps,omitempty"`
 	Sandbox       *Sandbox               `protobuf:"bytes,6,opt,name=sandbox,proto3" json:"sandbox,omitempty"`
 	Policy        *Policy                `protobuf:"bytes,7,opt,name=policy,proto3" json:"policy,omitempty"`
-	Memory        *Memory                `protobuf:"bytes,8,opt,name=memory,proto3" json:"memory,omitempty"`
+	Store         *Store                 `protobuf:"bytes,8,opt,name=store,proto3" json:"store,omitempty"`
 	Session       *Session               `protobuf:"bytes,9,opt,name=session,proto3" json:"session,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -246,9 +246,9 @@ func (x *Harness) GetPolicy() *Policy {
 	return nil
 }
 
-func (x *Harness) GetMemory() *Memory {
+func (x *Harness) GetStore() *Store {
 	if x != nil {
-		return x.Memory
+		return x.Store
 	}
 	return nil
 }
@@ -262,14 +262,16 @@ func (x *Harness) GetSession() *Session {
 
 // Agent describes an external agent to be harnessed.
 type Agent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
-	Model         *ModelRef              `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
-	Adapter       *AdapterRef            `protobuf:"bytes,4,opt,name=adapter,proto3" json:"adapter,omitempty"`
-	Prompt        *PromptRef             `protobuf:"bytes,5,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	SkillRefs     []string               `protobuf:"bytes,6,rep,name=skill_refs,json=skillRefs,proto3" json:"skill_refs,omitempty"`
-	ToolRefs      []string               `protobuf:"bytes,7,rep,name=tool_refs,json=toolRefs,proto3" json:"tool_refs,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Description string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	Model       *ModelRef              `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	Adapter     *AdapterRef            `protobuf:"bytes,4,opt,name=adapter,proto3" json:"adapter,omitempty"`
+	// system_prompt references a prompt by ID.
+	SystemPrompt  string   `protobuf:"bytes,5,opt,name=system_prompt,json=systemPrompt,proto3" json:"system_prompt,omitempty"`
+	SkillRefs     []string `protobuf:"bytes,6,rep,name=skill_refs,json=skillRefs,proto3" json:"skill_refs,omitempty"`
+	ToolRefs      []string `protobuf:"bytes,7,rep,name=tool_refs,json=toolRefs,proto3" json:"tool_refs,omitempty"`
+	ApiKeyEnv     string   `protobuf:"bytes,8,opt,name=api_key_env,json=apiKeyEnv,proto3" json:"api_key_env,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -332,11 +334,11 @@ func (x *Agent) GetAdapter() *AdapterRef {
 	return nil
 }
 
-func (x *Agent) GetPrompt() *PromptRef {
+func (x *Agent) GetSystemPrompt() string {
 	if x != nil {
-		return x.Prompt
+		return x.SystemPrompt
 	}
-	return nil
+	return ""
 }
 
 func (x *Agent) GetSkillRefs() []string {
@@ -351,6 +353,13 @@ func (x *Agent) GetToolRefs() []string {
 		return x.ToolRefs
 	}
 	return nil
+}
+
+func (x *Agent) GetApiKeyEnv() string {
+	if x != nil {
+		return x.ApiKeyEnv
+	}
+	return ""
 }
 
 // ModelRef references a model provider and model name.
@@ -411,6 +420,8 @@ type AdapterRef struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Kind           string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
 	TimeoutSeconds int32                  `protobuf:"varint,2,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	Endpoint       string                 `protobuf:"bytes,3,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	ApiKeyEnv      string                 `protobuf:"bytes,4,opt,name=api_key_env,json=apiKeyEnv,proto3" json:"api_key_env,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -459,12 +470,28 @@ func (x *AdapterRef) GetTimeoutSeconds() int32 {
 	return 0
 }
 
+func (x *AdapterRef) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+func (x *AdapterRef) GetApiKeyEnv() string {
+	if x != nil {
+		return x.ApiKeyEnv
+	}
+	return ""
+}
+
 // Prompt is a reusable prompt template.
 type Prompt struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Template      string                 `protobuf:"bytes,2,opt,name=template,proto3" json:"template,omitempty"`
-	Variables     map[string]string      `protobuf:"bytes,3,rep,name=variables,proto3" json:"variables,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Id         string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Template   string                 `protobuf:"bytes,2,opt,name=template,proto3" json:"template,omitempty"`
+	PromptType string                 `protobuf:"bytes,4,opt,name=prompt_type,json=promptType,proto3" json:"prompt_type,omitempty"`
+	// schema is a JSON-encoded schema for the prompt variables / output.
+	Schema        string `protobuf:"bytes,5,opt,name=schema,proto3" json:"schema,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -513,54 +540,16 @@ func (x *Prompt) GetTemplate() string {
 	return ""
 }
 
-func (x *Prompt) GetVariables() map[string]string {
+func (x *Prompt) GetPromptType() string {
 	if x != nil {
-		return x.Variables
+		return x.PromptType
 	}
-	return nil
+	return ""
 }
 
-// PromptRef references a prompt by ID.
-type PromptRef struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PromptRef) Reset() {
-	*x = PromptRef{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PromptRef) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PromptRef) ProtoMessage() {}
-
-func (x *PromptRef) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[7]
+func (x *Prompt) GetSchema() string {
 	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PromptRef.ProtoReflect.Descriptor instead.
-func (*PromptRef) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *PromptRef) GetId() string {
-	if x != nil {
-		return x.Id
+		return x.Schema
 	}
 	return ""
 }
@@ -580,7 +569,7 @@ type Skill struct {
 
 func (x *Skill) Reset() {
 	*x = Skill{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[8]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -592,7 +581,7 @@ func (x *Skill) String() string {
 func (*Skill) ProtoMessage() {}
 
 func (x *Skill) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[8]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -605,7 +594,7 @@ func (x *Skill) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Skill.ProtoReflect.Descriptor instead.
 func (*Skill) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{8}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Skill) GetId() string {
@@ -662,7 +651,7 @@ type Example struct {
 
 func (x *Example) Reset() {
 	*x = Example{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[9]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -674,7 +663,7 @@ func (x *Example) String() string {
 func (*Example) ProtoMessage() {}
 
 func (x *Example) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[9]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -687,7 +676,7 @@ func (x *Example) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Example.ProtoReflect.Descriptor instead.
 func (*Example) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{9}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Example) GetId() string {
@@ -713,18 +702,20 @@ func (x *Example) GetOutput() string {
 
 // Tool is an atomic capability.
 type Tool struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
-	Type          string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
-	Config        string                 `protobuf:"bytes,4,opt,name=config,proto3" json:"config,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Description string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	Kind        string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
+	// config is a JSON-encoded configuration object.
+	Config        string `protobuf:"bytes,4,opt,name=config,proto3" json:"config,omitempty"`
+	Name          string `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Tool) Reset() {
 	*x = Tool{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[10]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -736,7 +727,7 @@ func (x *Tool) String() string {
 func (*Tool) ProtoMessage() {}
 
 func (x *Tool) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[10]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -749,7 +740,7 @@ func (x *Tool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Tool.ProtoReflect.Descriptor instead.
 func (*Tool) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{10}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Tool) GetId() string {
@@ -766,9 +757,9 @@ func (x *Tool) GetDescription() string {
 	return ""
 }
 
-func (x *Tool) GetType() string {
+func (x *Tool) GetKind() string {
 	if x != nil {
-		return x.Type
+		return x.Kind
 	}
 	return ""
 }
@@ -780,20 +771,29 @@ func (x *Tool) GetConfig() string {
 	return ""
 }
 
+func (x *Tool) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 // MCPConfig describes an MCP server connection.
 type MCPConfig struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Command       string                 `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`
-	Args          []string               `protobuf:"bytes,3,rep,name=args,proto3" json:"args,omitempty"`
-	Env           map[string]string      `protobuf:"bytes,4,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Transport     string                 `protobuf:"bytes,2,opt,name=transport,proto3" json:"transport,omitempty"`
+	Command       string                 `protobuf:"bytes,3,opt,name=command,proto3" json:"command,omitempty"`
+	Args          []string               `protobuf:"bytes,4,rep,name=args,proto3" json:"args,omitempty"`
+	Url           string                 `protobuf:"bytes,5,opt,name=url,proto3" json:"url,omitempty"`
+	Headers       map[string]string      `protobuf:"bytes,6,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MCPConfig) Reset() {
 	*x = MCPConfig{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[11]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -805,7 +805,7 @@ func (x *MCPConfig) String() string {
 func (*MCPConfig) ProtoMessage() {}
 
 func (x *MCPConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[11]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -818,12 +818,19 @@ func (x *MCPConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MCPConfig.ProtoReflect.Descriptor instead.
 func (*MCPConfig) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{11}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *MCPConfig) GetId() string {
 	if x != nil {
 		return x.Id
+	}
+	return ""
+}
+
+func (x *MCPConfig) GetTransport() string {
+	if x != nil {
+		return x.Transport
 	}
 	return ""
 }
@@ -842,9 +849,16 @@ func (x *MCPConfig) GetArgs() []string {
 	return nil
 }
 
-func (x *MCPConfig) GetEnv() map[string]string {
+func (x *MCPConfig) GetUrl() string {
 	if x != nil {
-		return x.Env
+		return x.Url
+	}
+	return ""
+}
+
+func (x *MCPConfig) GetHeaders() map[string]string {
+	if x != nil {
+		return x.Headers
 	}
 	return nil
 }
@@ -860,7 +874,7 @@ type Sandbox struct {
 
 func (x *Sandbox) Reset() {
 	*x = Sandbox{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[12]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -872,7 +886,7 @@ func (x *Sandbox) String() string {
 func (*Sandbox) ProtoMessage() {}
 
 func (x *Sandbox) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[12]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -885,7 +899,7 @@ func (x *Sandbox) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Sandbox.ProtoReflect.Descriptor instead.
 func (*Sandbox) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{12}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Sandbox) GetBackend() string {
@@ -904,19 +918,18 @@ func (x *Sandbox) GetConfig() string {
 
 // Policy defines constraints.
 type Policy struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	BudgetUsd            float64                `protobuf:"fixed64,1,opt,name=budget_usd,json=budgetUsd,proto3" json:"budget_usd,omitempty"`
-	AllowedTools         []string               `protobuf:"bytes,2,rep,name=allowed_tools,json=allowedTools,proto3" json:"allowed_tools,omitempty"`
-	DeniedTools          []string               `protobuf:"bytes,3,rep,name=denied_tools,json=deniedTools,proto3" json:"denied_tools,omitempty"`
-	RequireHumanApproval bool                   `protobuf:"varint,4,opt,name=require_human_approval,json=requireHumanApproval,proto3" json:"require_human_approval,omitempty"`
-	Guardrails           string                 `protobuf:"bytes,5,opt,name=guardrails,proto3" json:"guardrails,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Budget        *Budget                `protobuf:"bytes,1,opt,name=budget,proto3" json:"budget,omitempty"`
+	Permissions   *Permission            `protobuf:"bytes,2,opt,name=permissions,proto3" json:"permissions,omitempty"`
+	Guardrails    []*Guardrail           `protobuf:"bytes,3,rep,name=guardrails,proto3" json:"guardrails,omitempty"`
+	Approval      *Approval              `protobuf:"bytes,4,opt,name=approval,proto3" json:"approval,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Policy) Reset() {
 	*x = Policy{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[13]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -928,7 +941,7 @@ func (x *Policy) String() string {
 func (*Policy) ProtoMessage() {}
 
 func (x *Policy) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[13]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -941,67 +954,123 @@ func (x *Policy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Policy.ProtoReflect.Descriptor instead.
 func (*Policy) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{13}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *Policy) GetBudgetUsd() float64 {
+func (x *Policy) GetBudget() *Budget {
 	if x != nil {
-		return x.BudgetUsd
-	}
-	return 0
-}
-
-func (x *Policy) GetAllowedTools() []string {
-	if x != nil {
-		return x.AllowedTools
+		return x.Budget
 	}
 	return nil
 }
 
-func (x *Policy) GetDeniedTools() []string {
+func (x *Policy) GetPermissions() *Permission {
 	if x != nil {
-		return x.DeniedTools
+		return x.Permissions
 	}
 	return nil
 }
 
-func (x *Policy) GetRequireHumanApproval() bool {
-	if x != nil {
-		return x.RequireHumanApproval
-	}
-	return false
-}
-
-func (x *Policy) GetGuardrails() string {
+func (x *Policy) GetGuardrails() []*Guardrail {
 	if x != nil {
 		return x.Guardrails
 	}
-	return ""
+	return nil
 }
 
-// Memory defines context storage.
-type Memory struct {
+func (x *Policy) GetApproval() *Approval {
+	if x != nil {
+		return x.Approval
+	}
+	return nil
+}
+
+// Budget defines cost and turn limits.
+type Budget struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Backend       string                 `protobuf:"bytes,1,opt,name=backend,proto3" json:"backend,omitempty"`
-	Config        string                 `protobuf:"bytes,2,opt,name=config,proto3" json:"config,omitempty"`
+	MaxCostUsd    float64                `protobuf:"fixed64,1,opt,name=max_cost_usd,json=maxCostUsd,proto3" json:"max_cost_usd,omitempty"`
+	MaxTurns      int32                  `protobuf:"varint,2,opt,name=max_turns,json=maxTurns,proto3" json:"max_turns,omitempty"`
+	MaxTokens     int32                  `protobuf:"varint,3,opt,name=max_tokens,json=maxTokens,proto3" json:"max_tokens,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Memory) Reset() {
-	*x = Memory{}
+func (x *Budget) Reset() {
+	*x = Budget{}
+	mi := &file_hnsx_v1_domain_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Budget) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Budget) ProtoMessage() {}
+
+func (x *Budget) ProtoReflect() protoreflect.Message {
+	mi := &file_hnsx_v1_domain_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Budget.ProtoReflect.Descriptor instead.
+func (*Budget) Descriptor() ([]byte, []int) {
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *Budget) GetMaxCostUsd() float64 {
+	if x != nil {
+		return x.MaxCostUsd
+	}
+	return 0
+}
+
+func (x *Budget) GetMaxTurns() int32 {
+	if x != nil {
+		return x.MaxTurns
+	}
+	return 0
+}
+
+func (x *Budget) GetMaxTokens() int32 {
+	if x != nil {
+		return x.MaxTokens
+	}
+	return 0
+}
+
+// Permission defines capability toggles.
+type Permission struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	AllowFileWrite  bool                   `protobuf:"varint,1,opt,name=allow_file_write,json=allowFileWrite,proto3" json:"allow_file_write,omitempty"`
+	AllowFileDelete bool                   `protobuf:"varint,2,opt,name=allow_file_delete,json=allowFileDelete,proto3" json:"allow_file_delete,omitempty"`
+	AllowNetwork    bool                   `protobuf:"varint,3,opt,name=allow_network,json=allowNetwork,proto3" json:"allow_network,omitempty"`
+	AllowShell      bool                   `protobuf:"varint,4,opt,name=allow_shell,json=allowShell,proto3" json:"allow_shell,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *Permission) Reset() {
+	*x = Permission{}
 	mi := &file_hnsx_v1_domain_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Memory) String() string {
+func (x *Permission) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Memory) ProtoMessage() {}
+func (*Permission) ProtoMessage() {}
 
-func (x *Memory) ProtoReflect() protoreflect.Message {
+func (x *Permission) ProtoReflect() protoreflect.Message {
 	mi := &file_hnsx_v1_domain_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1013,19 +1082,354 @@ func (x *Memory) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Memory.ProtoReflect.Descriptor instead.
-func (*Memory) Descriptor() ([]byte, []int) {
+// Deprecated: Use Permission.ProtoReflect.Descriptor instead.
+func (*Permission) Descriptor() ([]byte, []int) {
 	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{14}
 }
 
-func (x *Memory) GetBackend() string {
+func (x *Permission) GetAllowFileWrite() bool {
+	if x != nil {
+		return x.AllowFileWrite
+	}
+	return false
+}
+
+func (x *Permission) GetAllowFileDelete() bool {
+	if x != nil {
+		return x.AllowFileDelete
+	}
+	return false
+}
+
+func (x *Permission) GetAllowNetwork() bool {
+	if x != nil {
+		return x.AllowNetwork
+	}
+	return false
+}
+
+func (x *Permission) GetAllowShell() bool {
+	if x != nil {
+		return x.AllowShell
+	}
+	return false
+}
+
+// Guardrail defines a runtime check.
+type Guardrail struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	On            string                 `protobuf:"bytes,3,opt,name=on,proto3" json:"on,omitempty"`
+	Action        string                 `protobuf:"bytes,4,opt,name=action,proto3" json:"action,omitempty"`
+	Schema        string                 `protobuf:"bytes,5,opt,name=schema,proto3" json:"schema,omitempty"`
+	Message       string                 `protobuf:"bytes,6,opt,name=message,proto3" json:"message,omitempty"`
+	Config        string                 `protobuf:"bytes,7,opt,name=config,proto3" json:"config,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Guardrail) Reset() {
+	*x = Guardrail{}
+	mi := &file_hnsx_v1_domain_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Guardrail) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Guardrail) ProtoMessage() {}
+
+func (x *Guardrail) ProtoReflect() protoreflect.Message {
+	mi := &file_hnsx_v1_domain_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Guardrail.ProtoReflect.Descriptor instead.
+func (*Guardrail) Descriptor() ([]byte, []int) {
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *Guardrail) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Guardrail) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *Guardrail) GetOn() string {
+	if x != nil {
+		return x.On
+	}
+	return ""
+}
+
+func (x *Guardrail) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *Guardrail) GetSchema() string {
+	if x != nil {
+		return x.Schema
+	}
+	return ""
+}
+
+func (x *Guardrail) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *Guardrail) GetConfig() string {
+	if x != nil {
+		return x.Config
+	}
+	return ""
+}
+
+// Approval defines human-in-the-loop gates.
+type Approval struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	DefaultTimeoutSeconds int32                  `protobuf:"varint,1,opt,name=default_timeout_seconds,json=defaultTimeoutSeconds,proto3" json:"default_timeout_seconds,omitempty"`
+	RequiredFor           *RequiredFor           `protobuf:"bytes,2,opt,name=required_for,json=requiredFor,proto3" json:"required_for,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *Approval) Reset() {
+	*x = Approval{}
+	mi := &file_hnsx_v1_domain_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Approval) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Approval) ProtoMessage() {}
+
+func (x *Approval) ProtoReflect() protoreflect.Message {
+	mi := &file_hnsx_v1_domain_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Approval.ProtoReflect.Descriptor instead.
+func (*Approval) Descriptor() ([]byte, []int) {
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *Approval) GetDefaultTimeoutSeconds() int32 {
+	if x != nil {
+		return x.DefaultTimeoutSeconds
+	}
+	return 0
+}
+
+func (x *Approval) GetRequiredFor() *RequiredFor {
+	if x != nil {
+		return x.RequiredFor
+	}
+	return nil
+}
+
+// RequiredFor specifies which operations require approval.
+type RequiredFor struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Tools            []string               `protobuf:"bytes,1,rep,name=tools,proto3" json:"tools,omitempty"`
+	Resources        []string               `protobuf:"bytes,2,rep,name=resources,proto3" json:"resources,omitempty"`
+	CostThresholdUsd float64                `protobuf:"fixed64,3,opt,name=cost_threshold_usd,json=costThresholdUsd,proto3" json:"cost_threshold_usd,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *RequiredFor) Reset() {
+	*x = RequiredFor{}
+	mi := &file_hnsx_v1_domain_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequiredFor) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequiredFor) ProtoMessage() {}
+
+func (x *RequiredFor) ProtoReflect() protoreflect.Message {
+	mi := &file_hnsx_v1_domain_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequiredFor.ProtoReflect.Descriptor instead.
+func (*RequiredFor) Descriptor() ([]byte, []int) {
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *RequiredFor) GetTools() []string {
+	if x != nil {
+		return x.Tools
+	}
+	return nil
+}
+
+func (x *RequiredFor) GetResources() []string {
+	if x != nil {
+		return x.Resources
+	}
+	return nil
+}
+
+func (x *RequiredFor) GetCostThresholdUsd() float64 {
+	if x != nil {
+		return x.CostThresholdUsd
+	}
+	return 0
+}
+
+// Store defines per-namespace context storage.
+type Store struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Context       *StoreNamespaceConfig  `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	Knowledge     *StoreNamespaceConfig  `protobuf:"bytes,2,opt,name=knowledge,proto3" json:"knowledge,omitempty"`
+	Ephemeral     *StoreNamespaceConfig  `protobuf:"bytes,3,opt,name=ephemeral,proto3" json:"ephemeral,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Store) Reset() {
+	*x = Store{}
+	mi := &file_hnsx_v1_domain_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Store) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Store) ProtoMessage() {}
+
+func (x *Store) ProtoReflect() protoreflect.Message {
+	mi := &file_hnsx_v1_domain_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Store.ProtoReflect.Descriptor instead.
+func (*Store) Descriptor() ([]byte, []int) {
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *Store) GetContext() *StoreNamespaceConfig {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *Store) GetKnowledge() *StoreNamespaceConfig {
+	if x != nil {
+		return x.Knowledge
+	}
+	return nil
+}
+
+func (x *Store) GetEphemeral() *StoreNamespaceConfig {
+	if x != nil {
+		return x.Ephemeral
+	}
+	return nil
+}
+
+// StoreNamespaceConfig selects the backend for one store namespace.
+type StoreNamespaceConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Backend       string                 `protobuf:"bytes,1,opt,name=backend,proto3" json:"backend,omitempty"`
+	Config        string                 `protobuf:"bytes,2,opt,name=config,proto3" json:"config,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StoreNamespaceConfig) Reset() {
+	*x = StoreNamespaceConfig{}
+	mi := &file_hnsx_v1_domain_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StoreNamespaceConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StoreNamespaceConfig) ProtoMessage() {}
+
+func (x *StoreNamespaceConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_hnsx_v1_domain_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StoreNamespaceConfig.ProtoReflect.Descriptor instead.
+func (*StoreNamespaceConfig) Descriptor() ([]byte, []int) {
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *StoreNamespaceConfig) GetBackend() string {
 	if x != nil {
 		return x.Backend
 	}
 	return ""
 }
 
-func (x *Memory) GetConfig() string {
+func (x *StoreNamespaceConfig) GetConfig() string {
 	if x != nil {
 		return x.Config
 	}
@@ -1040,13 +1444,15 @@ type Session struct {
 	Supervisor    *SupervisorSession     `protobuf:"bytes,3,opt,name=supervisor,proto3" json:"supervisor,omitempty"`
 	Workflow      *WorkflowSession       `protobuf:"bytes,4,opt,name=workflow,proto3" json:"workflow,omitempty"`
 	Autonomous    *AutonomousSession     `protobuf:"bytes,5,opt,name=autonomous,proto3" json:"autonomous,omitempty"`
+	TriggerSchema string                 `protobuf:"bytes,6,opt,name=trigger_schema,json=triggerSchema,proto3" json:"trigger_schema,omitempty"`
+	OutputSchema  string                 `protobuf:"bytes,7,opt,name=output_schema,json=outputSchema,proto3" json:"output_schema,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
 	*x = Session{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[15]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1058,7 +1464,7 @@ func (x *Session) String() string {
 func (*Session) ProtoMessage() {}
 
 func (x *Session) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[15]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1071,7 +1477,7 @@ func (x *Session) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Session.ProtoReflect.Descriptor instead.
 func (*Session) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{15}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *Session) GetMode() string {
@@ -1109,6 +1515,20 @@ func (x *Session) GetAutonomous() *AutonomousSession {
 	return nil
 }
 
+func (x *Session) GetTriggerSchema() string {
+	if x != nil {
+		return x.TriggerSchema
+	}
+	return ""
+}
+
+func (x *Session) GetOutputSchema() string {
+	if x != nil {
+		return x.OutputSchema
+	}
+	return ""
+}
+
 // SingleSession runs one agent for the entire session.
 type SingleSession struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1121,7 +1541,7 @@ type SingleSession struct {
 
 func (x *SingleSession) Reset() {
 	*x = SingleSession{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[16]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1133,7 +1553,7 @@ func (x *SingleSession) String() string {
 func (*SingleSession) ProtoMessage() {}
 
 func (x *SingleSession) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[16]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1146,7 +1566,7 @@ func (x *SingleSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SingleSession.ProtoReflect.Descriptor instead.
 func (*SingleSession) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{16}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *SingleSession) GetAgentRef() string {
@@ -1178,13 +1598,14 @@ type SupervisorSession struct {
 	Transitions   []*Transition                `protobuf:"bytes,3,rep,name=transitions,proto3" json:"transitions,omitempty"`
 	Fallback      string                       `protobuf:"bytes,4,opt,name=fallback,proto3" json:"fallback,omitempty"`
 	Specialists   map[string]*SpecialistConfig `protobuf:"bytes,5,rep,name=specialists,proto3" json:"specialists,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Agent         string                       `protobuf:"bytes,6,opt,name=agent,proto3" json:"agent,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SupervisorSession) Reset() {
 	*x = SupervisorSession{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[17]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1196,7 +1617,7 @@ func (x *SupervisorSession) String() string {
 func (*SupervisorSession) ProtoMessage() {}
 
 func (x *SupervisorSession) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[17]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1209,7 +1630,7 @@ func (x *SupervisorSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SupervisorSession.ProtoReflect.Descriptor instead.
 func (*SupervisorSession) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{17}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *SupervisorSession) GetSupervisorRef() string {
@@ -1247,6 +1668,13 @@ func (x *SupervisorSession) GetSpecialists() map[string]*SpecialistConfig {
 	return nil
 }
 
+func (x *SupervisorSession) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
 // SpecialistConfig defines the runtime behavior of a specialist agent.
 type SpecialistConfig struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1259,7 +1687,7 @@ type SpecialistConfig struct {
 
 func (x *SpecialistConfig) Reset() {
 	*x = SpecialistConfig{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[18]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1271,7 +1699,7 @@ func (x *SpecialistConfig) String() string {
 func (*SpecialistConfig) ProtoMessage() {}
 
 func (x *SpecialistConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[18]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1284,7 +1712,7 @@ func (x *SpecialistConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpecialistConfig.ProtoReflect.Descriptor instead.
 func (*SpecialistConfig) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{18}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *SpecialistConfig) GetAgentRef() string {
@@ -1319,7 +1747,7 @@ type WorkflowSession struct {
 
 func (x *WorkflowSession) Reset() {
 	*x = WorkflowSession{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[19]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1331,7 +1759,7 @@ func (x *WorkflowSession) String() string {
 func (*WorkflowSession) ProtoMessage() {}
 
 func (x *WorkflowSession) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[19]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1344,7 +1772,7 @@ func (x *WorkflowSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowSession.ProtoReflect.Descriptor instead.
 func (*WorkflowSession) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{19}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *WorkflowSession) GetEntry() string {
@@ -1375,7 +1803,7 @@ type AutonomousSession struct {
 
 func (x *AutonomousSession) Reset() {
 	*x = AutonomousSession{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[20]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1387,7 +1815,7 @@ func (x *AutonomousSession) String() string {
 func (*AutonomousSession) ProtoMessage() {}
 
 func (x *AutonomousSession) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[20]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1400,7 +1828,7 @@ func (x *AutonomousSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AutonomousSession.ProtoReflect.Descriptor instead.
 func (*AutonomousSession) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{20}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *AutonomousSession) GetAgentRef() string {
@@ -1440,19 +1868,23 @@ func (x *AutonomousSession) GetExit() string {
 
 // Step is a single node in a workflow.
 type Step struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	AgentRef      string                 `protobuf:"bytes,2,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
-	PromptRef     string                 `protobuf:"bytes,3,opt,name=prompt_ref,json=promptRef,proto3" json:"prompt_ref,omitempty"`
-	Exit          string                 `protobuf:"bytes,4,opt,name=exit,proto3" json:"exit,omitempty"`
-	Transitions   []*Transition          `protobuf:"bytes,5,rep,name=transitions,proto3" json:"transitions,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Id       string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	AgentRef string                 `protobuf:"bytes,2,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	// input is a JSON-encoded payload passed to the step.
+	Input         string        `protobuf:"bytes,3,opt,name=input,proto3" json:"input,omitempty"`
+	Output        string        `protobuf:"bytes,4,opt,name=output,proto3" json:"output,omitempty"`
+	Condition     string        `protobuf:"bytes,5,opt,name=condition,proto3" json:"condition,omitempty"`
+	Next          string        `protobuf:"bytes,6,opt,name=next,proto3" json:"next,omitempty"`
+	OnError       string        `protobuf:"bytes,7,opt,name=on_error,json=onError,proto3" json:"on_error,omitempty"`
+	Transitions   []*Transition `protobuf:"bytes,8,rep,name=transitions,proto3" json:"transitions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Step) Reset() {
 	*x = Step{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[21]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1464,7 +1896,7 @@ func (x *Step) String() string {
 func (*Step) ProtoMessage() {}
 
 func (x *Step) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[21]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1477,7 +1909,7 @@ func (x *Step) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Step.ProtoReflect.Descriptor instead.
 func (*Step) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{21}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *Step) GetId() string {
@@ -1494,16 +1926,37 @@ func (x *Step) GetAgentRef() string {
 	return ""
 }
 
-func (x *Step) GetPromptRef() string {
+func (x *Step) GetInput() string {
 	if x != nil {
-		return x.PromptRef
+		return x.Input
 	}
 	return ""
 }
 
-func (x *Step) GetExit() string {
+func (x *Step) GetOutput() string {
 	if x != nil {
-		return x.Exit
+		return x.Output
+	}
+	return ""
+}
+
+func (x *Step) GetCondition() string {
+	if x != nil {
+		return x.Condition
+	}
+	return ""
+}
+
+func (x *Step) GetNext() string {
+	if x != nil {
+		return x.Next
+	}
+	return ""
+}
+
+func (x *Step) GetOnError() string {
+	if x != nil {
+		return x.OnError
 	}
 	return ""
 }
@@ -1527,7 +1980,7 @@ type Transition struct {
 
 func (x *Transition) Reset() {
 	*x = Transition{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[22]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1539,7 +1992,7 @@ func (x *Transition) String() string {
 func (*Transition) ProtoMessage() {}
 
 func (x *Transition) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[22]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1552,7 +2005,7 @@ func (x *Transition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Transition.ProtoReflect.Descriptor instead.
 func (*Transition) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{22}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *Transition) GetWhen() string {
@@ -1586,7 +2039,7 @@ type Eval struct {
 
 func (x *Eval) Reset() {
 	*x = Eval{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[23]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1598,7 +2051,7 @@ func (x *Eval) String() string {
 func (*Eval) ProtoMessage() {}
 
 func (x *Eval) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[23]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1611,7 +2064,7 @@ func (x *Eval) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Eval.ProtoReflect.Descriptor instead.
 func (*Eval) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{23}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *Eval) GetSets() []*EvalSet {
@@ -1633,7 +2086,7 @@ type EvalSet struct {
 
 func (x *EvalSet) Reset() {
 	*x = EvalSet{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[24]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1645,7 +2098,7 @@ func (x *EvalSet) String() string {
 func (*EvalSet) ProtoMessage() {}
 
 func (x *EvalSet) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[24]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1658,7 +2111,7 @@ func (x *EvalSet) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvalSet.ProtoReflect.Descriptor instead.
 func (*EvalSet) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{24}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *EvalSet) GetId() string {
@@ -1696,7 +2149,7 @@ type EvalCase struct {
 
 func (x *EvalCase) Reset() {
 	*x = EvalCase{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[25]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1708,7 +2161,7 @@ func (x *EvalCase) String() string {
 func (*EvalCase) ProtoMessage() {}
 
 func (x *EvalCase) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[25]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1721,7 +2174,7 @@ func (x *EvalCase) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvalCase.ProtoReflect.Descriptor instead.
 func (*EvalCase) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{25}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *EvalCase) GetId() string {
@@ -1769,7 +2222,7 @@ type ScorerConfig struct {
 
 func (x *ScorerConfig) Reset() {
 	*x = ScorerConfig{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[26]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1781,7 +2234,7 @@ func (x *ScorerConfig) String() string {
 func (*ScorerConfig) ProtoMessage() {}
 
 func (x *ScorerConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[26]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1794,7 +2247,7 @@ func (x *ScorerConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScorerConfig.ProtoReflect.Descriptor instead.
 func (*ScorerConfig) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{26}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ScorerConfig) GetScorers() []*Scorer {
@@ -1816,7 +2269,7 @@ type Scorer struct {
 
 func (x *Scorer) Reset() {
 	*x = Scorer{}
-	mi := &file_hnsx_v1_domain_proto_msgTypes[27]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1828,7 +2281,7 @@ func (x *Scorer) String() string {
 func (*Scorer) ProtoMessage() {}
 
 func (x *Scorer) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_domain_proto_msgTypes[27]
+	mi := &file_hnsx_v1_domain_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1841,7 +2294,7 @@ func (x *Scorer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Scorer.ProtoReflect.Descriptor instead.
 func (*Scorer) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{27}
+	return file_hnsx_v1_domain_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *Scorer) GetName() string {
@@ -1886,7 +2339,7 @@ const file_hnsx_v1_domain_proto_rawDesc = "" +
 	"\x04eval\x18\x05 \x01(\v2\r.hnsx.v1.EvalR\x04eval\"5\n" +
 	"\tDomainRef\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion\"\xfb\x02\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\"\xf8\x02\n" +
 	"\aHarness\x12&\n" +
 	"\x06agents\x18\x01 \x03(\v2\x0e.hnsx.v1.AgentR\x06agents\x12)\n" +
 	"\aprompts\x18\x02 \x03(\v2\x0f.hnsx.v1.PromptR\aprompts\x12&\n" +
@@ -1894,34 +2347,34 @@ const file_hnsx_v1_domain_proto_rawDesc = "" +
 	"\x05tools\x18\x04 \x03(\v2\r.hnsx.v1.ToolR\x05tools\x12&\n" +
 	"\x04mcps\x18\x05 \x03(\v2\x12.hnsx.v1.MCPConfigR\x04mcps\x12*\n" +
 	"\asandbox\x18\x06 \x01(\v2\x10.hnsx.v1.SandboxR\asandbox\x12'\n" +
-	"\x06policy\x18\a \x01(\v2\x0f.hnsx.v1.PolicyR\x06policy\x12'\n" +
-	"\x06memory\x18\b \x01(\v2\x0f.hnsx.v1.MemoryR\x06memory\x12*\n" +
-	"\asession\x18\t \x01(\v2\x10.hnsx.v1.SessionR\asession\"\xf9\x01\n" +
+	"\x06policy\x18\a \x01(\v2\x0f.hnsx.v1.PolicyR\x06policy\x12$\n" +
+	"\x05store\x18\b \x01(\v2\x0e.hnsx.v1.StoreR\x05store\x12*\n" +
+	"\asession\x18\t \x01(\v2\x10.hnsx.v1.SessionR\asession\"\x92\x02\n" +
 	"\x05Agent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12'\n" +
 	"\x05model\x18\x03 \x01(\v2\x11.hnsx.v1.ModelRefR\x05model\x12-\n" +
-	"\aadapter\x18\x04 \x01(\v2\x13.hnsx.v1.AdapterRefR\aadapter\x12*\n" +
-	"\x06prompt\x18\x05 \x01(\v2\x12.hnsx.v1.PromptRefR\x06prompt\x12\x1d\n" +
+	"\aadapter\x18\x04 \x01(\v2\x13.hnsx.v1.AdapterRefR\aadapter\x12#\n" +
+	"\rsystem_prompt\x18\x05 \x01(\tR\fsystemPrompt\x12\x1d\n" +
 	"\n" +
 	"skill_refs\x18\x06 \x03(\tR\tskillRefs\x12\x1b\n" +
-	"\ttool_refs\x18\a \x03(\tR\btoolRefs\"<\n" +
+	"\ttool_refs\x18\a \x03(\tR\btoolRefs\x12\x1e\n" +
+	"\vapi_key_env\x18\b \x01(\tR\tapiKeyEnv\"<\n" +
 	"\bModelRef\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x14\n" +
-	"\x05model\x18\x02 \x01(\tR\x05model\"I\n" +
+	"\x05model\x18\x02 \x01(\tR\x05model\"\x85\x01\n" +
 	"\n" +
 	"AdapterRef\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12'\n" +
-	"\x0ftimeout_seconds\x18\x02 \x01(\x05R\x0etimeoutSeconds\"\xb0\x01\n" +
+	"\x0ftimeout_seconds\x18\x02 \x01(\x05R\x0etimeoutSeconds\x12\x1a\n" +
+	"\bendpoint\x18\x03 \x01(\tR\bendpoint\x12\x1e\n" +
+	"\vapi_key_env\x18\x04 \x01(\tR\tapiKeyEnv\"m\n" +
 	"\x06Prompt\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
-	"\btemplate\x18\x02 \x01(\tR\btemplate\x12<\n" +
-	"\tvariables\x18\x03 \x03(\v2\x1e.hnsx.v1.Prompt.VariablesEntryR\tvariables\x1a<\n" +
-	"\x0eVariablesEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x1b\n" +
-	"\tPromptRef\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\xd2\x01\n" +
+	"\btemplate\x18\x02 \x01(\tR\btemplate\x12\x1f\n" +
+	"\vprompt_type\x18\x04 \x01(\tR\n" +
+	"promptType\x12\x16\n" +
+	"\x06schema\x18\x05 \x01(\tR\x06schema\"\xd2\x01\n" +
 	"\x05Skill\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12)\n" +
@@ -1932,35 +2385,68 @@ const file_hnsx_v1_domain_proto_rawDesc = "" +
 	"\aExample\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05input\x18\x02 \x01(\tR\x05input\x12\x16\n" +
-	"\x06output\x18\x03 \x01(\tR\x06output\"d\n" +
+	"\x06output\x18\x03 \x01(\tR\x06output\"x\n" +
 	"\x04Tool\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x12\n" +
-	"\x04type\x18\x03 \x01(\tR\x04type\x12\x16\n" +
-	"\x06config\x18\x04 \x01(\tR\x06config\"\xb0\x01\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x16\n" +
+	"\x06config\x18\x04 \x01(\tR\x06config\x12\x12\n" +
+	"\x04name\x18\x05 \x01(\tR\x04name\"\xf0\x01\n" +
 	"\tMCPConfig\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
-	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +
-	"\x04args\x18\x03 \x03(\tR\x04args\x12-\n" +
-	"\x03env\x18\x04 \x03(\v2\x1b.hnsx.v1.MCPConfig.EnvEntryR\x03env\x1a6\n" +
-	"\bEnvEntry\x12\x10\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
+	"\ttransport\x18\x02 \x01(\tR\ttransport\x12\x18\n" +
+	"\acommand\x18\x03 \x01(\tR\acommand\x12\x12\n" +
+	"\x04args\x18\x04 \x03(\tR\x04args\x12\x10\n" +
+	"\x03url\x18\x05 \x01(\tR\x03url\x129\n" +
+	"\aheaders\x18\x06 \x03(\v2\x1f.hnsx.v1.MCPConfig.HeadersEntryR\aheaders\x1a:\n" +
+	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\";\n" +
 	"\aSandbox\x12\x18\n" +
 	"\abackend\x18\x01 \x01(\tR\abackend\x12\x16\n" +
-	"\x06config\x18\x02 \x01(\tR\x06config\"\xc5\x01\n" +
-	"\x06Policy\x12\x1d\n" +
+	"\x06config\x18\x02 \x01(\tR\x06config\"\xcb\x01\n" +
+	"\x06Policy\x12'\n" +
+	"\x06budget\x18\x01 \x01(\v2\x0f.hnsx.v1.BudgetR\x06budget\x125\n" +
+	"\vpermissions\x18\x02 \x01(\v2\x13.hnsx.v1.PermissionR\vpermissions\x122\n" +
 	"\n" +
-	"budget_usd\x18\x01 \x01(\x01R\tbudgetUsd\x12#\n" +
-	"\rallowed_tools\x18\x02 \x03(\tR\fallowedTools\x12!\n" +
-	"\fdenied_tools\x18\x03 \x03(\tR\vdeniedTools\x124\n" +
-	"\x16require_human_approval\x18\x04 \x01(\bR\x14requireHumanApproval\x12\x1e\n" +
+	"guardrails\x18\x03 \x03(\v2\x12.hnsx.v1.GuardrailR\n" +
+	"guardrails\x12-\n" +
+	"\bapproval\x18\x04 \x01(\v2\x11.hnsx.v1.ApprovalR\bapproval\"f\n" +
+	"\x06Budget\x12 \n" +
+	"\fmax_cost_usd\x18\x01 \x01(\x01R\n" +
+	"maxCostUsd\x12\x1b\n" +
+	"\tmax_turns\x18\x02 \x01(\x05R\bmaxTurns\x12\x1d\n" +
 	"\n" +
-	"guardrails\x18\x05 \x01(\tR\n" +
-	"guardrails\":\n" +
-	"\x06Memory\x12\x18\n" +
+	"max_tokens\x18\x03 \x01(\x05R\tmaxTokens\"\xa8\x01\n" +
+	"\n" +
+	"Permission\x12(\n" +
+	"\x10allow_file_write\x18\x01 \x01(\bR\x0eallowFileWrite\x12*\n" +
+	"\x11allow_file_delete\x18\x02 \x01(\bR\x0fallowFileDelete\x12#\n" +
+	"\rallow_network\x18\x03 \x01(\bR\fallowNetwork\x12\x1f\n" +
+	"\vallow_shell\x18\x04 \x01(\bR\n" +
+	"allowShell\"\xa1\x01\n" +
+	"\tGuardrail\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x0e\n" +
+	"\x02on\x18\x03 \x01(\tR\x02on\x12\x16\n" +
+	"\x06action\x18\x04 \x01(\tR\x06action\x12\x16\n" +
+	"\x06schema\x18\x05 \x01(\tR\x06schema\x12\x18\n" +
+	"\amessage\x18\x06 \x01(\tR\amessage\x12\x16\n" +
+	"\x06config\x18\a \x01(\tR\x06config\"{\n" +
+	"\bApproval\x126\n" +
+	"\x17default_timeout_seconds\x18\x01 \x01(\x05R\x15defaultTimeoutSeconds\x127\n" +
+	"\frequired_for\x18\x02 \x01(\v2\x14.hnsx.v1.RequiredForR\vrequiredFor\"o\n" +
+	"\vRequiredFor\x12\x14\n" +
+	"\x05tools\x18\x01 \x03(\tR\x05tools\x12\x1c\n" +
+	"\tresources\x18\x02 \x03(\tR\tresources\x12,\n" +
+	"\x12cost_threshold_usd\x18\x03 \x01(\x01R\x10costThresholdUsd\"\xba\x01\n" +
+	"\x05Store\x127\n" +
+	"\acontext\x18\x01 \x01(\v2\x1d.hnsx.v1.StoreNamespaceConfigR\acontext\x12;\n" +
+	"\tknowledge\x18\x02 \x01(\v2\x1d.hnsx.v1.StoreNamespaceConfigR\tknowledge\x12;\n" +
+	"\tephemeral\x18\x03 \x01(\v2\x1d.hnsx.v1.StoreNamespaceConfigR\tephemeral\"H\n" +
+	"\x14StoreNamespaceConfig\x12\x18\n" +
 	"\abackend\x18\x01 \x01(\tR\abackend\x12\x16\n" +
-	"\x06config\x18\x02 \x01(\tR\x06config\"\xfb\x01\n" +
+	"\x06config\x18\x02 \x01(\tR\x06config\"\xc7\x02\n" +
 	"\aSession\x12\x12\n" +
 	"\x04mode\x18\x01 \x01(\tR\x04mode\x12.\n" +
 	"\x06single\x18\x02 \x01(\v2\x16.hnsx.v1.SingleSessionR\x06single\x12:\n" +
@@ -1970,17 +2456,20 @@ const file_hnsx_v1_domain_proto_rawDesc = "" +
 	"\bworkflow\x18\x04 \x01(\v2\x18.hnsx.v1.WorkflowSessionR\bworkflow\x12:\n" +
 	"\n" +
 	"autonomous\x18\x05 \x01(\v2\x1a.hnsx.v1.AutonomousSessionR\n" +
-	"autonomous\"]\n" +
+	"autonomous\x12%\n" +
+	"\x0etrigger_schema\x18\x06 \x01(\tR\rtriggerSchema\x12#\n" +
+	"\routput_schema\x18\a \x01(\tR\foutputSchema\"]\n" +
 	"\rSingleSession\x12\x1b\n" +
 	"\tagent_ref\x18\x01 \x01(\tR\bagentRef\x12\x1b\n" +
 	"\tmax_turns\x18\x02 \x01(\x05R\bmaxTurns\x12\x12\n" +
-	"\x04exit\x18\x03 \x01(\tR\x04exit\"\xd4\x02\n" +
+	"\x04exit\x18\x03 \x01(\tR\x04exit\"\xea\x02\n" +
 	"\x11SupervisorSession\x12%\n" +
 	"\x0esupervisor_ref\x18\x01 \x01(\tR\rsupervisorRef\x12\x1b\n" +
 	"\tmax_turns\x18\x02 \x01(\x05R\bmaxTurns\x125\n" +
 	"\vtransitions\x18\x03 \x03(\v2\x13.hnsx.v1.TransitionR\vtransitions\x12\x1a\n" +
 	"\bfallback\x18\x04 \x01(\tR\bfallback\x12M\n" +
-	"\vspecialists\x18\x05 \x03(\v2+.hnsx.v1.SupervisorSession.SpecialistsEntryR\vspecialists\x1aY\n" +
+	"\vspecialists\x18\x05 \x03(\v2+.hnsx.v1.SupervisorSession.SpecialistsEntryR\vspecialists\x12\x14\n" +
+	"\x05agent\x18\x06 \x01(\tR\x05agent\x1aY\n" +
 	"\x10SpecialistsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12/\n" +
 	"\x05value\x18\x02 \x01(\v2\x19.hnsx.v1.SpecialistConfigR\x05value:\x028\x01\"z\n" +
@@ -1996,14 +2485,16 @@ const file_hnsx_v1_domain_proto_rawDesc = "" +
 	"\rallowed_tools\x18\x02 \x03(\tR\fallowedTools\x12%\n" +
 	"\x0eallowed_agents\x18\x03 \x03(\tR\rallowedAgents\x12\x1b\n" +
 	"\tmax_turns\x18\x04 \x01(\x05R\bmaxTurns\x12\x12\n" +
-	"\x04exit\x18\x05 \x01(\tR\x04exit\"\x9d\x01\n" +
+	"\x04exit\x18\x05 \x01(\tR\x04exit\"\xe5\x01\n" +
 	"\x04Step\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\tagent_ref\x18\x02 \x01(\tR\bagentRef\x12\x1d\n" +
-	"\n" +
-	"prompt_ref\x18\x03 \x01(\tR\tpromptRef\x12\x12\n" +
-	"\x04exit\x18\x04 \x01(\tR\x04exit\x125\n" +
-	"\vtransitions\x18\x05 \x03(\v2\x13.hnsx.v1.TransitionR\vtransitions\"H\n" +
+	"\tagent_ref\x18\x02 \x01(\tR\bagentRef\x12\x14\n" +
+	"\x05input\x18\x03 \x01(\tR\x05input\x12\x16\n" +
+	"\x06output\x18\x04 \x01(\tR\x06output\x12\x1c\n" +
+	"\tcondition\x18\x05 \x01(\tR\tcondition\x12\x12\n" +
+	"\x04next\x18\x06 \x01(\tR\x04next\x12\x19\n" +
+	"\bon_error\x18\a \x01(\tR\aonError\x125\n" +
+	"\vtransitions\x18\b \x03(\v2\x13.hnsx.v1.TransitionR\vtransitions\"H\n" +
 	"\n" +
 	"Transition\x12\x12\n" +
 	"\x04when\x18\x01 \x01(\tR\x04when\x12\x0e\n" +
@@ -2042,79 +2533,89 @@ func file_hnsx_v1_domain_proto_rawDescGZIP() []byte {
 	return file_hnsx_v1_domain_proto_rawDescData
 }
 
-var file_hnsx_v1_domain_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_hnsx_v1_domain_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_hnsx_v1_domain_proto_goTypes = []any{
-	(*DomainSpec)(nil),        // 0: hnsx.v1.DomainSpec
-	(*DomainRef)(nil),         // 1: hnsx.v1.DomainRef
-	(*Harness)(nil),           // 2: hnsx.v1.Harness
-	(*Agent)(nil),             // 3: hnsx.v1.Agent
-	(*ModelRef)(nil),          // 4: hnsx.v1.ModelRef
-	(*AdapterRef)(nil),        // 5: hnsx.v1.AdapterRef
-	(*Prompt)(nil),            // 6: hnsx.v1.Prompt
-	(*PromptRef)(nil),         // 7: hnsx.v1.PromptRef
-	(*Skill)(nil),             // 8: hnsx.v1.Skill
-	(*Example)(nil),           // 9: hnsx.v1.Example
-	(*Tool)(nil),              // 10: hnsx.v1.Tool
-	(*MCPConfig)(nil),         // 11: hnsx.v1.MCPConfig
-	(*Sandbox)(nil),           // 12: hnsx.v1.Sandbox
-	(*Policy)(nil),            // 13: hnsx.v1.Policy
-	(*Memory)(nil),            // 14: hnsx.v1.Memory
-	(*Session)(nil),           // 15: hnsx.v1.Session
-	(*SingleSession)(nil),     // 16: hnsx.v1.SingleSession
-	(*SupervisorSession)(nil), // 17: hnsx.v1.SupervisorSession
-	(*SpecialistConfig)(nil),  // 18: hnsx.v1.SpecialistConfig
-	(*WorkflowSession)(nil),   // 19: hnsx.v1.WorkflowSession
-	(*AutonomousSession)(nil), // 20: hnsx.v1.AutonomousSession
-	(*Step)(nil),              // 21: hnsx.v1.Step
-	(*Transition)(nil),        // 22: hnsx.v1.Transition
-	(*Eval)(nil),              // 23: hnsx.v1.Eval
-	(*EvalSet)(nil),           // 24: hnsx.v1.EvalSet
-	(*EvalCase)(nil),          // 25: hnsx.v1.EvalCase
-	(*ScorerConfig)(nil),      // 26: hnsx.v1.ScorerConfig
-	(*Scorer)(nil),            // 27: hnsx.v1.Scorer
-	nil,                       // 28: hnsx.v1.Prompt.VariablesEntry
-	nil,                       // 29: hnsx.v1.MCPConfig.EnvEntry
-	nil,                       // 30: hnsx.v1.SupervisorSession.SpecialistsEntry
+	(*DomainSpec)(nil),           // 0: hnsx.v1.DomainSpec
+	(*DomainRef)(nil),            // 1: hnsx.v1.DomainRef
+	(*Harness)(nil),              // 2: hnsx.v1.Harness
+	(*Agent)(nil),                // 3: hnsx.v1.Agent
+	(*ModelRef)(nil),             // 4: hnsx.v1.ModelRef
+	(*AdapterRef)(nil),           // 5: hnsx.v1.AdapterRef
+	(*Prompt)(nil),               // 6: hnsx.v1.Prompt
+	(*Skill)(nil),                // 7: hnsx.v1.Skill
+	(*Example)(nil),              // 8: hnsx.v1.Example
+	(*Tool)(nil),                 // 9: hnsx.v1.Tool
+	(*MCPConfig)(nil),            // 10: hnsx.v1.MCPConfig
+	(*Sandbox)(nil),              // 11: hnsx.v1.Sandbox
+	(*Policy)(nil),               // 12: hnsx.v1.Policy
+	(*Budget)(nil),               // 13: hnsx.v1.Budget
+	(*Permission)(nil),           // 14: hnsx.v1.Permission
+	(*Guardrail)(nil),            // 15: hnsx.v1.Guardrail
+	(*Approval)(nil),             // 16: hnsx.v1.Approval
+	(*RequiredFor)(nil),          // 17: hnsx.v1.RequiredFor
+	(*Store)(nil),                // 18: hnsx.v1.Store
+	(*StoreNamespaceConfig)(nil), // 19: hnsx.v1.StoreNamespaceConfig
+	(*Session)(nil),              // 20: hnsx.v1.Session
+	(*SingleSession)(nil),        // 21: hnsx.v1.SingleSession
+	(*SupervisorSession)(nil),    // 22: hnsx.v1.SupervisorSession
+	(*SpecialistConfig)(nil),     // 23: hnsx.v1.SpecialistConfig
+	(*WorkflowSession)(nil),      // 24: hnsx.v1.WorkflowSession
+	(*AutonomousSession)(nil),    // 25: hnsx.v1.AutonomousSession
+	(*Step)(nil),                 // 26: hnsx.v1.Step
+	(*Transition)(nil),           // 27: hnsx.v1.Transition
+	(*Eval)(nil),                 // 28: hnsx.v1.Eval
+	(*EvalSet)(nil),              // 29: hnsx.v1.EvalSet
+	(*EvalCase)(nil),             // 30: hnsx.v1.EvalCase
+	(*ScorerConfig)(nil),         // 31: hnsx.v1.ScorerConfig
+	(*Scorer)(nil),               // 32: hnsx.v1.Scorer
+	nil,                          // 33: hnsx.v1.MCPConfig.HeadersEntry
+	nil,                          // 34: hnsx.v1.SupervisorSession.SpecialistsEntry
 }
 var file_hnsx_v1_domain_proto_depIdxs = []int32{
 	2,  // 0: hnsx.v1.DomainSpec.harness:type_name -> hnsx.v1.Harness
-	23, // 1: hnsx.v1.DomainSpec.eval:type_name -> hnsx.v1.Eval
+	28, // 1: hnsx.v1.DomainSpec.eval:type_name -> hnsx.v1.Eval
 	3,  // 2: hnsx.v1.Harness.agents:type_name -> hnsx.v1.Agent
 	6,  // 3: hnsx.v1.Harness.prompts:type_name -> hnsx.v1.Prompt
-	8,  // 4: hnsx.v1.Harness.skills:type_name -> hnsx.v1.Skill
-	10, // 5: hnsx.v1.Harness.tools:type_name -> hnsx.v1.Tool
-	11, // 6: hnsx.v1.Harness.mcps:type_name -> hnsx.v1.MCPConfig
-	12, // 7: hnsx.v1.Harness.sandbox:type_name -> hnsx.v1.Sandbox
-	13, // 8: hnsx.v1.Harness.policy:type_name -> hnsx.v1.Policy
-	14, // 9: hnsx.v1.Harness.memory:type_name -> hnsx.v1.Memory
-	15, // 10: hnsx.v1.Harness.session:type_name -> hnsx.v1.Session
+	7,  // 4: hnsx.v1.Harness.skills:type_name -> hnsx.v1.Skill
+	9,  // 5: hnsx.v1.Harness.tools:type_name -> hnsx.v1.Tool
+	10, // 6: hnsx.v1.Harness.mcps:type_name -> hnsx.v1.MCPConfig
+	11, // 7: hnsx.v1.Harness.sandbox:type_name -> hnsx.v1.Sandbox
+	12, // 8: hnsx.v1.Harness.policy:type_name -> hnsx.v1.Policy
+	18, // 9: hnsx.v1.Harness.store:type_name -> hnsx.v1.Store
+	20, // 10: hnsx.v1.Harness.session:type_name -> hnsx.v1.Session
 	4,  // 11: hnsx.v1.Agent.model:type_name -> hnsx.v1.ModelRef
 	5,  // 12: hnsx.v1.Agent.adapter:type_name -> hnsx.v1.AdapterRef
-	7,  // 13: hnsx.v1.Agent.prompt:type_name -> hnsx.v1.PromptRef
-	28, // 14: hnsx.v1.Prompt.variables:type_name -> hnsx.v1.Prompt.VariablesEntry
-	6,  // 15: hnsx.v1.Skill.prompts:type_name -> hnsx.v1.Prompt
-	10, // 16: hnsx.v1.Skill.tools:type_name -> hnsx.v1.Tool
-	9,  // 17: hnsx.v1.Skill.examples:type_name -> hnsx.v1.Example
-	29, // 18: hnsx.v1.MCPConfig.env:type_name -> hnsx.v1.MCPConfig.EnvEntry
-	16, // 19: hnsx.v1.Session.single:type_name -> hnsx.v1.SingleSession
-	17, // 20: hnsx.v1.Session.supervisor:type_name -> hnsx.v1.SupervisorSession
-	19, // 21: hnsx.v1.Session.workflow:type_name -> hnsx.v1.WorkflowSession
-	20, // 22: hnsx.v1.Session.autonomous:type_name -> hnsx.v1.AutonomousSession
-	22, // 23: hnsx.v1.SupervisorSession.transitions:type_name -> hnsx.v1.Transition
-	30, // 24: hnsx.v1.SupervisorSession.specialists:type_name -> hnsx.v1.SupervisorSession.SpecialistsEntry
-	22, // 25: hnsx.v1.SpecialistConfig.transitions:type_name -> hnsx.v1.Transition
-	21, // 26: hnsx.v1.WorkflowSession.steps:type_name -> hnsx.v1.Step
-	22, // 27: hnsx.v1.Step.transitions:type_name -> hnsx.v1.Transition
-	24, // 28: hnsx.v1.Eval.sets:type_name -> hnsx.v1.EvalSet
-	25, // 29: hnsx.v1.EvalSet.cases:type_name -> hnsx.v1.EvalCase
-	26, // 30: hnsx.v1.EvalCase.scorer:type_name -> hnsx.v1.ScorerConfig
-	27, // 31: hnsx.v1.ScorerConfig.scorers:type_name -> hnsx.v1.Scorer
-	18, // 32: hnsx.v1.SupervisorSession.SpecialistsEntry.value:type_name -> hnsx.v1.SpecialistConfig
-	33, // [33:33] is the sub-list for method output_type
-	33, // [33:33] is the sub-list for method input_type
-	33, // [33:33] is the sub-list for extension type_name
-	33, // [33:33] is the sub-list for extension extendee
-	0,  // [0:33] is the sub-list for field type_name
+	6,  // 13: hnsx.v1.Skill.prompts:type_name -> hnsx.v1.Prompt
+	9,  // 14: hnsx.v1.Skill.tools:type_name -> hnsx.v1.Tool
+	8,  // 15: hnsx.v1.Skill.examples:type_name -> hnsx.v1.Example
+	33, // 16: hnsx.v1.MCPConfig.headers:type_name -> hnsx.v1.MCPConfig.HeadersEntry
+	13, // 17: hnsx.v1.Policy.budget:type_name -> hnsx.v1.Budget
+	14, // 18: hnsx.v1.Policy.permissions:type_name -> hnsx.v1.Permission
+	15, // 19: hnsx.v1.Policy.guardrails:type_name -> hnsx.v1.Guardrail
+	16, // 20: hnsx.v1.Policy.approval:type_name -> hnsx.v1.Approval
+	17, // 21: hnsx.v1.Approval.required_for:type_name -> hnsx.v1.RequiredFor
+	19, // 22: hnsx.v1.Store.context:type_name -> hnsx.v1.StoreNamespaceConfig
+	19, // 23: hnsx.v1.Store.knowledge:type_name -> hnsx.v1.StoreNamespaceConfig
+	19, // 24: hnsx.v1.Store.ephemeral:type_name -> hnsx.v1.StoreNamespaceConfig
+	21, // 25: hnsx.v1.Session.single:type_name -> hnsx.v1.SingleSession
+	22, // 26: hnsx.v1.Session.supervisor:type_name -> hnsx.v1.SupervisorSession
+	24, // 27: hnsx.v1.Session.workflow:type_name -> hnsx.v1.WorkflowSession
+	25, // 28: hnsx.v1.Session.autonomous:type_name -> hnsx.v1.AutonomousSession
+	27, // 29: hnsx.v1.SupervisorSession.transitions:type_name -> hnsx.v1.Transition
+	34, // 30: hnsx.v1.SupervisorSession.specialists:type_name -> hnsx.v1.SupervisorSession.SpecialistsEntry
+	27, // 31: hnsx.v1.SpecialistConfig.transitions:type_name -> hnsx.v1.Transition
+	26, // 32: hnsx.v1.WorkflowSession.steps:type_name -> hnsx.v1.Step
+	27, // 33: hnsx.v1.Step.transitions:type_name -> hnsx.v1.Transition
+	29, // 34: hnsx.v1.Eval.sets:type_name -> hnsx.v1.EvalSet
+	30, // 35: hnsx.v1.EvalSet.cases:type_name -> hnsx.v1.EvalCase
+	31, // 36: hnsx.v1.EvalCase.scorer:type_name -> hnsx.v1.ScorerConfig
+	32, // 37: hnsx.v1.ScorerConfig.scorers:type_name -> hnsx.v1.Scorer
+	23, // 38: hnsx.v1.SupervisorSession.SpecialistsEntry.value:type_name -> hnsx.v1.SpecialistConfig
+	39, // [39:39] is the sub-list for method output_type
+	39, // [39:39] is the sub-list for method input_type
+	39, // [39:39] is the sub-list for extension type_name
+	39, // [39:39] is the sub-list for extension extendee
+	0,  // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_hnsx_v1_domain_proto_init() }
@@ -2128,7 +2629,7 @@ func file_hnsx_v1_domain_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_hnsx_v1_domain_proto_rawDesc), len(file_hnsx_v1_domain_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   31,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

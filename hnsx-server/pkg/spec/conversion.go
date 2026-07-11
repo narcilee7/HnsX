@@ -62,10 +62,15 @@ func harnessToProto(h *HarnessSpec) (*pb.Harness, error) {
 		out.Agents = append(out.Agents, agentToProto(id, a))
 	}
 	for id, p := range h.Prompts {
+		schema, err := toJSONString(p.Schema)
+		if err != nil {
+			return nil, fmt.Errorf("prompt %q schema: %w", id, err)
+		}
 		out.Prompts = append(out.Prompts, &pb.Prompt{
-			Id:        id,
-			Template:  p.Template,
-			Variables: stringifyMap(p.Schema),
+			Id:          id,
+			Template:    p.Template,
+			PromptType:  p.Type,
+			Schema:      schema,
 		})
 	}
 	for id, s := range h.Skills {
@@ -78,18 +83,21 @@ func harnessToProto(h *HarnessSpec) (*pb.Harness, error) {
 		}
 		out.Tools = append(out.Tools, &pb.Tool{
 			Id:          id,
+			Name:        t.Name,
 			Description: t.Description,
-			Type:        t.Kind,
+			Kind:        t.Kind,
 			Config:      cfg,
 		})
 	}
 	if h.MCP != nil {
 		for _, m := range h.MCP.Servers {
 			out.Mcps = append(out.Mcps, &pb.MCPConfig{
-				Id:      m.Name,
-				Command: m.Command,
-				Args:    m.Args,
-				Env:     m.Headers,
+				Id:        m.Name,
+				Transport: m.Transport,
+				Command:   m.Command,
+				Args:      m.Args,
+				Url:       m.URL,
+				Headers:   m.Headers,
 			})
 		}
 	}
@@ -103,27 +111,15 @@ func harnessToProto(h *HarnessSpec) (*pb.Harness, error) {
 			Config:  cfg,
 		}
 	}
-	if h.Policy.Budget.MaxCostUSD != 0 || !h.Policy.Permissions.IsZero() || len(h.Policy.Guardrails) > 0 {
-		grd, err := toJSONString(h.Policy.Guardrails)
-		if err != nil {
-			return nil, fmt.Errorf("policy guardrails: %w", err)
-		}
-		out.Policy = &pb.Policy{
-			BudgetUsd:            h.Policy.Budget.MaxCostUSD,
-			AllowedTools:         allowedTools(h.Policy.Guardrails),
-			DeniedTools:          deniedTools(h.Policy.Guardrails),
-			RequireHumanApproval: requiresApproval(h.Policy.Guardrails),
-			Guardrails:           grd,
-		}
+	policy, err := policyToProto(&h.Policy)
+	if err != nil {
+		return nil, err
 	}
+	out.Policy = policy
 	if h.Store != nil {
-		cfg, err := toJSONString(h.Store)
+		out.Store, err = storeToProto(h.Store)
 		if err != nil {
-			return nil, fmt.Errorf("memory config: %w", err)
-		}
-		out.Memory = &pb.Memory{
-			Backend: "store",
-			Config:  cfg,
+			return nil, err
 		}
 	}
 	if h.Telemetry != nil {
@@ -131,10 +127,11 @@ func harnessToProto(h *HarnessSpec) (*pb.Harness, error) {
 		if err != nil {
 			return nil, fmt.Errorf("telemetry config: %w", err)
 		}
-		if out.Memory == nil {
-			out.Memory = &pb.Memory{}
+		if out.Store == nil {
+			out.Store = &pb.Store{}
 		}
-		out.Memory.Config = cfg
+		// Preserve telemetry in context namespace config as a fallback.
+		out.Store.Context = &pb.StoreNamespaceConfig{Backend: "telemetry", Config: cfg}
 	}
 	out.Session = sessionToProto(&h.Session)
 	return out, nil
@@ -155,10 +152,14 @@ func harnessFromProto(h *pb.Harness) (*HarnessSpec, error) {
 		out.Agents[id] = spec
 	}
 	for _, p := range h.GetPrompts() {
+		var schema any
+		if p.GetSchema() != "" {
+			_ = json.Unmarshal([]byte(p.GetSchema()), &schema)
+		}
 		out.Prompts[p.GetId()] = PromptSpec{
-			Type:     "text",
+			Type:     p.GetPromptType(),
 			Template: p.GetTemplate(),
-			Schema:   mapFromStrings(p.GetVariables()),
+			Schema:   schema,
 		}
 	}
 	for _, s := range h.GetSkills() {
@@ -173,8 +174,8 @@ func harnessFromProto(h *pb.Harness) (*HarnessSpec, error) {
 			}
 		}
 		out.Tools[t.GetId()] = ToolConfig{
-			Kind:        t.GetType(),
-			Name:        t.GetId(),
+			Kind:        t.GetKind(),
+			Name:        t.GetName(),
 			Description: t.GetDescription(),
 			Config:      cfg,
 		}
@@ -184,10 +185,11 @@ func harnessFromProto(h *pb.Harness) (*HarnessSpec, error) {
 		for _, m := range h.GetMcps() {
 			mcp.Servers = append(mcp.Servers, MCPServer{
 				Name:      m.GetId(),
-				Transport: "stdio",
+				Transport: m.GetTransport(),
 				Command:   m.GetCommand(),
 				Args:      m.GetArgs(),
-				Headers:   m.GetEnv(),
+				URL:       m.GetUrl(),
+				Headers:   m.GetHeaders(),
 			})
 		}
 		out.MCP = mcp
@@ -201,25 +203,18 @@ func harnessFromProto(h *pb.Harness) (*HarnessSpec, error) {
 		}
 	}
 	if h.GetPolicy() != nil {
-		out.Policy.Budget.MaxCostUSD = h.GetPolicy().GetBudgetUsd()
-		if h.GetPolicy().GetGuardrails() != "" {
-			if err := json.Unmarshal([]byte(h.GetPolicy().GetGuardrails()), &out.Policy.Guardrails); err != nil {
-				return nil, fmt.Errorf("policy guardrails: %w", err)
-			}
+		policy, err := policyFromProto(h.GetPolicy())
+		if err != nil {
+			return nil, err
 		}
+		out.Policy = *policy
 	}
-	if h.GetMemory() != nil && h.GetMemory().GetConfig() != "" {
-		if err := json.Unmarshal([]byte(h.GetMemory().GetConfig()), &out.Store); err == nil {
-			if out.Store == nil {
-				out.Store = &StoreConfig{}
-			}
+	if h.GetStore() != nil {
+		store, err := storeFromProto(h.GetStore())
+		if err != nil {
+			return nil, err
 		}
-		if out.Store == nil {
-			var tel TelemetryConfig
-			if err := json.Unmarshal([]byte(h.GetMemory().GetConfig()), &tel); err == nil {
-				out.Telemetry = &tel
-			}
-		}
+		out.Store = store
 	}
 	sess, err := sessionFromProto(h.GetSession())
 	if err != nil {
@@ -231,8 +226,8 @@ func harnessFromProto(h *pb.Harness) (*HarnessSpec, error) {
 
 func agentToProto(id string, a AgentSpec) *pb.Agent {
 	return &pb.Agent{
-		Id:          id,
-		Description: a.Description,
+		Id:           id,
+		Description:  a.Description,
 		Model: &pb.ModelRef{
 			Provider: a.Provider,
 			Model:    a.Model,
@@ -240,10 +235,13 @@ func agentToProto(id string, a AgentSpec) *pb.Agent {
 		Adapter: &pb.AdapterRef{
 			Kind:           a.Adapter.Kind,
 			TimeoutSeconds: int32(a.Adapter.TimeoutSeconds),
+			Endpoint:       a.Adapter.Endpoint,
+			ApiKeyEnv:      a.Adapter.APIKeyEnv,
 		},
-		Prompt:    &pb.PromptRef{Id: a.SystemPrompt},
-		SkillRefs: a.Skills,
-		ToolRefs:  a.Tools,
+		SystemPrompt: a.SystemPrompt,
+		SkillRefs:    a.SkillRefs,
+		ToolRefs:     a.ToolRefs,
+		ApiKeyEnv:    a.APIKeyEnv,
 	}
 }
 
@@ -256,10 +254,16 @@ func agentFromProto(a *pb.Agent) (string, AgentSpec) {
 		Provider:     a.GetModel().GetProvider(),
 		Model:        a.GetModel().GetModel(),
 		Description:  a.GetDescription(),
-		Adapter:      AdapterConfig{Kind: a.GetAdapter().GetKind(), TimeoutSeconds: int(a.GetAdapter().GetTimeoutSeconds())},
-		SystemPrompt: a.GetPrompt().GetId(),
-		Skills:       a.GetSkillRefs(),
-		Tools:        a.GetToolRefs(),
+		Adapter: AdapterConfig{
+			Kind:           a.GetAdapter().GetKind(),
+			TimeoutSeconds: int(a.GetAdapter().GetTimeoutSeconds()),
+			Endpoint:       a.GetAdapter().GetEndpoint(),
+			APIKeyEnv:      a.GetAdapter().GetApiKeyEnv(),
+		},
+		SystemPrompt: a.GetSystemPrompt(),
+		APIKeyEnv:    a.GetApiKeyEnv(),
+		SkillRefs:    a.GetSkillRefs(),
+		ToolRefs:     a.GetToolRefs(),
 	}
 }
 
@@ -268,11 +272,34 @@ func skillToProto(id string, s SkillSpec) *pb.Skill {
 		Id:          id,
 		Description: s.Description,
 	}
-	if s.Prompt != "" {
-		sk.Prompts = append(sk.Prompts, &pb.Prompt{Template: s.Prompt})
+	for _, p := range s.Prompts {
+		schema, _ := toJSONString(p.Schema)
+		sk.Prompts = append(sk.Prompts, &pb.Prompt{
+			Id:         p.Type,
+			Template:   p.Template,
+			PromptType: p.Type,
+			Schema:     schema,
+		})
 	}
 	for _, t := range s.Tools {
-		sk.Tools = append(sk.Tools, &pb.Tool{Id: t})
+		cfg, _ := toJSONString(t.Config)
+		sk.Tools = append(sk.Tools, &pb.Tool{
+			Id:          t.Name,
+			Name:        t.Name,
+			Description: t.Description,
+			Kind:        t.Kind,
+			Config:      cfg,
+		})
+	}
+	for _, ref := range s.McpRefs {
+		sk.McpRefs = append(sk.McpRefs, ref)
+	}
+	for _, ex := range s.Examples {
+		sk.Examples = append(sk.Examples, &pb.Example{
+			Id:     ex.ID,
+			Input:  ex.Input,
+			Output: ex.Output,
+		})
 	}
 	return sk
 }
@@ -281,19 +308,46 @@ func skillFromProto(s *pb.Skill) (string, SkillSpec) {
 	if s == nil {
 		return "", SkillSpec{}
 	}
-	var prompt string
-	if len(s.GetPrompts()) > 0 {
-		prompt = s.GetPrompts()[0].GetTemplate()
+	var prompts []PromptSpec
+	for _, p := range s.GetPrompts() {
+		var schema any
+		if p.GetSchema() != "" {
+			_ = json.Unmarshal([]byte(p.GetSchema()), &schema)
+		}
+		prompts = append(prompts, PromptSpec{
+			Type:     p.GetPromptType(),
+			Template: p.GetTemplate(),
+			Schema:   schema,
+		})
 	}
-	var tools []string
+	var tools []ToolConfig
 	for _, t := range s.GetTools() {
-		tools = append(tools, t.GetId())
+		var cfg any
+		if t.GetConfig() != "" {
+			_ = json.Unmarshal([]byte(t.GetConfig()), &cfg)
+		}
+		tools = append(tools, ToolConfig{
+			Kind:        t.GetKind(),
+			Name:        t.GetName(),
+			Description: t.GetDescription(),
+			Config:      cfg,
+		})
+	}
+	var examples []ExampleSpec
+	for _, ex := range s.GetExamples() {
+		examples = append(examples, ExampleSpec{
+			ID:     ex.GetId(),
+			Input:  ex.GetInput(),
+			Output: ex.GetOutput(),
+		})
 	}
 	return s.GetId(), SkillSpec{
 		Name:        s.GetId(),
 		Description: s.GetDescription(),
-		Prompt:      prompt,
+		Prompts:     prompts,
 		Tools:       tools,
+		McpRefs:     s.GetMcpRefs(),
+		Examples:    examples,
 	}
 }
 
@@ -301,7 +355,12 @@ func sessionToProto(s *SessionSpec) *pb.Session {
 	if s == nil {
 		return nil
 	}
-	out := &pb.Session{Mode: string(s.Mode)}
+	triggerSchema, _ := toJSONString(s.TriggerSchema)
+	out := &pb.Session{
+		Mode:          string(s.Mode),
+		TriggerSchema: triggerSchema,
+		OutputSchema:  s.OutputSchema,
+	}
 	switch s.Mode {
 	case SingleTask, Single, MultiTurn:
 		out.Single = &pb.SingleSession{
@@ -321,11 +380,15 @@ func sessionToProto(s *SessionSpec) *pb.Session {
 				Entry: s.Workflow.Entry,
 			}
 			for _, step := range s.Workflow.Steps {
-				cfg, _ := toJSONString(step.Input)
+				input, _ := toJSONString(step.Input)
 				out.Workflow.Steps = append(out.Workflow.Steps, &pb.Step{
-					Id:        step.ID,
-					AgentRef:  step.Agent,
-					PromptRef: cfg,
+					Id:          step.ID,
+					AgentRef:    step.Agent,
+					Input:       input,
+					Output:      step.Output,
+					Condition:   step.Condition,
+					Next:        step.Next,
+					OnError:     step.OnError,
 				})
 			}
 		}
@@ -338,6 +401,10 @@ func sessionFromProto(s *pb.Session) (*SessionSpec, error) {
 		return &SessionSpec{}, nil
 	}
 	out := &SessionSpec{Mode: HarnessSessionMode(s.GetMode())}
+	if s.GetTriggerSchema() != "" {
+		_ = json.Unmarshal([]byte(s.GetTriggerSchema()), &out.TriggerSchema)
+	}
+	out.OutputSchema = s.GetOutputSchema()
 	switch out.Mode {
 	case SingleTask, Single, MultiTurn:
 		out.Agent = s.GetSingle().GetAgentRef()
@@ -351,16 +418,147 @@ func sessionFromProto(s *pb.Session) (*SessionSpec, error) {
 			out.Workflow = &WorkflowSpec{Entry: wf.GetEntry()}
 			for _, step := range wf.GetSteps() {
 				var input any
-				if step.GetPromptRef() != "" {
-					_ = json.Unmarshal([]byte(step.GetPromptRef()), &input)
+				if step.GetInput() != "" {
+					_ = json.Unmarshal([]byte(step.GetInput()), &input)
 				}
 				out.Workflow.Steps = append(out.Workflow.Steps, StepSpec{
-					ID:     step.GetId(),
-					Agent:  step.GetAgentRef(),
-					Input:  input,
-					Output: step.GetExit(),
+					ID:        step.GetId(),
+					Agent:     step.GetAgentRef(),
+					Input:     input,
+					Output:    step.GetOutput(),
+					Condition: step.GetCondition(),
+					Next:      step.GetNext(),
+					OnError:   step.GetOnError(),
 				})
 			}
+		}
+	}
+	return out, nil
+}
+
+func policyToProto(p *PolicySpec) (*pb.Policy, error) {
+	if p == nil {
+		return nil, nil
+	}
+	return &pb.Policy{
+		Budget: &pb.Budget{
+			MaxCostUsd: p.Budget.MaxCostUSD,
+			MaxTurns:   int32(p.Budget.MaxTurns),
+			MaxTokens:  int32(p.Budget.MaxTokens),
+		},
+		Permissions: &pb.Permission{
+			AllowFileWrite:  p.Permissions.AllowFileWrite,
+			AllowFileDelete: p.Permissions.AllowFileDelete,
+			AllowNetwork:    p.Permissions.AllowNetwork,
+			AllowShell:      p.Permissions.AllowShell,
+		},
+		Guardrails: guardrailSpecsToProto(p.Guardrails),
+		Approval: &pb.Approval{
+			DefaultTimeoutSeconds: int32(p.Approval.DefaultTimeoutSeconds),
+			RequiredFor: &pb.RequiredFor{
+				Tools:            p.Approval.RequiredFor.Tools,
+				Resources:        p.Approval.RequiredFor.Resources,
+				CostThresholdUsd: p.Approval.RequiredFor.CostThresholdUSD,
+			},
+		},
+	}, nil
+}
+
+func guardrailSpecsToProto(guardrails []GuardrailSpec) []*pb.Guardrail {
+	out := make([]*pb.Guardrail, 0, len(guardrails))
+	for _, g := range guardrails {
+		cfg, _ := toJSONString(g.Config)
+		out = append(out, &pb.Guardrail{
+			Id:      g.ID,
+			Type:    g.Type,
+			On:      g.On,
+			Action:  g.Action,
+			Schema:  g.Schema,
+			Message: g.Message,
+			Config:  cfg,
+		})
+	}
+	return out
+}
+
+func policyFromProto(p *pb.Policy) (*PolicySpec, error) {
+	if p == nil {
+		return &PolicySpec{}, nil
+	}
+	out := &PolicySpec{
+		Budget: BudgetSpec{
+			MaxCostUSD: p.GetBudget().GetMaxCostUsd(),
+			MaxTurns:   int(p.GetBudget().GetMaxTurns()),
+			MaxTokens:  int(p.GetBudget().GetMaxTokens()),
+		},
+		Permissions: PermissionSpec{
+			AllowFileWrite:  p.GetPermissions().GetAllowFileWrite(),
+			AllowFileDelete: p.GetPermissions().GetAllowFileDelete(),
+			AllowNetwork:    p.GetPermissions().GetAllowNetwork(),
+			AllowShell:      p.GetPermissions().GetAllowShell(),
+		},
+		Approval: ApprovalSpec{
+			DefaultTimeoutSeconds: int(p.GetApproval().GetDefaultTimeoutSeconds()),
+			RequiredFor: RequiredForSpec{
+				Tools:            p.GetApproval().GetRequiredFor().GetTools(),
+				Resources:        p.GetApproval().GetRequiredFor().GetResources(),
+				CostThresholdUSD: p.GetApproval().GetRequiredFor().GetCostThresholdUsd(),
+			},
+		},
+	}
+	for _, g := range p.GetGuardrails() {
+		var cfg any
+		if g.GetConfig() != "" {
+			_ = json.Unmarshal([]byte(g.GetConfig()), &cfg)
+		}
+		out.Guardrails = append(out.Guardrails, GuardrailSpec{
+			ID:      g.GetId(),
+			Type:    g.GetType(),
+			On:      g.GetOn(),
+			Action:  g.GetAction(),
+			Schema:  g.GetSchema(),
+			Message: g.GetMessage(),
+			Config:  cfg,
+		})
+	}
+	return out, nil
+}
+
+func storeToProto(s *StoreConfig) (*pb.Store, error) {
+	if s == nil {
+		return nil, nil
+	}
+	ctxCfg, _ := toJSONString(s.Context.Config)
+	knowCfg, _ := toJSONString(s.Knowledge.Config)
+	ephCfg, _ := toJSONString(s.Ephemeral.Config)
+	return &pb.Store{
+		Context:   &pb.StoreNamespaceConfig{Backend: s.Context.Backend, Config: ctxCfg},
+		Knowledge: &pb.StoreNamespaceConfig{Backend: s.Knowledge.Backend, Config: knowCfg},
+		Ephemeral: &pb.StoreNamespaceConfig{Backend: s.Ephemeral.Backend, Config: ephCfg},
+	}, nil
+}
+
+func storeFromProto(s *pb.Store) (*StoreConfig, error) {
+	if s == nil {
+		return nil, nil
+	}
+	out := &StoreConfig{}
+	if s.GetContext() != nil {
+		out.Context.Backend = s.GetContext().GetBackend()
+		if s.GetContext().GetConfig() != "" {
+			_ = json.Unmarshal([]byte(s.GetContext().GetConfig()), &out.Context.Config)
+		}
+	}
+	if s.GetKnowledge() != nil {
+		out.Knowledge.Backend = s.GetKnowledge().GetBackend()
+		if s.GetKnowledge().GetConfig() != "" {
+			_ = json.Unmarshal([]byte(s.GetKnowledge().GetConfig()), &out.Knowledge.Config)
+		}
+	}
+	if s.GetEphemeral() != nil {
+		out.Ephemeral.Backend = s.GetEphemeral().GetBackend()
+		if s.GetEphemeral().GetConfig() != "" {
+			_ = json.Unmarshal([]byte(s.GetEphemeral().GetConfig()), &out.Ephemeral.Config)
 		}
 	}
 	return out, nil
@@ -377,59 +575,7 @@ func toJSONString(v any) (string, error) {
 	return string(b), nil
 }
 
-func stringifyMap(v any) map[string]string {
-	m, ok := v.(map[string]any)
-	if !ok {
-		return nil
-	}
-	out := make(map[string]string, len(m))
-	for k, val := range m {
-		out[k] = fmt.Sprintf("%v", val)
-	}
-	return out
-}
-
-func mapFromStrings(m map[string]string) any {
-	if len(m) == 0 {
-		return nil
-	}
-	out := make(map[string]any, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
-	return out
-}
-
 // IsZero reports whether no permission toggles are set.
 func (p PermissionSpec) IsZero() bool {
 	return !p.AllowFileWrite && !p.AllowFileDelete && !p.AllowNetwork && !p.AllowShell
-}
-
-func allowedTools(guardrails []GuardrailSpec) []string {
-	var out []string
-	for _, g := range guardrails {
-		if g.Type == "tool_allow" {
-			out = append(out, g.ID)
-		}
-	}
-	return out
-}
-
-func deniedTools(guardrails []GuardrailSpec) []string {
-	var out []string
-	for _, g := range guardrails {
-		if g.Type == "tool_deny" {
-			out = append(out, g.ID)
-		}
-	}
-	return out
-}
-
-func requiresApproval(guardrails []GuardrailSpec) bool {
-	for _, g := range guardrails {
-		if g.Action == "human_approval" {
-			return true
-		}
-	}
-	return false
 }

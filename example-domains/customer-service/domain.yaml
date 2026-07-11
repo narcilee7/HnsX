@@ -50,7 +50,7 @@ harness:
         technical question concisely.
   tools:
     request_human_approval:
-      type: human_approval
+      kind: human_approval
       name: request_human_approval
       description: |
         Pause the session and ask a human operator to approve, deny, or

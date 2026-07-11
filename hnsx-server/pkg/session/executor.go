@@ -326,7 +326,7 @@ func (a *policyAdapter) Invoke(ctx context.Context, agent spec.AgentSpec, prompt
 		return "", err
 	}
 
-	for _, tool := range agent.Tools {
+	for _, tool := range agent.ToolRefs {
 		if err := a.checkToolPermission(tool); err != nil {
 			a.recordDeny(ctx, "permission", tool, err.Error())
 			return "", err
