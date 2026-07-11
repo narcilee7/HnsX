@@ -62,6 +62,11 @@ Use "hnsx <command> --help" for per-command details.
 	cmd.AddCommand(newTraceCmd(&cfg))
 	cmd.AddCommand(newEvalCmd(&cfg))
 
+	// v0.5 Bridge: surface commands.
+	cmd.AddCommand(newConsoleCmd(&cfg))
+	cmd.AddCommand(newTuiCmd(&cfg))
+	cmd.AddCommand(newUpdateCmd(&cfg))
+
 	// Remote commands (preserved; deprecation warnings begin in v0.4).
 	cmd.AddCommand(newRemoteCmd(&cfg))
 
