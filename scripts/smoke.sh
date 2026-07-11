@@ -60,7 +60,7 @@ else
   done
   docker compose -f "$DEPLOY_DIR/docker-compose.yaml" exec -T postgres pg_isready -U hnsx >/dev/null || fail "postgres failed to become ready"
   ok "postgres ready"
-  export HNSX_DATABASE_URL="postgres://hnsx:hnsx@127.0.0.1:5432/hnsx?sslmode=disable"
+  export HNSX_DATABASE_URL="postgres://hnsx:hnsx@127.0.0.1:5433/hnsx?sslmode=disable"
 fi
 
 export HNSX_MIGRATIONS_DIR="$ROOT/go/migrations"
