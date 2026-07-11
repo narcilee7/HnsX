@@ -4,9 +4,12 @@
 package repository
 
 import (
+	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
 
 // Repository is the persistence contract for RegisteredDomain aggregates.
@@ -31,6 +34,19 @@ type Repository interface {
 
 	// Exists reports whether a domain with the given ID is registered.
 	Exists(id string) (bool, error)
+
+	// ListVersions returns every stored version for a domain, newest first.
+	ListVersions(id string) ([]VersionRecord, error)
+
+	// GetVersion returns the spec for a specific domain version.
+	GetVersion(id, version string) (*spec.DomainSpec, error)
+}
+
+// VersionRecord is a single persisted version of a DomainSpec.
+type VersionRecord struct {
+	Version   string
+	CreatedAt time.Time
+	Spec      *spec.DomainSpec
 }
 
 // InMemoryRepository is a thread-safe in-memory implementation of Repository.
@@ -38,11 +54,15 @@ type Repository interface {
 type InMemoryRepository struct {
 	mu      sync.RWMutex
 	domains map[string]*model.RegisteredDomain
+	history map[string][]VersionRecord
 }
 
 // NewInMemoryRepository constructs an empty in-memory repository.
 func NewInMemoryRepository() *InMemoryRepository {
-	return &InMemoryRepository{domains: map[string]*model.RegisteredDomain{}}
+	return &InMemoryRepository{
+		domains: map[string]*model.RegisteredDomain{},
+		history: map[string][]VersionRecord{},
+	}
 }
 
 // Save implements Repository.
@@ -56,6 +76,11 @@ func (r *InMemoryRepository) Save(d *model.RegisteredDomain) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.domains[d.ID] = d
+	r.history[d.ID] = append(r.history[d.ID], VersionRecord{
+		Version:   d.Version,
+		CreatedAt: time.Now().UTC(),
+		Spec:      cloneSpec(d.Spec),
+	})
 	return nil
 }
 
@@ -86,6 +111,7 @@ func (r *InMemoryRepository) Delete(id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.domains, id)
+	delete(r.history, id)
 	return nil
 }
 
@@ -95,6 +121,48 @@ func (r *InMemoryRepository) Exists(id string) (bool, error) {
 	defer r.mu.RUnlock()
 	_, ok := r.domains[id]
 	return ok, nil
+}
+
+// ListVersions implements Repository.
+func (r *InMemoryRepository) ListVersions(id string) ([]VersionRecord, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if _, ok := r.domains[id]; !ok {
+		return nil, model.ErrDomainNotFound
+	}
+	all := r.history[id]
+	out := make([]VersionRecord, len(all))
+	for i := len(all) - 1; i >= 0; i-- {
+		out[len(all)-1-i] = all[i]
+	}
+	return out, nil
+}
+
+// GetVersion implements Repository.
+func (r *InMemoryRepository) GetVersion(id, version string) (*spec.DomainSpec, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, rec := range r.history[id] {
+		if rec.Version == version {
+			return rec.Spec, nil
+		}
+	}
+	return nil, model.ErrDomainNotFound
+}
+
+func cloneSpec(s *spec.DomainSpec) *spec.DomainSpec {
+	if s == nil {
+		return nil
+	}
+	b, err := json.Marshal(s)
+	if err != nil {
+		return nil
+	}
+	var out spec.DomainSpec
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil
+	}
+	return &out
 }
 
 var _ Repository = (*InMemoryRepository)(nil)

@@ -156,6 +156,74 @@ func (r *PostgresRepository) Exists(id string) (bool, error) {
 	return count > 0, err
 }
 
+// ListVersions implements Repository.
+func (r *PostgresRepository) ListVersions(id string) ([]VersionRecord, error) {
+	if r.db == nil {
+		return nil, model.ErrDomainNotFound
+	}
+
+	var rec DomainRecord
+	if err := r.db.Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, id).
+		Take(&rec).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, model.ErrDomainNotFound
+		}
+		return nil, err
+	}
+
+	var rows []DomainVersionRecord
+	if err := r.db.Where("tenant_id = ? AND domain_uuid = ?", domainDefaultTenantUUID, rec.ID).
+		Order("created_at DESC").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	out := make([]VersionRecord, len(rows))
+	for i, v := range rows {
+		var s spec.DomainSpec
+		if err := json.Unmarshal(v.JSONBody, &s); err != nil {
+			return nil, err
+		}
+		out[i] = VersionRecord{
+			Version:   v.Version,
+			CreatedAt: v.CreatedAt,
+			Spec:      &s,
+		}
+	}
+	return out, nil
+}
+
+// GetVersion implements Repository.
+func (r *PostgresRepository) GetVersion(id, version string) (*spec.DomainSpec, error) {
+	if r.db == nil {
+		return nil, model.ErrDomainNotFound
+	}
+
+	var rec DomainRecord
+	if err := r.db.Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, id).
+		Take(&rec).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, model.ErrDomainNotFound
+		}
+		return nil, err
+	}
+
+	var v DomainVersionRecord
+	if err := r.db.Where("tenant_id = ? AND domain_uuid = ? AND version = ?", domainDefaultTenantUUID, rec.ID, version).
+		Take(&v).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, model.ErrDomainNotFound
+		}
+		return nil, err
+	}
+
+	var s spec.DomainSpec
+	if err := json.Unmarshal(v.JSONBody, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
 func (r *PostgresRepository) toModel(rec DomainRecord) (*model.RegisteredDomain, error) {
 	var version DomainVersionRecord
 	if err := r.db.Where("tenant_id = ? AND domain_uuid = ?", domainDefaultTenantUUID, rec.ID).

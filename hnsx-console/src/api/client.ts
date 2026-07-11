@@ -60,6 +60,40 @@ export function get<T>(path: string) {
   return request<T>('GET', path)
 }
 
+export async function requestText<T>(method: string, path: string, body: string, contentType: string): Promise<T> {
+  const url = `${API_BASE}${path}`
+  const init: RequestInit = {
+    method,
+    headers: {
+      'Content-Type': contentType,
+      Accept: 'application/json',
+    },
+    body,
+  }
+
+  const response = await fetch(url, init)
+  if (!response.ok) {
+    const error = await parseError(response)
+    toast.error(error.message)
+    throw error
+  }
+  if (response.status === 204) {
+    return undefined as T
+  }
+  return response.json() as Promise<T>
+}
+
+export async function getText(path: string): Promise<string> {
+  const url = `${API_BASE}${path}`
+  const response = await fetch(url, { headers: { Accept: 'application/yaml' } })
+  if (!response.ok) {
+    const error = await parseError(response)
+    toast.error(error.message)
+    throw error
+  }
+  return response.text()
+}
+
 export function post<T>(path: string, body?: unknown) {
   return request<T>('POST', path, body)
 }
