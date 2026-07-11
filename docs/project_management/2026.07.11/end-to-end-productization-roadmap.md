@@ -276,10 +276,10 @@ Refs：`sdk/python/pyproject.toml`、`sdk/python/hnsx/client.py`
 
 ### C3 — Go SDK
 
-- [ ] **sdk/go** 新建 `client.go`：封装 `internal/client` 的 REST/Connect 调用
-- [ ] **sdk/go** 复用 `hnsx-server/pkg/spec` 的 DomainSpec 类型
-- [ ] **sdk/go** 提供 `NewClient(baseURL)`、`RegisterDomain`、`TriggerSession`、`ListTraces` 等
-- [ ] **sdk/go** 补 README、go test、纳入 `go.work`
+- [x] **sdk/go** 新建 `client.go`：封装 `internal/client` 的 REST/Connect 调用
+- [x] **sdk/go** 复用 `hnsx-server/pkg/spec` 的 DomainSpec 类型
+- [x] **sdk/go** 提供 `NewClient(baseURL)`、`RegisterDomain`、`TriggerSession`、`ListTraces` 等
+- [x] **sdk/go** 补 README、go test、纳入 `go.work`
 
 #### 验收
 
