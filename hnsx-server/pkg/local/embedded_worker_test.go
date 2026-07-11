@@ -3,11 +3,17 @@ package local
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
+
+func canImportHnsxWorker(python string) bool {
+	cmd := exec.Command(python, "-c", "import hnsx_worker")
+	return cmd.Run() == nil
+}
 
 func TestFindWorkerPythonFallback(t *testing.T) {
 	// When HNSX_WORKER_PYTHON is set it wins.
@@ -25,6 +31,9 @@ func TestRunEmbeddedSessionNoopSmoke(t *testing.T) {
 	python, err := FindWorkerPython()
 	if err != nil {
 		t.Skipf("worker python not available: %v", err)
+	}
+	if !canImportHnsxWorker(python) {
+		t.Skipf("python %s cannot import hnsx_worker; install the worker package first", python)
 	}
 
 	root, err := findProjectRoot(python)
@@ -65,6 +74,9 @@ func TestRunEmbeddedSessionWorkflowEcho(t *testing.T) {
 	python, err := FindWorkerPython()
 	if err != nil {
 		t.Skipf("worker python not available: %v", err)
+	}
+	if !canImportHnsxWorker(python) {
+		t.Skipf("python %s cannot import hnsx_worker; install the worker package first", python)
 	}
 
 	root, err := findProjectRoot(python)
@@ -114,12 +126,17 @@ func findProjectRoot(python string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Walk up until we find the repo root (identified by go.work or go.mod).
+	// The Go module lives under hnsx-server/, but the repo root (which holds
+	// example-domains/) is one level above. Walk up and prefer the directory
+	// that actually contains the example domains.
 	for dir := cwd; dir != "" && dir != string(filepath.Separator); dir = filepath.Dir(dir) {
-		if _, err := os.Stat(filepath.Join(dir, "go.work")); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, "example-domains", "noop-smoke", "domain.yaml")); err == nil {
 			return dir, nil
 		}
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+	}
+	// Fallback: repo root identified by go.work.
+	for dir := cwd; dir != "" && dir != string(filepath.Separator); dir = filepath.Dir(dir) {
+		if _, err := os.Stat(filepath.Join(dir, "go.work")); err == nil {
 			return dir, nil
 		}
 	}
@@ -131,6 +148,9 @@ func TestRunEmbeddedSessionNoPolicy(t *testing.T) {
 	if err != nil {
 		t.Skipf("worker python not available: %v", err)
 	}
+	if !canImportHnsxWorker(python) {
+		t.Skipf("python %s cannot import hnsx_worker; install the worker package first", python)
+	}
 
 	root, err := findProjectRoot(python)
 	if err != nil {
@@ -138,6 +158,10 @@ func TestRunEmbeddedSessionNoPolicy(t *testing.T) {
 	}
 
 	domainPath := filepath.Join(root, "example-domains", "noop-smoke", "domain.yaml")
+	if _, err := os.Stat(domainPath); err != nil {
+		t.Skipf("example domain not found: %v", err)
+	}
+
 	s, err := spec.LoadFile(domainPath)
 	if err != nil {
 		t.Fatalf("load domain: %v", err)
