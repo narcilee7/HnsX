@@ -97,7 +97,6 @@ func (t SessionsTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, nil
 
 	case RefreshMsg:
-		return t, t.fetchSessions()
 		if !t.inDetail {
 			return t, tea.Batch(t.fetchSessions(), tickSessions())
 		}

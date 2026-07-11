@@ -86,8 +86,13 @@ bold "[4/7] booting server on $ADDR (log $LOG)"
 # Generate a deterministic-but-non-default key when the caller did not supply one.
 : "${HNSX_SECRET_KEY:=hnsx-smoke-test-key-do-not-use-in-prod-2026}"
 export HNSX_SECRET_KEY
+# Smoke tests exercise admin/designer endpoints (secrets, policies); give the
+# default identity sufficient privileges in "none" auth mode.
+: "${HNSX_AUTH_DEFAULT_ROLE:=platform_admin}"
+export HNSX_AUTH_DEFAULT_ROLE
 HNSX_HTTP_ADDR="$ADDR" HNSX_GRPC_ADDR="" \
   HNSX_DATABASE_URL="$HNSX_DATABASE_URL" HNSX_SECRET_KEY="$HNSX_SECRET_KEY" \
+  HNSX_AUTH_DEFAULT_ROLE="$HNSX_AUTH_DEFAULT_ROLE" \
   "$BIN_DIR/hnsx-server" server --seed-from "$ROOT/example-domains" >"$LOG" 2>&1 &
 SERVER_PID=$!
 trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
