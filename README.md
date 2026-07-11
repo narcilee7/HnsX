@@ -45,23 +45,52 @@ HnsX 不自己造 Agent，而是把最好的 Agent 接入企业场景，用 YAML
 
 ## 快速开始
 
+> 一句话：`hnsx try customer-service` — 30 秒跑通一个端到端 Session。
+
 ```bash
-# 1. 启动完整本地环境（Postgres + Server + Worker + Tempo + Grafana）
-docker compose -f deployments/local/docker-compose.yaml up -d
+# 0. 装好 hnsx（任选其一）
+make build-cli                       # 源码内构建
+brew install hnsx                   # macOS（formula 见 packaging/homebrew/）
+curl -sSL hnsx.dev/install.sh | sh  # Linux
 
-# 2. 触发一个 customer-service 会话
-SID=$(curl -fsS -X POST http://127.0.0.1:50052/api/v1/sessions \
-  -H 'Content-Type: application/json' \
-  -d '{"domain_id":"customer-service","trigger":{"question":"hello"}}' | jq -r .id)
+# 1. 启动本地全栈（Postgres + Server + Worker，可选 Tempo + Grafana）
+hnsx up                              # 等 /healthz 通过后返回
+hnsx up --with-telemetry            # 同上 + Tempo + Grafana
+hnsx up --detach                    # 后台启动
 
-# 3. 实时观看 Observation 流
-curl -N http://127.0.0.1:50052/api/v1/sessions/$SID/events
+# 2. 跑一个示例 Domain（自动 register + trigger + tail SSE）
+hnsx examples                        # 列出 10 个内置示例
+hnsx try noop-smoke                  # 一键：up + register + trigger + tail
 
-# 4. 打开 Grafana 看 Trace 大盘
-open http://127.0.0.1:3002
+# 3. 看效果
+hnsx session list                    # 表格列出 Session
+hnsx session tail <id>               # 实时 SSE 流（彩色）
+hnsx trace list --limit 10           # 列出最近 Trace
+
+# 4. 打开 GUI
+hnsx console                         # 启 Vite + 自动开浏览器
 ```
 
 本地默认使用 `noop` adapter，无需真实 LLM API Key 即可跑通完整链路。
+
+---
+
+## Operator CLI 命令速查
+
+完整的命令词表见 [`docs/cli-roadmap.md`](docs/cli-roadmap.md) §2。常用片段：
+
+| 想做什么 | 命令 |
+|---|---|
+| 起 / 停 / 看状态 | `hnsx up` / `down` / `status` / `doctor` |
+| 列示例 Domain 并一键跑 | `hnsx examples` / `hnsx try <name>` |
+| 触发 / 看 Session | `hnsx session trigger --domain <id>` / `hnsx session tail <id>` |
+| 查 Trace | `hnsx trace list --since 1h` / `hnsx trace show <id>` |
+| 跑 Eval / diff | `hnsx eval run start <set-id>` / `hnsx eval run diff <set> <a> <b>` |
+| Policy / Secret / Approval | `hnsx governance policy apply --file ... --confirm` |
+| Domain 高级动作 | `hnsx power format/diff/replay/debug-bundle` |
+| 打开 GUI / TUI | `hnsx console` / `hnsx tui` |
+
+通用 flag：每条 list 命令都支持 `--limit`、`--filter k=v`、`--since 5m|1h|2d`、`--output human|json|quiet`。
 
 ---
 
