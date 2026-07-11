@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
 
@@ -17,29 +18,26 @@ import (
 //   - InMemoryRepository (tests / no-db mode)
 //   - PostgresRepository (production, tables `domains` + `domain_versions`)
 type Repository interface {
-	// Save persists a domain. If a domain with the same ID already exists it
-	// is overwritten (upsert semantics).
-	Save(d *model.RegisteredDomain) error
+	// Save persists a domain scoped to a tenant.
+	Save(tenantID tenant.ID, d *model.RegisteredDomain) error
 
-	// ByID returns the domain with the given ID, or ErrDomainNotFound.
-	ByID(id string) (*model.RegisteredDomain, error)
+	// ByID returns the domain with the given ID scoped to a tenant, or ErrDomainNotFound.
+	ByID(tenantID tenant.ID, id string) (*model.RegisteredDomain, error)
 
-	// All returns every registered domain. The order is undefined; callers
-	// should sort by ID or CreatedAt themselves.
-	All() ([]*model.RegisteredDomain, error)
+	// All returns every registered domain for a tenant.
+	All(tenantID tenant.ID) ([]*model.RegisteredDomain, error)
 
-	// Delete removes a domain by ID. Deleting a non-existent domain is a
-	// no-op and returns nil.
-	Delete(id string) error
+	// Delete removes a domain by ID scoped to a tenant.
+	Delete(tenantID tenant.ID, id string) error
 
-	// Exists reports whether a domain with the given ID is registered.
-	Exists(id string) (bool, error)
+	// Exists reports whether a domain with the given ID is registered for a tenant.
+	Exists(tenantID tenant.ID, id string) (bool, error)
 
 	// ListVersions returns every stored version for a domain, newest first.
-	ListVersions(id string) ([]VersionRecord, error)
+	ListVersions(tenantID tenant.ID, id string) ([]VersionRecord, error)
 
 	// GetVersion returns the spec for a specific domain version.
-	GetVersion(id, version string) (*spec.DomainSpec, error)
+	GetVersion(tenantID tenant.ID, id, version string) (*spec.DomainSpec, error)
 }
 
 // VersionRecord is a single persisted version of a DomainSpec.
@@ -66,7 +64,8 @@ func NewInMemoryRepository() *InMemoryRepository {
 }
 
 // Save implements Repository.
-func (r *InMemoryRepository) Save(d *model.RegisteredDomain) error {
+func (r *InMemoryRepository) Save(tenantID tenant.ID, d *model.RegisteredDomain) error {
+	_ = tenantID
 	if d == nil {
 		return model.ErrInvalidSpec
 	}
@@ -85,7 +84,8 @@ func (r *InMemoryRepository) Save(d *model.RegisteredDomain) error {
 }
 
 // ByID implements Repository.
-func (r *InMemoryRepository) ByID(id string) (*model.RegisteredDomain, error) {
+func (r *InMemoryRepository) ByID(tenantID tenant.ID, id string) (*model.RegisteredDomain, error) {
+	_ = tenantID
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	d, ok := r.domains[id]
@@ -96,7 +96,8 @@ func (r *InMemoryRepository) ByID(id string) (*model.RegisteredDomain, error) {
 }
 
 // All implements Repository.
-func (r *InMemoryRepository) All() ([]*model.RegisteredDomain, error) {
+func (r *InMemoryRepository) All(tenantID tenant.ID) ([]*model.RegisteredDomain, error) {
+	_ = tenantID
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]*model.RegisteredDomain, 0, len(r.domains))
@@ -107,7 +108,8 @@ func (r *InMemoryRepository) All() ([]*model.RegisteredDomain, error) {
 }
 
 // Delete implements Repository.
-func (r *InMemoryRepository) Delete(id string) error {
+func (r *InMemoryRepository) Delete(tenantID tenant.ID, id string) error {
+	_ = tenantID
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.domains, id)
@@ -116,7 +118,8 @@ func (r *InMemoryRepository) Delete(id string) error {
 }
 
 // Exists implements Repository.
-func (r *InMemoryRepository) Exists(id string) (bool, error) {
+func (r *InMemoryRepository) Exists(tenantID tenant.ID, id string) (bool, error) {
+	_ = tenantID
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	_, ok := r.domains[id]
@@ -124,7 +127,8 @@ func (r *InMemoryRepository) Exists(id string) (bool, error) {
 }
 
 // ListVersions implements Repository.
-func (r *InMemoryRepository) ListVersions(id string) ([]VersionRecord, error) {
+func (r *InMemoryRepository) ListVersions(tenantID tenant.ID, id string) ([]VersionRecord, error) {
+	_ = tenantID
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if _, ok := r.domains[id]; !ok {
@@ -139,7 +143,8 @@ func (r *InMemoryRepository) ListVersions(id string) ([]VersionRecord, error) {
 }
 
 // GetVersion implements Repository.
-func (r *InMemoryRepository) GetVersion(id, version string) (*spec.DomainSpec, error) {
+func (r *InMemoryRepository) GetVersion(tenantID tenant.ID, id, version string) (*spec.DomainSpec, error) {
+	_ = tenantID
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for _, rec := range r.history[id] {

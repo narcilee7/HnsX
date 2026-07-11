@@ -1,0 +1,78 @@
+Metadata-Version: 2.4
+Name: hnsx
+Version: 0.1.0
+Summary: Python SDK for the HnsX Harness platform.
+Author: HnsX Authors
+License: Apache-2.0
+Project-URL: Homepage, https://github.com/narcilee7/HnsX
+Project-URL: Issues, https://github.com/narcilee7/HnsX/issues
+Keywords: hnsx,agent,harness,sdk
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Libraries
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: httpx>=0.27
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-httpx>=0.30; extra == "dev"
+Requires-Dist: ruff>=0.5; extra == "dev"
+Requires-Dist: mypy>=1.10; extra == "dev"
+
+# hnsx (Python SDK)
+
+Python SDK for the HnsX Harness platform.
+
+## Install
+
+```bash
+pip install -e "sdk/python"
+```
+
+## Usage
+
+### REST client
+
+```python
+from hnsx import HnsXClient
+
+client = HnsXClient("http://127.0.0.1:50052")
+session = client.sessions.trigger(
+    domain_id="customer-service",
+    trigger={"question": "I want a refund"},
+)
+print(session.id, session.state)
+```
+
+### SSE stream
+
+```python
+for event in client.stream_session_events(session.id):
+    print(event.name, event.payload)
+```
+
+### DomainSpec builder
+
+```python
+from hnsx import DomainSpecBuilder
+
+spec = (
+    DomainSpecBuilder("my-agent", description="A simple agent")
+    .with_agent("assistant", provider="openai", model="gpt-4o-mini", system_prompt="default")
+    .with_prompt("default", "You are a helpful assistant.")
+    .with_session_mode("single", agent="assistant")
+    .with_policy(max_cost_usd=1.0, max_turns=20)
+    .build()
+)
+```
+
+## Development
+
+```bash
+cd sdk/python
+pip install -e ".[dev]"
+pytest
+```

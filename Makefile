@@ -22,7 +22,7 @@ VENV_DIR    := $(WORKER_DIR)/.venv
 VENV_BIN    := $(VENV_DIR)/bin
 PY_PROTO_PATH := PATH="$(VENV_BIN):$$PATH"
 
-VERSION ?= 0.2.0
+VERSION ?= 1.0.0
 
 # ---------------------------------------------------------------------------
 # Version stamping

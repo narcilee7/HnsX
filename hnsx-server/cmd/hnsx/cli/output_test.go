@@ -67,3 +67,61 @@ func TestOutput_Table_Quiet(t *testing.T) {
 		t.Fatalf("quiet should suppress table, got %q", buf.String())
 	}
 }
+
+func TestOutput_KV_Human(t *testing.T) {
+	var buf bytes.Buffer
+	o := &Output{mode: "human", w: &buf}
+	o.KV([][2]string{{"id", "abc"}, {"state", "running"}})
+	out := buf.String()
+	if !strings.Contains(out, "id") || !strings.Contains(out, "abc") {
+		t.Fatalf("KV missing id/abc: %q", out)
+	}
+	if !strings.Contains(out, "state") || !strings.Contains(out, "running") {
+		t.Fatalf("KV missing state/running: %q", out)
+	}
+}
+
+func TestOutput_KV_JSON(t *testing.T) {
+	var buf bytes.Buffer
+	o := &Output{mode: "json", w: &buf}
+	o.KV([][2]string{{"id", "abc"}, {"state", "running"}})
+	var got map[string]string
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, buf.String())
+	}
+	if got["id"] != "abc" || got["state"] != "running" {
+		t.Fatalf("unexpected JSON: %+v", got)
+	}
+}
+
+func TestOutput_KV_Quiet(t *testing.T) {
+	var buf bytes.Buffer
+	o := &Output{mode: "quiet", w: &buf}
+	o.KV([][2]string{{"id", "abc"}})
+	if buf.Len() != 0 {
+		t.Fatalf("quiet should suppress KV, got %q", buf.String())
+	}
+}
+
+func TestOutput_Card_Human(t *testing.T) {
+	var buf bytes.Buffer
+	o := &Output{mode: "human", w: &buf}
+	o.Card("Session", [][2]string{{"id", "abc"}})
+	out := buf.String()
+	if !strings.Contains(out, "Session") {
+		t.Fatalf("card missing title: %q", out)
+	}
+	if !strings.Contains(out, "abc") {
+		t.Fatalf("card missing value: %q", out)
+	}
+}
+
+func TestOutput_Section_Human(t *testing.T) {
+	var buf bytes.Buffer
+	o := &Output{mode: "human", w: &buf}
+	o.Section("Trigger")
+	out := buf.String()
+	if !strings.Contains(out, "Trigger") {
+		t.Fatalf("section missing title: %q", out)
+	}
+}

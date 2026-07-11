@@ -117,7 +117,7 @@ func newPolicyApplyCmd(cfg *Config) *cobra.Command {
 				return err
 			}
 			req.Header.Set("Content-Type", "application/x-yaml")
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := doAuthorized(cfg, req)
 			if err != nil {
 				return err
 			}
@@ -148,7 +148,7 @@ func newPolicyDeleteCmd(cfg *Config) *cobra.Command {
 				return nil
 			}
 			req, _ := http.NewRequest(http.MethodDelete, cfg.ServerURL+"/api/v1/policies/"+args[0], nil)
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := doAuthorized(cfg, req)
 			if err != nil {
 				return err
 			}
@@ -214,7 +214,7 @@ func newSecretSetCmd(cfg *Config) *cobra.Command {
 			payload := fmt.Sprintf(`{"id":"%s","value":"%s"}`, args[0], value)
 			req, _ := http.NewRequest(http.MethodPost, cfg.ServerURL+"/api/v1/secrets", strings.NewReader(payload))
 			req.Header.Set("Content-Type", "application/json")
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := doAuthorized(cfg, req)
 			if err != nil {
 				return err
 			}
@@ -246,7 +246,7 @@ func newSecretDeleteCmd(cfg *Config) *cobra.Command {
 				return nil
 			}
 			req, _ := http.NewRequest(http.MethodDelete, cfg.ServerURL+"/api/v1/secrets/"+args[0], nil)
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := doAuthorized(cfg, req)
 			if err != nil {
 				return err
 			}
@@ -303,7 +303,7 @@ func newApprovalListCmd(cfg *Config) *cobra.Command {
 
 func approvalAction(cfg *Config, id, action string) error {
 	req, _ := http.NewRequest(http.MethodPost, cfg.ServerURL+"/api/v1/approvals/"+id+"/"+action, nil)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doAuthorized(cfg, req)
 	if err != nil {
 		return err
 	}
@@ -519,15 +519,11 @@ func newAuthLoginCmd(cfg *Config) *cobra.Command {
 			if token == "" {
 				return fmt.Errorf("--token is required")
 			}
-			path := cfgPath()
-			if err := os.MkdirAll(filepathDir(path), 0o700); err != nil {
-				return err
+			cfg.Token = token
+			if err := cfg.SaveToFile(); err != nil {
+				return fmt.Errorf("save config: %w", err)
 			}
-			content := fmt.Sprintf("server: %s\ntoken: %s\n", cfg.ServerURL, token)
-			if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-				return err
-			}
-			out.Line("✓ token stored in %s", path)
+			out.Line("✓ token stored in %s", cfg.ConfigFile)
 			return nil
 		},
 	}
@@ -536,35 +532,38 @@ func newAuthLoginCmd(cfg *Config) *cobra.Command {
 }
 
 func newAuthStatusCmd(cfg *Config) *cobra.Command {
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "status",
 		Short: "Show the active auth context",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			b, err := os.ReadFile(cfgPath())
-			if err != nil {
-				NewOutput(cfg.Output).Line("not logged in")
+			out := NewOutput(cfg.Output)
+			if cfg.Token == "" {
+				out.Line("not logged in")
 				return nil
 			}
-			fmt.Println(string(b))
+			out.Card("Auth Context", [][2]string{
+				{"server_url", cfg.ServerURL},
+				{"token", maskToken(cfg.Token)},
+				{"config_file", cfg.ConfigFile},
+			})
 			return nil
 		},
 	}
-	return cmd
 }
 
 func newAuthLogoutCmd(cfg *Config) *cobra.Command {
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "logout",
 		Short: "Remove the locally stored auth token",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := os.Remove(cfgPath()); err != nil && !os.IsNotExist(err) {
-				return err
+			cfg.Token = ""
+			if err := cfg.SaveToFile(); err != nil {
+				return fmt.Errorf("save config: %w", err)
 			}
 			NewOutput(cfg.Output).Line("✓ logged out")
 			return nil
 		},
 	}
-	return cmd
 }
 
 // cfgPath returns the auth config path. Honours HNSX_AUTH_FILE for tests.

@@ -1,0 +1,87 @@
+/* --------------------------------------------------------------------------
+ * HnsX 官网全局样式
+ * 继承控制台 Morandi 调色板与系统无衬线字体，保持品牌一致。
+ * -------------------------------------------------------------------------- */
+
+:root {
+  /* Morandi 主色 */
+  --chart-1: oklch(0.65 0.07 145);
+  --chart-2: oklch(0.66 0.07 20);
+  --chart-3: oklch(0.58 0.05 250);
+  --chart-4: oklch(0.74 0.09 75);
+  --chart-5: oklch(0.55 0.03 70);
+
+  --success: oklch(0.62 0.08 145);
+  --warning: oklch(0.76 0.10 78);
+  --danger: oklch(0.58 0.10 28);
+  --info: oklch(0.58 0.05 245);
+
+  --hnsx-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+html,
+body {
+  font-family: var(--hnsx-font);
+}
+
+/* 让首页 Hero 区域更舒展 */
+.rspress-home-hero {
+  padding-top: 6rem;
+  padding-bottom: 4rem;
+}
+
+.rspress-home-hero-name {
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.rspress-home-hero-tagline {
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
+
+/* 按钮品牌色 */
+.rspress-button-brand {
+  background-color: var(--chart-1);
+  border-color: var(--chart-1);
+}
+
+.rspress-button-brand:hover {
+  background-color: oklch(0.58 0.07 145);
+  border-color: oklch(0.58 0.07 145);
+}
+
+/* Feature 卡片 */
+.rspress-home-feature {
+  border-radius: 12px;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.rspress-home-feature:hover {
+  box-shadow: 0 8px 24px oklch(0.55 0.03 70 / 0.12);
+  transform: translateY(-2px);
+}
+
+.rspress-home-feature-title {
+  font-weight: 600;
+  color: var(--chart-3);
+}
+
+/* 顶部导航 */
+.rspress-nav {
+  backdrop-filter: blur(8px);
+}
+
+@media (max-width: 768px) {
+  .rspress-home-hero {
+    padding-top: 4rem;
+    padding-bottom: 2rem;
+  }
+
+  .rspress-home-hero-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}

@@ -142,6 +142,7 @@ type PolicySpec struct {
 	Permissions PermissionSpec  `json:"permissions,omitempty" yaml:"permissions,omitempty"`
 	Guardrails  []GuardrailSpec `json:"guardrails,omitempty" yaml:"guardrails,omitempty"`
 	Approval    ApprovalSpec    `json:"approval,omitempty" yaml:"approval,omitempty"`
+	Presets     []string        `json:"presets,omitempty" yaml:"presets,omitempty"`
 }
 
 // ApprovalSpec defines human-in-the-loop gates.

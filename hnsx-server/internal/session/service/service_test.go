@@ -6,15 +6,18 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/session/model"
 	"github.com/hnsx-io/hnsx/server/internal/session/repository"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
+
+var testTenant = tenant.DefaultID
 
 func TestService_CreateAndGet(t *testing.T) {
 	repo := repository.NewInMemoryRepository()
 	svc := NewService(repo)
 
-	sess, err := svc.Create(CreateParams{
+	sess, err := svc.Create(testTenant, CreateParams{
 		SessionID:     "s-1",
 		DomainID:      "d-1",
 		DomainVersion: "1.0.0",
@@ -31,7 +34,7 @@ func TestService_CreateAndGet(t *testing.T) {
 		t.Fatal("missing started_at")
 	}
 
-	got, err := svc.Get("s-1")
+	got, err := svc.Get(testTenant, "s-1")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -44,10 +47,10 @@ func TestService_CreateInvalid(t *testing.T) {
 	repo := repository.NewInMemoryRepository()
 	svc := NewService(repo)
 
-	if _, err := svc.Create(CreateParams{SessionID: "", DomainID: "d"}); err != model.ErrInvalidSession {
+	if _, err := svc.Create(testTenant, CreateParams{SessionID: "", DomainID: "d"}); err != model.ErrInvalidSession {
 		t.Fatalf("expected ErrInvalidSession, got %v", err)
 	}
-	if _, err := svc.Create(CreateParams{SessionID: "s", DomainID: ""}); err != model.ErrInvalidSession {
+	if _, err := svc.Create(testTenant, CreateParams{SessionID: "s", DomainID: ""}); err != model.ErrInvalidSession {
 		t.Fatalf("expected ErrInvalidSession, got %v", err)
 	}
 }
@@ -56,12 +59,12 @@ func TestService_MarkRunning(t *testing.T) {
 	repo := repository.NewInMemoryRepository()
 	svc := NewService(repo)
 
-	sess, _ := svc.Create(CreateParams{SessionID: "s", DomainID: "d", Orchestration: "single"})
+	sess, _ := svc.Create(testTenant, CreateParams{SessionID: "s", DomainID: "d", Orchestration: "single"})
 	if sess.State != model.StatePending {
 		t.Fatalf("initial state = %q", sess.State)
 	}
 
-	sess, err := svc.MarkRunning("s")
+	sess, err := svc.MarkRunning(testTenant, "s")
 	if err != nil {
 		t.Fatalf("mark running: %v", err)
 	}
@@ -70,7 +73,7 @@ func TestService_MarkRunning(t *testing.T) {
 	}
 
 	// Second call should fail: not pending anymore.
-	if _, err := svc.MarkRunning("s"); err != model.ErrInvalidSession {
+	if _, err := svc.MarkRunning(testTenant, "s"); err != model.ErrInvalidSession {
 		t.Fatalf("expected ErrInvalidSession, got %v", err)
 	}
 }
@@ -79,9 +82,9 @@ func TestService_MarkCompleted(t *testing.T) {
 	repo := repository.NewInMemoryRepository()
 	svc := NewService(repo)
 
-	_, _ = svc.Create(CreateParams{SessionID: "s", DomainID: "d", Orchestration: "single"})
+	_, _ = svc.Create(testTenant, CreateParams{SessionID: "s", DomainID: "d", Orchestration: "single"})
 	result := &runtime.Result{Mode: spec.Single}
-	sess, err := svc.MarkCompleted("s", result)
+	sess, err := svc.MarkCompleted(testTenant, "s", result)
 	if err != nil {
 		t.Fatalf("mark completed: %v", err)
 	}
@@ -100,8 +103,8 @@ func TestService_Cancel(t *testing.T) {
 	repo := repository.NewInMemoryRepository()
 	svc := NewService(repo)
 
-	_, _ = svc.Create(CreateParams{SessionID: "s", DomainID: "d", Orchestration: "single"})
-	sess, err := svc.Cancel("s")
+	_, _ = svc.Create(testTenant, CreateParams{SessionID: "s", DomainID: "d", Orchestration: "single"})
+	sess, err := svc.Cancel(testTenant, "s")
 	if err != nil {
 		t.Fatalf("cancel: %v", err)
 	}
@@ -110,7 +113,7 @@ func TestService_Cancel(t *testing.T) {
 	}
 
 	// Cancel again should fail.
-	if _, err := svc.Cancel("s"); err != model.ErrAlreadyTerminal {
+	if _, err := svc.Cancel(testTenant, "s"); err != model.ErrAlreadyTerminal {
 		t.Fatalf("expected ErrAlreadyTerminal, got %v", err)
 	}
 }
@@ -119,7 +122,7 @@ func TestService_Rerun(t *testing.T) {
 	repo := repository.NewInMemoryRepository()
 	svc := NewService(repo)
 
-	original, _ := svc.Create(CreateParams{
+	original, _ := svc.Create(testTenant, CreateParams{
 		SessionID:     "s",
 		DomainID:      "d",
 		DomainVersion: "1.0.0",
@@ -127,7 +130,7 @@ func TestService_Rerun(t *testing.T) {
 		Trigger:       map[string]any{"q": "hello"},
 	})
 
-	newSess, err := svc.Rerun(original)
+	newSess, err := svc.Rerun(testTenant, original)
 	if err != nil {
 		t.Fatalf("rerun: %v", err)
 	}
@@ -178,10 +181,10 @@ func TestRepository_ByDomain(t *testing.T) {
 		if id == "s3" {
 			domainID = "d2"
 		}
-		_ = repo.Save(&model.Session{ID: id, DomainID: domainID, State: model.StatePending})
+		_ = repo.Save(testTenant, &model.Session{ID: id, DomainID: domainID, State: model.StatePending})
 	}
 
-	list, err := repo.ByDomain("d1")
+	list, err := repo.ByDomain(testTenant, "d1")
 	if err != nil {
 		t.Fatalf("by domain: %v", err)
 	}

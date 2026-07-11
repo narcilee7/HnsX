@@ -28,7 +28,14 @@ type Executor interface {
 // a nil CostFunc contributes zero cost.
 type CostFunc func(sessionID string) float64
 
-const defaultConcurrency = 4
+// EvalRunner is the common surface implemented by the local Runner and the
+// worker-pool WorkerPoolRunner.
+type EvalRunner interface {
+	Run(ctx context.Context, run *evalmodel.EvalRun, set *evalmodel.EvalSet, domainSpec *spec.DomainSpec, budgetUSD float64) error
+}
+
+var _ EvalRunner = (*Runner)(nil)
+var _ EvalRunner = (*WorkerPoolRunner)(nil)
 
 // Runner executes eval sets.
 type Runner struct {
@@ -40,6 +47,8 @@ type Runner struct {
 
 // Option configures a Runner.
 type Option func(*Runner)
+
+const defaultConcurrency = 4
 
 // WithConcurrency bounds how many cases run in parallel (default 4).
 func WithConcurrency(n int) Option {

@@ -84,6 +84,10 @@ type Server struct {
 	// When nil the HTTP server exposes only the REST API.
 	ConnectHandler http.Handler
 
+	// TemplatesIndexPath is the path to the template market index YAML.
+	// When empty the template gallery endpoint returns an empty list.
+	TemplatesIndexPath string
+
 	shutdownOnce   sync.Once
 	httpServer     *http.Server
 	activeRequests sync.WaitGroup
@@ -101,21 +105,22 @@ type Domain = app.RegisteredDomain
 // The worker pool is wired automatically when the Application has one.
 func NewServer(build BuildInfo, application *app.Application) *Server {
 	return &Server{
-		App:             application,
-		BuildInfo:       build,
-		DB:              application.DB,
-		Executor:        application.Executor,
-		AppState:        application.State,
-		PolicyService:   application.PolicyService,
-		AuditService:    application.AuditService,
-		TraceService:    application.TraceService,
-		EvalService:     application.EvalService,
-		ApprovalService: application.ApprovalService,
-		SecretService:   application.SecretService,
-		WorkerService:   application.WorkerService,
-		DomainCommands:  commands.NewDomainCommands(application.DomainService),
-		SessionCommands: commands.NewSessionCommands(application.SessionService, application.DomainService, application.WorkerService, application.Executor, application.State),
-		Queries:         queries.NewQueries(application.DomainService, application.SessionService),
+		App:                application,
+		BuildInfo:          build,
+		DB:                 application.DB,
+		Executor:           application.Executor,
+		AppState:           application.State,
+		PolicyService:      application.PolicyService,
+		AuditService:       application.AuditService,
+		TraceService:       application.TraceService,
+		EvalService:        application.EvalService,
+		ApprovalService:    application.ApprovalService,
+		SecretService:      application.SecretService,
+		WorkerService:      application.WorkerService,
+		DomainCommands:     commands.NewDomainCommands(application.DomainService),
+		SessionCommands:    commands.NewSessionCommands(application.SessionService, application.DomainService, application.WorkerService, application.Executor, application.State),
+		Queries:            queries.NewQueries(application.DomainService, application.SessionService),
+		TemplatesIndexPath: "templates/index.yaml",
 	}
 }
 
@@ -215,7 +220,7 @@ func (s *Server) RegisterBootstrapDomain(tenantID tenant.ID, v *spec.DomainSpec)
 	if v == nil {
 		return
 	}
-	if _, err := s.App.DomainService.Register(v); err != nil {
+	if _, err := s.App.DomainService.Register(tenantID, v); err != nil {
 		return
 	}
 	_ = s.LoadDomainPolicy(tenant.NewContext(context.Background(), tenantID), v.ID)

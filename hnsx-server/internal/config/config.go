@@ -47,10 +47,18 @@ type Config struct {
 	// in memory after first load.
 	DomainCache bool `yaml:"domain_cache"`
 
+	// TemplatesIndexPath is the path to the template market index YAML.
+	// Defaults to "templates/index.yaml" relative to the server working
+	// directory. Empty disables the template endpoint.
+	TemplatesIndexPath string `yaml:"templates_index_path"`
+
 	// Redis is the optional Redis configuration. When present, the worker
 	// scheduling queue is backed by Redis so multiple Control Plane
 	// instances can share the same queue.
 	Redis RedisConfig `yaml:"redis"`
+
+	// Auth controls authentication and tenant mapping.
+	Auth AuthConfig `yaml:"auth"`
 }
 
 // RedisConfig selects a Redis server and queue key namespace.
@@ -81,6 +89,29 @@ type LogConfig struct {
 	Level string `yaml:"level"` // debug | info | warn | error
 }
 
+// AuthConfig controls authentication mode and tenant/role mapping.
+type AuthConfig struct {
+	// Mode is one of "none", "jwt", or "apikey". Defaults to "none".
+	Mode string `yaml:"mode"`
+	// JWTSecret is the HMAC secret used to verify JWT signatures.
+	JWTSecret string `yaml:"jwt_secret"`
+	// JWTIssuer is the expected iss claim. Empty means any issuer is accepted.
+	JWTIssuer string `yaml:"jwt_issuer"`
+	// JWTAudience is the expected aud claim. Empty means any audience is accepted.
+	JWTAudience string `yaml:"jwt_audience"`
+	// APIKeys maps API keys to tenant/role entries.
+	APIKeys map[string]APIKeyEntry `yaml:"api_keys"`
+	// DefaultRole is assigned in "none" mode when no identity is provided.
+	// Defaults to "operator".
+	DefaultRole string `yaml:"default_role"`
+}
+
+// APIKeyEntry describes the tenant and role associated with an API key.
+type APIKeyEntry struct {
+	TenantID string `yaml:"tenant_id"`
+	Role     string `yaml:"role"`
+}
+
 // Default returns a Config populated with reasonable defaults for local dev.
 func Default() *Config {
 	return &Config{
@@ -96,10 +127,15 @@ func Default() *Config {
 		Log: LogConfig{
 			Level: "info",
 		},
-		DomainCache: true,
+		DomainCache:        true,
+		TemplatesIndexPath: "templates/index.yaml",
 		Redis: RedisConfig{
 			Addr:           "127.0.0.1:6379",
 			QueueKeyPrefix: "hnsx:queue",
+		},
+		Auth: AuthConfig{
+			Mode:        "none",
+			DefaultRole: "operator",
 		},
 	}
 }
@@ -170,6 +206,24 @@ func applyEnv(cfg *Config) {
 	if v := os.Getenv("HNSX_REDIS_QUEUE_PREFIX"); v != "" {
 		cfg.Redis.QueueKeyPrefix = v
 	}
+	if v := os.Getenv("HNSX_TEMPLATES_INDEX"); v != "" {
+		cfg.TemplatesIndexPath = v
+	}
+	if v := os.Getenv("HNSX_AUTH_MODE"); v != "" {
+		cfg.Auth.Mode = v
+	}
+	if v := os.Getenv("HNSX_AUTH_JWT_SECRET"); v != "" {
+		cfg.Auth.JWTSecret = v
+	}
+	if v := os.Getenv("HNSX_AUTH_JWT_ISSUER"); v != "" {
+		cfg.Auth.JWTIssuer = v
+	}
+	if v := os.Getenv("HNSX_AUTH_JWT_AUDIENCE"); v != "" {
+		cfg.Auth.JWTAudience = v
+	}
+	if v := os.Getenv("HNSX_AUTH_DEFAULT_ROLE"); v != "" {
+		cfg.Auth.DefaultRole = v
+	}
 }
 
 // Validate enforces structural invariants.
@@ -200,6 +254,12 @@ func (c *Config) Validate() error {
 		if abs, err := filepath.Abs(c.MigrationsDir); err == nil {
 			c.MigrationsDir = abs
 		}
+	}
+	switch c.Auth.Mode {
+	case "none", "jwt", "apikey":
+		// ok
+	default:
+		return fmt.Errorf("config.auth.mode %q is invalid (allowed: none, jwt, apikey)", c.Auth.Mode)
 	}
 	return nil
 }

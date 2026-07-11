@@ -31,7 +31,6 @@ func newPowerCmd(cfg *Config) *cobra.Command {
 	cmd.AddCommand(newDomainDiffCmd(cfg))
 	cmd.AddCommand(newSessionReplayCmd(cfg))
 	cmd.AddCommand(newDebugBundleCmd(cfg))
-	cmd.AddCommand(newPluginCmd(cfg))
 	return cmd
 }
 
@@ -356,37 +355,6 @@ func execHTTPGet(url string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	return io.ReadAll(resp.Body)
-}
-
-// ---------------------------------------------------------------------------
-// hnsx plugin
-// ---------------------------------------------------------------------------
-
-// newPluginCmd is a stub for the v0.7 plugin surface. v1.0 wires a real
-// external-subcommand mechanism (similar to kubectl plugins).
-func newPluginCmd(cfg *Config) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "plugin",
-		Short: "Manage hnsx plugins (placeholder; real implementation lands in v1.0)",
-	}
-	cmd.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "List installed plugins",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			NewOutput(cfg.Output).Line("(no plugins installed; external-subcommand support lands in v1.0)")
-			return nil
-		},
-	})
-	cmd.AddCommand(&cobra.Command{
-		Use:   "install <url>",
-		Short: "Install a plugin from a URL",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			NewOutput(cfg.Output).Line("plugin install is a placeholder in v0.7; v1.0 wires real external-subcommand discovery")
-			return nil
-		},
-	})
-	return cmd
 }
 
 // mapKeysToJSON is a tiny helper used by debug bundle to serialise maps

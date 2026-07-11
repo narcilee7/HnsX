@@ -8,9 +8,11 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/client"
 )
 
-// newClient returns a client configured for cfg's server URL.
+// newClient returns a client configured for cfg's server URL and auth token.
 func newClient(cfg *Config) *client.Client {
-	return client.NewWithBaseURL(cfg.ServerURL)
+	c := client.NewWithBaseURL(cfg.ServerURL)
+	c.AuthToken = cfg.Token
+	return c
 }
 
 // parseSince converts --since flags ("5m", "1h", "2d") into a time.Time.
