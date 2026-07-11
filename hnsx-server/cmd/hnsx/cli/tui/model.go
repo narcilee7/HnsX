@@ -54,8 +54,8 @@ type Model struct {
 func NewModel(serverURL string) Model {
 	th := common.NewTheme()
 	ti := textinput.New()
-	ti.Prompt = ":"
-	ti.Placeholder = "command"
+	ti.Prompt = "/ "
+	ti.Placeholder = "session id, approve id, quit ..."
 	return Model{
 		serverURL: serverURL,
 		client:    common.NewClient(serverURL),
@@ -147,6 +147,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeTab = n - 1
 			return m, nil
 		}
+
+		// Unhandled keys are delegated to the active tab (e.g. j/k/up/down).
+		var cmd tea.Cmd
+		m.tabs[m.activeTab], cmd = m.tabs[m.activeTab].Update(msg)
+		return m, cmd
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
