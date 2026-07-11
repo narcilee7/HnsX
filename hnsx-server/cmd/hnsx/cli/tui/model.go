@@ -51,9 +51,9 @@ func NewModel(serverURL string) Model {
 		tabs: []tea.Model{
 			tabs.NewSessionsTab(serverURL),
 			tabs.NewTracesTab(serverURL),
+			tabs.NewApprovalsTab(serverURL),
+			tabs.NewEvalTab(serverURL),
 			// Placeholder tabs for later phases.
-			newPlaceholderTab("Approvals"),
-			newPlaceholderTab("Eval"),
 			newPlaceholderTab("Audit"),
 			newPlaceholderTab("Domains"),
 			newPlaceholderTab("Dashboard"),
