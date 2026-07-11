@@ -166,26 +166,5 @@ func openBrowser(url string) error {
 	return cmd.Start()
 }
 
-// newTuiCmd launches the TUI. v0.5 ships a placeholder that delegates to
-// the legacy `console` flow with a note; the bubbletea implementation lands
-// in a follow-up commit.
-func newTuiCmd(cfg *Config) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "tui",
-		Short: "Launch the terminal UI (TUI) — sessions / traces / approvals",
-		Long: `Starts an interactive terminal UI for monitoring sessions, traces,
-and pending approvals. v0.5 ships a thin placeholder; the full bubbletea
-implementation lands in a follow-up.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			out := NewOutput(cfg.Output)
-			out.Line("⚠ tui is a placeholder in v0.5 — try `hnsx console` for the GUI,")
-			out.Line("  `hnsx session tail <id>` for live SSE, and `hnsx session list`")
-			out.Line("  for tabular output. Full TUI lands in v0.5.x.")
-			return nil
-		},
-	}
-	return cmd
-}
-
 // newUpdateCmd was a placeholder; the real implementation lives in
 // update.go (v0.8). The constructor is registered by root.go.
