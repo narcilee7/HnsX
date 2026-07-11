@@ -141,12 +141,12 @@ Refs：`hnsx-console/src/pages/DomainDetailPage.tsx`、`hnsx-console/src/compone
 
 ### B1 — Domain Workspace 视图
 
-- [ ] **console** 新增页面 `/domains/:id/workspace`（`hnsx-console/src/pages/DomainWorkspacePage.tsx`）
-- [ ] **console** 根据 `trigger_schema` 自动生成输入表单（优先用 React Hook Form + Zod）
-- [ ] **console** 提供自然语言输入框 + 模板选择 + 历史记录列表
-- [ ] **console** 结果展示卡片：最终输出、执行步骤摘要、cost/耗时
-- [ ] **console** 侧边栏路由区分 "Workspace" / "Editor" / "Runs" / "Evals"
-- [ ] **server** 如需 `GET /domains/:id/schema`，补充 endpoint 暴露 trigger_schema 与输入提示
+- [x] **console** 新增页面 `/domains/:id/workspace`（`hnsx-console/src/pages/DomainWorkspacePage.tsx`）
+- [x] **console** 根据 `trigger_schema` 自动生成输入表单（优先用 React Hook Form + Zod）
+- [x] **console** 提供自然语言输入框 + 模板选择 + 历史记录列表
+- [x] **console** 结果展示卡片：最终输出、执行步骤摘要、cost/耗时
+- [x] **console** 侧边栏路由区分 "Workspace" / "Editor" / "Runs" / "Evals"
+- [x] **server** 如需 `GET /domains/:id/schema`，补充 endpoint 暴露 trigger_schema 与输入提示
 
 #### 验收
 

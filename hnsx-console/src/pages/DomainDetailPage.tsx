@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { DomainEditor, useDomainEditor } from '@/components/domain/DomainEditor'
 import { VersionsPanel } from '@/components/domain/VersionsPanel'
+import { DomainNav } from '@/components/domain/DomainNav'
 import {
   useDomainYaml,
   useUpdateDomainYaml,
@@ -133,6 +134,8 @@ export default function DomainDetailPage() {
           <Play className="mr-2 h-4 w-4" /> Run
         </Link>
       </PageHeader>
+
+      <DomainNav domainId={parsed.id} />
 
       <Tabs defaultValue="editor" className="w-full">
         <TabsList>

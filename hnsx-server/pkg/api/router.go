@@ -52,6 +52,7 @@ func newRouter(s *Server) *gin.Engine {
 				d.DELETE("", s.DeleteDomain)
 				d.GET("/versions", s.ListDomainVersions)
 				d.GET("/versions/:version", s.GetDomainVersion)
+				d.GET("/schema", s.GetDomainSchema)
 				d.POST("/validate", s.ValidateDomain)
 				d.POST("/run", s.TriggerDomain)
 				d.POST("/policies", s.BindPolicy)
