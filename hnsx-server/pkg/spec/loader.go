@@ -8,12 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 // LoadFile reads a DomainSpec v2 YAML/JSON document from disk and returns a
-// validated in-memory model.
+// validated in-memory model with policy presets expanded.
 func LoadFile(path string) (*DomainSpec, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -22,7 +23,8 @@ func LoadFile(path string) (*DomainSpec, error) {
 	return Parse(data)
 }
 
-// Parse decodes and validates DomainSpec v2 bytes.
+// Parse decodes and validates DomainSpec v2 bytes, expanding any policy
+// presets into concrete budget / permission / approval / guardrail values.
 func Parse(data []byte) (*DomainSpec, error) {
 	spec := new(DomainSpec)
 	if err := yaml.Unmarshal(data, spec); err != nil {
@@ -31,6 +33,7 @@ func Parse(data []byte) (*DomainSpec, error) {
 	if err := Validate(spec); err != nil {
 		return nil, err
 	}
+	spec.Harness.Policy = ExpandPresets(spec.Harness.Policy)
 	return spec, nil
 }
 
@@ -121,6 +124,14 @@ func Validate(spec *DomainSpec) error {
 		}
 		if len(s.Prompts) == 0 && len(s.Tools) == 0 && len(s.McpRefs) == 0 && len(s.Examples) == 0 {
 			return fmt.Errorf("skill %q: must have at least one of prompts/tools/mcp_refs/examples", id)
+		}
+	}
+
+	// Policy presets must be known.
+	for _, p := range spec.Harness.Policy.Presets {
+		if _, ok := PresetRegistry[PresetName(p)]; !ok {
+			known := strings.Join(KnownPresets(), ", ")
+			return fmt.Errorf("unknown policy preset %q (known: %s)", p, known)
 		}
 	}
 

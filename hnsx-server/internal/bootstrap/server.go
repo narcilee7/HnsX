@@ -69,6 +69,7 @@ func NewServerFromArgs(args []string) (*Server, error) {
 		GoVersion: stdruntime.Version(),
 	}
 	apiServer := api.NewServer(build, application)
+	apiServer.TemplatesIndexPath = cfg.TemplatesIndexPath
 
 	connectSrv := controlplane.NewConnectServer(application)
 	apiServer.WithConnectHandler(connectSrv.Handler())
@@ -118,7 +119,7 @@ func NewServerFromArgs(args []string) (*Server, error) {
 			}
 			grpcSrv.Sched.OnSessionStatus = func(tid tenant.ID, sessionID, state string) {
 				if application.SessionService != nil {
-					_, _ = application.SessionService.UpdateState(sessionID, sessionmodel.State(state))
+					_, _ = application.SessionService.UpdateState(tid, sessionID, sessionmodel.State(state))
 				}
 			}
 		}

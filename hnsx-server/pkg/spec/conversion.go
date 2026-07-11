@@ -461,6 +461,7 @@ func policyToProto(p *PolicySpec) (*pb.Policy, error) {
 				CostThresholdUsd: p.Approval.RequiredFor.CostThresholdUSD,
 			},
 		},
+		Presets: p.Presets,
 	}, nil
 }
 
@@ -505,6 +506,7 @@ func policyFromProto(p *pb.Policy) (*PolicySpec, error) {
 				CostThresholdUSD: p.GetApproval().GetRequiredFor().GetCostThresholdUsd(),
 			},
 		},
+		Presets: p.GetPresets(),
 	}
 	for _, g := range p.GetGuardrails() {
 		var cfg any

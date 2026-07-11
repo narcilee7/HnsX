@@ -1,10 +1,12 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/hnsx-io/hnsx/server/internal/auth"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 )
 
@@ -16,6 +18,7 @@ func newRouter(s *Server) *gin.Engine {
 	// Global middleware.
 	r.Use(gin.Recovery())
 	r.Use(corsMiddleware())
+	r.Use(authMiddleware(s))
 	r.Use(tenantMiddleware())
 	r.Use(metricsMiddleware())
 	r.Use(drainMiddleware(s))
@@ -86,8 +89,8 @@ func newRouter(s *Server) *gin.Engine {
 			ap := approvals.Group("/:id")
 			{
 				ap.GET("", s.GetApproval)
-				ap.POST("/approve", s.ApproveApproval)
-				ap.POST("/reject", s.RejectApproval)
+				ap.POST("/approve", requireRole(auth.RoleOperator, auth.RolePlatformAdmin), s.ApproveApproval)
+				ap.POST("/reject", requireRole(auth.RoleOperator, auth.RolePlatformAdmin), s.RejectApproval)
 			}
 		}
 
@@ -109,24 +112,25 @@ func newRouter(s *Server) *gin.Engine {
 		v1.GET("/audit", s.ListAudit)
 		v1.GET("/metrics", s.GetMetrics)
 		v1.GET("/runtimes", s.ListRuntimes)
+		v1.GET("/templates", s.ListTemplates)
 
 		secrets := v1.Group("/secrets")
 		{
 			secrets.GET("", s.ListSecrets)
-			secrets.POST("", s.CreateSecret)
+			secrets.POST("", requireRole(auth.RolePlatformAdmin, auth.RoleHarnessDesigner), s.CreateSecret)
 			sc := secrets.Group("/:id")
 			{
-				sc.PUT("", s.UpdateSecret)
-				sc.DELETE("", s.DeleteSecret)
+				sc.PUT("", requireRole(auth.RolePlatformAdmin, auth.RoleHarnessDesigner), s.UpdateSecret)
+				sc.DELETE("", requireRole(auth.RolePlatformAdmin, auth.RoleHarnessDesigner), s.DeleteSecret)
 			}
 		}
 
 		v1.GET("/policies", s.ListPolicies)
 		policies := v1.Group("/policies")
 		{
-			policies.POST("", s.CreatePolicy)
-			policies.PUT("/:id", s.UpdatePolicy)
-			policies.DELETE("/:id", s.DeletePolicy)
+			policies.POST("", requireRole(auth.RolePlatformAdmin, auth.RoleHarnessDesigner), s.CreatePolicy)
+			policies.PUT("/:id", requireRole(auth.RolePlatformAdmin, auth.RoleHarnessDesigner), s.UpdatePolicy)
+			policies.DELETE("/:id", requireRole(auth.RolePlatformAdmin, auth.RoleHarnessDesigner), s.DeletePolicy)
 		}
 	}
 
@@ -146,9 +150,62 @@ func corsMiddleware() gin.HandlerFunc {
 	}
 }
 
+// authMiddleware enforces authentication and maps the caller to a tenant/role.
+// In "none" mode it still sets the default identity so downstream code always
+// sees a valid tenant and role.
+func authMiddleware(s *Server) gin.HandlerFunc {
+	authenticator, err := auth.NewAuthenticator(&s.App.Config.Auth)
+	return func(c *gin.Context) {
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, APIError{
+				Code:    "AUTH_NOT_CONFIGURED",
+				Message: err.Error(),
+			})
+			return
+		}
+
+		identity, aerr := authenticator.Authenticate(c.Request)
+		if aerr != nil {
+			code := "UNAUTHORIZED"
+			status := http.StatusUnauthorized
+			if errors.Is(aerr, auth.ErrForbidden) {
+				code = "FORBIDDEN"
+				status = http.StatusForbidden
+			}
+			c.AbortWithStatusJSON(status, APIError{Code: code, Message: aerr.Error()})
+			return
+		}
+
+		c.Set(authContextKey, identity)
+		c.Request = c.Request.WithContext(auth.NewContext(c.Request.Context(), identity))
+		c.Next()
+	}
+}
+
+// requireRole returns a middleware that aborts with 403 unless the caller has
+// one of the supplied roles.
+func requireRole(roles ...auth.Role) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !auth.HasRole(c.Request.Context(), roles...) {
+			c.AbortWithStatusJSON(http.StatusForbidden, APIError{
+				Code:    "FORBIDDEN",
+				Message: "insufficient permissions",
+			})
+			return
+		}
+		c.Next()
+	}
+}
+
 func tenantMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := tenant.ID(c.GetHeader(tenant.HeaderName))
+		var id tenant.ID
+		if identity := auth.FromContext(c.Request.Context()); identity != nil {
+			id = identity.TenantID
+		}
+		if id == "" {
+			id = tenant.ID(c.GetHeader(tenant.HeaderName))
+		}
 		if id == "" {
 			id = tenant.DefaultID
 		}
@@ -167,6 +224,7 @@ func tenantFromGin(c *gin.Context) tenant.ID {
 }
 
 const tenantContextKey = "hnsx-tenant-id"
+const authContextKey = "hnsx-auth-identity"
 
 func metricsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {

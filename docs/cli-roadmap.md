@@ -276,7 +276,7 @@ hnsx plugin  list | install      # 插件预留（v1.0）
 **主题**：让产品能装、能升级、能让 CI 信任。
 
 **新增**：
-- Release artifacts：`brew tap hnsx-io/hnsx`、`curl -sSL hnsx.dev/install.sh | sh`、Docker image、Debian/RPM、npm sidecar
+- Release artifacts：`brew tap narcilee7/hnsx`、`curl -sSL hnsx.dev/install.sh | sh`、Docker image、Debian/RPM、npm sidecar
 - SBOM + cosign 签名
 - 升级检测：`hnsx update --check`
 - 文档站：`docs.hnsx.dev/cli/` 自动生成（cobra-doc）

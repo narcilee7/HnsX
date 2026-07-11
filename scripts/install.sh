@@ -1,28 +1,27 @@
 #!/usr/bin/env bash
-# scripts/install.sh — installer scaffold for HnsX CLI.
+# scripts/install.sh — canonical installer for the HnsX CLI.
 #
-# v0.8 ships this script as the canonical `curl -sSL hnsx.dev/install.sh | sh`
-# entrypoint. It is intentionally conservative:
-#   - resolves the latest release tag via the GitHub API
-#   - picks the matching asset for the host OS/arch
-#   - downloads to a temp file, verifies it is executable, and renames it
-#     into $HOME/.local/bin/hnsx (creating the dir if needed)
-#   - prints next-step guidance (add to PATH if needed)
+# Resolves the latest release tag via the GitHub API, picks the matching asset
+# for the host OS/arch, downloads it to a temp file, verifies the SHA-256
+# checksum against the release's checksums.txt, extracts the binaries, and
+# installs them into $HOME/.local/bin (or $HNSX_INSTALL_DIR).
 #
-# Production hardening (checksums, cosign verification, system paths) lives
-# in the release pipeline; this file is the canonical in-repo copy that the
-# website links to.
+# Usage:
+#   curl -sSL hnsx.dev/install.sh | sh
+#   HNSX_INSTALL_DIR=/usr/local/bin ./scripts/install.sh
 
 set -euo pipefail
 
-REPO="hnsx-io/hnsx"
+REPO="narcilee7/HnsX"
 BIN_NAME="hnsx"
+SERVER_BIN_NAME="hnsx-server"
 INSTALL_DIR="${HNSX_INSTALL_DIR:-$HOME/.local/bin}"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "✗ missing: $1" >&2; exit 1; }; }
 
 need curl
 need tar
+need shasum
 
 # Detect OS/arch.
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -48,18 +47,43 @@ echo "→ latest tag: $tag"
 
 asset="hnsx_${OS}_${ARCH}.tar.gz"
 url="https://github.com/$REPO/releases/download/$tag/$asset"
+checksums_url="https://github.com/$REPO/releases/download/$tag/checksums.txt"
 echo "→ downloading $url"
 
 tmpdir="$(mktemp -d -t hnsx-install.XXXXXX)"
 trap 'rm -rf "$tmpdir"' EXIT
 curl -fsSL "$url" -o "$tmpdir/$asset"
+
+echo "→ verifying checksum ..."
+curl -fsSL "$checksums_url" -o "$tmpdir/checksums.txt"
+cd "$tmpdir"
+expected="$(grep -E "^([0-9a-f]+)  ${asset}$" checksums.txt | awk '{print $1}')"
+if [[ -z "$expected" ]]; then
+  echo "✗ could not find checksum for $asset" >&2
+  exit 1
+fi
+actual="$(shasum -a 256 "$asset" | awk '{print $1}')"
+if [[ "$expected" != "$actual" ]]; then
+  echo "✗ checksum mismatch for $asset" >&2
+  echo "  expected: $expected" >&2
+  echo "  actual:   $actual" >&2
+  exit 1
+fi
+echo "✓ checksum verified"
+
 tar -xzf "$tmpdir/$asset" -C "$tmpdir"
 
 mkdir -p "$INSTALL_DIR"
-mv "$tmpdir/$BIN_NAME" "$INSTALL_DIR/$BIN_NAME"
-chmod +x "$INSTALL_DIR/$BIN_NAME"
-
-echo "✓ installed $BIN_NAME to $INSTALL_DIR/$BIN_NAME"
+for bin in "$BIN_NAME" "$SERVER_BIN_NAME"; do
+  src="$tmpdir/$bin"
+  if [[ ! -f "$src" ]]; then
+    echo "✗ missing binary in archive: $bin" >&2
+    exit 1
+  fi
+  mv "$src" "$INSTALL_DIR/$bin"
+  chmod +x "$INSTALL_DIR/$bin"
+  echo "✓ installed $bin to $INSTALL_DIR/$bin"
+done
 
 # PATH hint.
 case ":$PATH:" in
@@ -69,3 +93,4 @@ case ":$PATH:" in
 esac
 
 echo "→ try: $BIN_NAME --help"
+echo "→ try: $BIN_NAME try customer-service"

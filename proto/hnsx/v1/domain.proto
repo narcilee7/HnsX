@@ -117,6 +117,7 @@ message Policy {
   Permission permissions = 2;
   repeated Guardrail guardrails = 3;
   Approval approval = 4;
+  repeated string presets = 5;
 }
 
 // Budget defines cost and turn limits.

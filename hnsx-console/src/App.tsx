@@ -18,6 +18,9 @@ import AuditPage from "@/pages/AuditPage";
 import ApprovalsPage from "@/pages/ApprovalsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import PlaygroundPage from "@/pages/PlaygroundPage";
+import GalleryPage from "@/pages/GalleryPage";
+
+import LoginPage from '@/pages/LoginPage'
 
 function App() {
   return (
@@ -25,6 +28,7 @@ function App() {
       <ToastProvider />
       <AppShell>
         <Routes>
+          <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<DashboardPage />} />
           <Route path="/domains" element={<DomainsPage />} />
           <Route path="/domains/:id/workspace" element={<DomainWorkspacePage />} />
@@ -42,6 +46,7 @@ function App() {
           <Route path="/approvals" element={<ApprovalsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/playground" element={<PlaygroundPage />} />
+          <Route path="/gallery" element={<GalleryPage />} />
         </Routes>
       </AppShell>
     </>

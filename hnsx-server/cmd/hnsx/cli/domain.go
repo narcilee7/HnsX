@@ -108,7 +108,26 @@ func newDomainShowCmd(cfg *Config) *cobra.Command {
 				return err
 			}
 			o := NewOutput(cfg.Output)
-			o.Print(d)
+			if cfg.Output == "json" {
+				o.Print(d)
+				return nil
+			}
+			if cfg.Output == "quiet" {
+				fmt.Println(d.ID)
+				return nil
+			}
+			o.Card("Domain", [][2]string{
+				{"id", d.ID},
+				{"version", nonEmpty(d.Version, "-")},
+				{"status", nonEmpty(d.Status, "-")},
+				{"description", nonEmpty(d.Description, "-")},
+				{"created", nonEmpty(d.CreatedAt, "-")},
+				{"updated", nonEmpty(d.UpdatedAt, "-")},
+			})
+			if len(d.Harness) > 0 {
+				o.Section("Harness")
+				o.Print(d.Harness)
+			}
 			return nil
 		},
 	}
@@ -166,7 +185,7 @@ func newDomainDeleteCmd(cfg *Config) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			resp, err := httpDo(req)
+			resp, err := doAuthorized(cfg, req)
 			if err != nil {
 				return err
 			}

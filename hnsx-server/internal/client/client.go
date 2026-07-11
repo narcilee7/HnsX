@@ -97,6 +97,7 @@ type Event struct {
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
+	AuthToken  string
 
 	domainClient    v1connect.DomainRegistryServiceClient
 	sessionClient   v1connect.SessionSchedulerServiceClient
@@ -111,20 +112,36 @@ func New() *Client {
 	if base == "" {
 		base = DefaultBaseURL
 	}
-	return NewWithBaseURL(base)
+	c := NewWithBaseURL(base)
+	if token := os.Getenv("HNSX_TOKEN"); token != "" {
+		c.AuthToken = token
+	}
+	return c
 }
 
 // NewWithBaseURL constructs a Client for an explicit server URL.
 func NewWithBaseURL(baseURL string) *Client {
 	httpClient := &http.Client{Timeout: 30 * time.Second}
-	return &Client{
-		BaseURL:         baseURL,
-		HTTPClient:      httpClient,
-		domainClient:    v1connect.NewDomainRegistryServiceClient(httpClient, baseURL, connect.WithHTTPGet()),
-		sessionClient:   v1connect.NewSessionSchedulerServiceClient(httpClient, baseURL, connect.WithHTTPGet()),
-		evalClient:      v1connect.NewEvalServiceClient(httpClient, baseURL, connect.WithHTTPGet()),
-		runtimeClient:   v1connect.NewRuntimeDiscoveryServiceClient(httpClient, baseURL, connect.WithHTTPGet()),
-		telemetryClient: v1connect.NewTelemetryServiceClient(httpClient, baseURL, connect.WithHTTPGet()),
+	c := &Client{BaseURL: baseURL, HTTPClient: httpClient}
+	auth := newAuthInterceptor(c)
+	c.domainClient = v1connect.NewDomainRegistryServiceClient(httpClient, baseURL, connect.WithHTTPGet(), connect.WithInterceptors(auth))
+	c.sessionClient = v1connect.NewSessionSchedulerServiceClient(httpClient, baseURL, connect.WithHTTPGet(), connect.WithInterceptors(auth))
+	c.evalClient = v1connect.NewEvalServiceClient(httpClient, baseURL, connect.WithHTTPGet(), connect.WithInterceptors(auth))
+	c.runtimeClient = v1connect.NewRuntimeDiscoveryServiceClient(httpClient, baseURL, connect.WithHTTPGet(), connect.WithInterceptors(auth))
+	c.telemetryClient = v1connect.NewTelemetryServiceClient(httpClient, baseURL, connect.WithHTTPGet(), connect.WithInterceptors(auth))
+	return c
+}
+
+// newAuthInterceptor returns a Connect interceptor that attaches the current
+// client's bearer token to every outgoing request.
+func newAuthInterceptor(c *Client) connect.UnaryInterceptorFunc {
+	return func(next connect.UnaryFunc) connect.UnaryFunc {
+		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			if c.AuthToken != "" {
+				req.Header().Set("Authorization", "Bearer "+c.AuthToken)
+			}
+			return next(ctx, req)
+		}
 	}
 }
 
@@ -345,7 +362,12 @@ func (c *Client) SessionSchedulerClient() v1connect.SessionSchedulerServiceClien
 func (c *Client) EvalClient() v1connect.EvalServiceClient { return c.evalClient }
 
 func (c *Client) get(path string) (*http.Response, error) {
-	return c.HTTPClient.Get(c.BaseURL + path)
+	req, err := http.NewRequest(http.MethodGet, c.BaseURL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setAuthHeader(req)
+	return c.HTTPClient.Do(req)
 }
 
 func (c *Client) post(path string, body io.Reader, contentType string) (*http.Response, error) {
@@ -356,7 +378,14 @@ func (c *Client) post(path string, body io.Reader, contentType string) (*http.Re
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
+	c.setAuthHeader(req)
 	return c.HTTPClient.Do(req)
+}
+
+func (c *Client) setAuthHeader(req *http.Request) {
+	if c.AuthToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.AuthToken)
+	}
 }
 
 func checkStatus(resp *http.Response) error {

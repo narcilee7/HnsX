@@ -15,7 +15,7 @@ import (
 //go:embed templates/*.yaml
 var templatesFS embed.FS
 
-// newInitCmd generates a new DomainSpec from a built-in template.
+// newInitCmd generates a new DomainSpec from a template.
 func newInitCmd(cfg *Config) *cobra.Command {
 	var (
 		templateName string
@@ -26,13 +26,15 @@ func newInitCmd(cfg *Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init [flags] [domain-id]",
 		Short: "Generate a new DomainSpec from a template",
-		Long: `Generate a new domain.yaml from a built-in template.
+		Long: `Generate a new domain.yaml from a built-in template or the template index.
 
-Available templates:
+Available built-in templates:
   blank              minimal single-agent domain
   customer-service   triage + billing workflow
   code-review        PR reviewer with self_check
   research-assistant ReAct agent with http tool
+
+The template index (templates/index.yaml) can also be referenced by id.
 
 Examples:
   hnsx init
@@ -49,17 +51,26 @@ Examples:
 				"domain_id":    domainID,
 				"company_name": "Acme",
 			}
+
+			data, source, err := loadTemplate(cfg, templateName)
+			if err != nil {
+				return err
+			}
+
+			// Apply defaults from the template index, then user overrides.
+			if entry := findTemplateEntry(cfg, templateName); entry != nil {
+				for _, v := range entry.Variables {
+					if v.Name != "" {
+						vars[v.Name] = v.Default
+					}
+				}
+			}
 			for _, s := range setVars {
 				k, v, ok := strings.Cut(s, "=")
 				if !ok {
 					return fmt.Errorf("--set must be key=value: %q", s)
 				}
 				vars[k] = v
-			}
-
-			data, err := templatesFS.ReadFile("templates/" + templateName + ".yaml")
-			if err != nil {
-				return fmt.Errorf("unknown template %q (available: blank, customer-service, code-review, research-assistant)", templateName)
 			}
 
 			rendered := renderTemplateVars(string(data), vars)
@@ -81,20 +92,51 @@ Examples:
 				o.Print(map[string]string{
 					"path":     outPath,
 					"template": templateName,
+					"source":   source,
 					"domain":   domainID,
 				})
 				return nil
 			}
-			o.Line("✓ created %s from template %q", outPath, templateName)
+			o.Line("✓ created %s from template %q (%s)", outPath, templateName, source)
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&templateName, "template", "blank", "template to use (blank, customer-service, code-review, research-assistant)")
+	cmd.Flags().StringVar(&templateName, "template", "blank", "template to use (built-in or index id)")
 	cmd.Flags().StringVar(&outputDir, "output-dir", ".", "directory to write domain.yaml")
 	cmd.Flags().StringArrayVar(&setVars, "set", nil, "set template variables (key=value); can be repeated")
 
 	return cmd
+}
+
+// loadTemplate returns template bytes and a source label. It first tries the
+// embedded built-ins, then the template index, then gives up.
+func loadTemplate(cfg *Config, name string) ([]byte, string, error) {
+	if data, err := templatesFS.ReadFile("templates/" + name + ".yaml"); err == nil {
+		return data, "built-in", nil
+	}
+	if entry := findTemplateEntry(cfg, name); entry != nil {
+		path := filepath.Join(cfg.RepoRoot, entry.Source)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, "", fmt.Errorf("read indexed template %q from %s: %w", name, path, err)
+		}
+		return data, "index", nil
+	}
+	return nil, "", fmt.Errorf("unknown template %q (run `hnsx examples` to list)", name)
+}
+
+func findTemplateEntry(cfg *Config, name string) *TemplateEntry {
+	idx, err := loadTemplateIndex(cfg)
+	if err != nil {
+		return nil
+	}
+	for i := range idx.Templates {
+		if idx.Templates[i].ID == name {
+			return &idx.Templates[i]
+		}
+	}
+	return nil
 }
 
 func renderTemplateVars(tmpl string, vars map[string]string) string {

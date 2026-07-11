@@ -11,6 +11,7 @@ import {
   Shield,
   Menu,
   FlaskConical,
+  LayoutTemplate,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -26,6 +27,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 const navItems = [
   { label: 'Dashboard', href: '/', icon: LayoutDashboard },
   { label: 'Domains', href: '/domains', icon: Globe },
+  { label: 'Gallery', href: '/gallery', icon: LayoutTemplate },
   { label: 'Sessions', href: '/sessions', icon: PlayCircle },
   { label: 'Traces', href: '/traces', icon: Search },
   { label: 'Evals', href: '/evals', icon: CheckSquare },
