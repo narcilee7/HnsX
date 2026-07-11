@@ -368,7 +368,7 @@ func postApproval(cfg *Config, sessionID, action string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doAuthorized(cfg, req)
 	if err != nil {
 		return err
 	}

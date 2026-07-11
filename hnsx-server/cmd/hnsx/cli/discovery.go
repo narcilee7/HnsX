@@ -328,7 +328,7 @@ func postFile(cfg *Config, path string, body *os.File) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-yaml")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doAuthorized(cfg, req)
 	if err != nil {
 		return err
 	}
@@ -346,7 +346,7 @@ func putFile(cfg *Config, path string, body *os.File) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-yaml")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doAuthorized(cfg, req)
 	if err != nil {
 		return err
 	}
@@ -384,7 +384,7 @@ func registerOrUpdate(cfg *Config, name, path string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-yaml")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doAuthorized(cfg, req)
 	if err != nil {
 		return err
 	}
@@ -412,7 +412,7 @@ func postJSON(cfg *Config, path string, body []byte) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doAuthorized(cfg, req)
 	if err != nil {
 		return nil, err
 	}
@@ -447,7 +447,7 @@ func tailEvents(cfg *Config, sessionID string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doAuthorized(cfg, req)
 	if err != nil {
 		return err
 	}

@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/hnsx-io/hnsx/server/internal/session/model"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 )
 
 // Repository is the persistence contract for Session aggregates.
@@ -14,22 +15,20 @@ import (
 //   - InMemoryRepository (tests / no-db mode)
 //   - PostgresRepository (production, table `sessions`)
 type Repository interface {
-	// Save persists a session. If a session with the same ID already exists it
-	// is overwritten (upsert semantics).
-	Save(s *model.Session) error
+	// Save persists a session scoped to a tenant.
+	Save(tenantID tenant.ID, s *model.Session) error
 
-	// ByID returns the session with the given ID, or ErrSessionNotFound.
-	ByID(id string) (*model.Session, error)
+	// ByID returns the session with the given ID scoped to a tenant, or ErrSessionNotFound.
+	ByID(tenantID tenant.ID, id string) (*model.Session, error)
 
-	// All returns every registered session. The order is undefined.
-	All() ([]*model.Session, error)
+	// All returns every session for a tenant.
+	All(tenantID tenant.ID) ([]*model.Session, error)
 
-	// ByDomain returns every session for a given domain ID.
-	ByDomain(domainID string) ([]*model.Session, error)
+	// ByDomain returns every session for a given domain ID scoped to a tenant.
+	ByDomain(tenantID tenant.ID, domainID string) ([]*model.Session, error)
 
-	// Delete removes a session by ID. Deleting a non-existent session is a
-	// no-op and returns nil.
-	Delete(id string) error
+	// Delete removes a session by ID scoped to a tenant.
+	Delete(tenantID tenant.ID, id string) error
 }
 
 // InMemoryRepository is a thread-safe in-memory implementation of Repository.
@@ -45,7 +44,8 @@ func NewInMemoryRepository() *InMemoryRepository {
 }
 
 // Save implements Repository.
-func (r *InMemoryRepository) Save(s *model.Session) error {
+func (r *InMemoryRepository) Save(tenantID tenant.ID, s *model.Session) error {
+	_ = tenantID
 	if s == nil || s.ID == "" {
 		return model.ErrInvalidSession
 	}
@@ -56,7 +56,8 @@ func (r *InMemoryRepository) Save(s *model.Session) error {
 }
 
 // ByID implements Repository.
-func (r *InMemoryRepository) ByID(id string) (*model.Session, error) {
+func (r *InMemoryRepository) ByID(tenantID tenant.ID, id string) (*model.Session, error) {
+	_ = tenantID
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	s, ok := r.sessions[id]
@@ -67,7 +68,8 @@ func (r *InMemoryRepository) ByID(id string) (*model.Session, error) {
 }
 
 // All implements Repository.
-func (r *InMemoryRepository) All() ([]*model.Session, error) {
+func (r *InMemoryRepository) All(tenantID tenant.ID) ([]*model.Session, error) {
+	_ = tenantID
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]*model.Session, 0, len(r.sessions))
@@ -78,7 +80,8 @@ func (r *InMemoryRepository) All() ([]*model.Session, error) {
 }
 
 // ByDomain implements Repository.
-func (r *InMemoryRepository) ByDomain(domainID string) ([]*model.Session, error) {
+func (r *InMemoryRepository) ByDomain(tenantID tenant.ID, domainID string) ([]*model.Session, error) {
+	_ = tenantID
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]*model.Session, 0)
@@ -91,7 +94,8 @@ func (r *InMemoryRepository) ByDomain(domainID string) ([]*model.Session, error)
 }
 
 // Delete implements Repository.
-func (r *InMemoryRepository) Delete(id string) error {
+func (r *InMemoryRepository) Delete(tenantID tenant.ID, id string) error {
+	_ = tenantID
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.sessions, id)

@@ -119,7 +119,7 @@ func NewServerFromArgs(args []string) (*Server, error) {
 			}
 			grpcSrv.Sched.OnSessionStatus = func(tid tenant.ID, sessionID, state string) {
 				if application.SessionService != nil {
-					_, _ = application.SessionService.UpdateState(sessionID, sessionmodel.State(state))
+					_, _ = application.SessionService.UpdateState(tid, sessionID, sessionmodel.State(state))
 				}
 			}
 		}
