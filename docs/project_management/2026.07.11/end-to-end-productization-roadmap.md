@@ -344,7 +344,7 @@ Refs：`hnsx-server/internal/evaluation/runner/runner.go`、`hnsx-server/pkg/con
 curl -sSL hnsx.dev/install.sh | sh
 hnsx version          # 1.0.0
 hnsx try customer-service
-brew install hnsx-io/hnsx/hnsx
+brew install narcilee7/hnsx/hnsx
 ```
 
 Refs：`hnsx-server/cmd/hnsx/cli/power.go`、`packaging/homebrew/hnsx.rb`、`scripts/install.sh`、`.github/workflows/`

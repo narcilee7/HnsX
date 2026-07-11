@@ -54,7 +54,7 @@ HnsX 不自己造 Agent，而是把最好的 Agent 接入企业场景，用 YAML
 ```bash
 # 0. 装好 hnsx（任选其一）
 curl -sSL hnsx.dev/install.sh | sh      # 推荐：自动下载并校验 checksum
-brew install hnsx-io/hnsx/hnsx          # macOS
+brew install narcilee7/hnsx/hnsx          # macOS
 make build-cli                           # 源码内构建
 
 # 1. 启动本地全栈（Postgres + Server + Worker，可选 Tempo + Grafana）
