@@ -8,9 +8,9 @@ package service
 import (
 	"time"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
 	"github.com/hnsx-io/hnsx/server/internal/domain/repository"
+	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
 
 // Service implements the domain application use cases.
@@ -85,6 +85,16 @@ func (s *Service) Update(id string, ds *spec.DomainSpec) (*model.RegisteredDomai
 // Get returns a single domain by ID.
 func (s *Service) Get(id string) (*model.RegisteredDomain, error) {
 	return s.repo.ByID(id)
+}
+
+// ListVersions returns every stored version for a domain, newest first.
+func (s *Service) ListVersions(id string) ([]repository.VersionRecord, error) {
+	return s.repo.ListVersions(id)
+}
+
+// GetVersion returns the spec for a specific domain version.
+func (s *Service) GetVersion(id, version string) (*spec.DomainSpec, error) {
+	return s.repo.GetVersion(id, version)
 }
 
 // List returns every registered domain.

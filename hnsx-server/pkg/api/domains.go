@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/gin-gonic/gin"
+	"gopkg.in/yaml.v3"
 
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
@@ -53,6 +54,25 @@ func (s *Server) GetDomain(c *gin.Context) {
 		"created_at":  queries.FormatTimeValue(item.CreatedAt),
 		"updated_at":  queries.FormatTimeValue(item.UpdatedAt),
 	})
+}
+
+// GetDomainYAML handles GET /api/v1/domains/:id/yaml.
+// Returns the canonical YAML representation of the registered domain spec.
+// This is used by the console editor to avoid the protobuf/JSON shape mismatch.
+func (s *Server) GetDomainYAML(c *gin.Context) {
+	id := c.Param("id")
+	_, d, ok := s.Queries.GetDomain(tenantFromGin(c), id)
+	if !ok {
+		writeError(c, NewDomainNotFound(id))
+		return
+	}
+	body, err := yaml.Marshal(d.Spec)
+	if err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+	c.Header("Content-Type", "application/yaml")
+	c.String(http.StatusOK, string(body))
 }
 
 // RegisterDomain handles POST /api/v1/domains.
@@ -122,18 +142,50 @@ func (s *Server) DeleteDomain(c *gin.Context) {
 // ListDomainVersions handles GET /api/v1/domains/:id/versions.
 func (s *Server) ListDomainVersions(c *gin.Context) {
 	id := c.Param("id")
-	_, d, ok := s.Queries.GetDomain(tenantFromGin(c), id)
+	item, _, ok := s.Queries.GetDomain(tenantFromGin(c), id)
+	if !ok {
+		writeError(c, NewDomainNotFound(id))
+		return
+	}
+	versions, ok := s.Queries.ListDomainVersions(tenantFromGin(c), id)
+	if !ok {
+		writeError(c, NewDomainNotFound(id))
+		return
+	}
+
+	out := make([]map[string]any, 0, len(versions))
+	for _, v := range versions {
+		out = append(out, map[string]any{
+			"version":    v.Version,
+			"created_at": queries.FormatTimeValue(v.CreatedAt),
+			"is_current": v.Version == item.Version,
+		})
+	}
+	writeJSON(c, http.StatusOK, map[string]any{
+		"items":  out,
+		"total":  len(out),
+		"limit":  len(out),
+		"offset": 0,
+	})
+}
+
+// GetDomainVersion handles GET /api/v1/domains/:id/versions/:version.
+func (s *Server) GetDomainVersion(c *gin.Context) {
+	id := c.Param("id")
+	version := c.Param("version")
+	d, ok := s.Queries.GetDomainVersion(tenantFromGin(c), id, version)
 	if !ok {
 		writeError(c, NewDomainNotFound(id))
 		return
 	}
 	writeJSON(c, http.StatusOK, map[string]any{
-		"items": []map[string]any{{
-			"version":    d.Version,
-			"created_at": d.CreatedAt,
-			"is_current": true,
-		}},
-		"total": 1,
+		"id":          d.ID,
+		"version":     d.Version,
+		"description": d.Description,
+		"harness":     d.Harness,
+		"status":      "active",
+		"created_at":  d.CreatedAt,
+		"updated_at":  d.UpdatedAt,
 	})
 }
 
