@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content="Rspress v1.47.1">
+    <meta property="og:title"content="HnsX — Harness as a Service"><meta property="og:description"content="HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI 等最强 Agent。"><meta property="og:type"content="website"><meta property="og:image"content="https://narcilee7.github.io/HnsX/og-image.png"><meta name="twitter:card"content="summary_large_image"><title data-rh="true">HnsX — Harness as a Service</title><meta data-rh="true" name="description" content="HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI 等最强 Agent。"/>
+  <script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const isDark = !saved || saved === 'auto' ? preferDark : saved === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script><link rel="icon" href="/HnsX/favicon.png"><script defer src="/HnsX/static/js/styles.ae5ec2d0.js"></script><script defer src="/HnsX/static/js/lib-react.0aff66c0.js"></script><script defer src="/HnsX/static/js/lib-router.0d65c259.js"></script><script defer src="/HnsX/static/js/641.c64fbc03.js"></script><script defer src="/HnsX/static/js/index.7e3760f1.js"></script><link href="/HnsX/static/css/styles.f27a1667.css" rel="stylesheet"></head>
+
+  <body >
+    <div id="root"><div class="navContainer_d18b1 rspress-nav px-6  sticky_ddfa7"><div class="container_e4235 flex justify-between items-center h-full"><div class="navBarTitle_c5f07"><a href="/HnsX/index" class="link_a7cea flex items-center w-full h-full text-base font-semibold transition-opacity duration-300 hover:opacity-60"><span>HnsX — Harness as a Service</span></a></div><div class="flex flex-1 justify-end items-center"><div class="leftNav_e6722"><div class="rspress-nav-menu menu h-14"><a href="/HnsX/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154 activeItem_a28b5 text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">首页</div></a><a href="/HnsX/blog/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">博客</div></a><a href="/HnsX/guide/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">指南</div></a><a href="/HnsX/design/vision" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">文档</div></a><a href="/HnsX/design/server-design/api-design" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">API</div></a></div></div><div class="rightNav_a2fea"><div class="flex sm:flex-1 items-center sm:pl-4 sm:pr-2"><div class="rspress-nav-search-button navSearchButton_df1fb"><button><svg width="18" height="18" viewBox="0 0 32 32"><path fill="var(--rp-c-gray)" d="m29 27.586-7.552-7.552a11.018 11.018 0 1 0-1.414 1.414L27.586 29ZM4 13a9 9 0 1 1 9 9 9.01 9.01 0 0 1-9-9"></path></svg><p class="searchWord_af2c1">Search</p><div style="opacity:0"><span></span><span>K</span></div></button></div><div class="mobileNavSearchButton_d85a9"><svg width="24" height="24" viewBox="0 0 32 32"><path fill="var(--rp-c-gray)" d="m29 27.586-7.552-7.552a11.018 11.018 0 1 0-1.414 1.414L27.586 29ZM4 13a9 9 0 1 1 9 9 9.01 9.01 0 0 1-9-9"></path></svg></div></div><div class="rspress-nav-menu menu h-14"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">GitHub</div></a></div><div class="flex-center flex-row"><div class="mx-2"><div class="md:mr-2 rspress-nav-appearance"><div class="p-1 border border-solid border-gray-300 text-gray-400  cursor-pointer rounded-md hover:border-gray-600 hover:text-gray-600 dark:hover:border-gray-200 dark:hover:text-gray-200 transition-all duration-300 w-7 h-7"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24" class="dark:hidden" width="18" height="18" fill="currentColor"><path d="M12 18c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6m0-10c-2.2 0-4 1.8-4 4s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4M12 4c-.6 0-1-.4-1-1V1c0-.6.4-1 1-1s1 .4 1 1v2c0 .6-.4 1-1 1M12 24c-.6 0-1-.4-1-1v-2c0-.6.4-1 1-1s1 .4 1 1v2c0 .6-.4 1-1 1M5.6 6.6c-.3 0-.5-.1-.7-.3L3.5 4.9c-.4-.4-.4-1 0-1.4s1-.4 1.4 0l1.4 1.4c.4.4.4 1 0 1.4-.1.2-.4.3-.7.3M19.8 20.8c-.3 0-.5-.1-.7-.3l-1.4-1.4c-.4-.4-.4-1 0-1.4s1-.4 1.4 0l1.4 1.4c.4.4.4 1 0 1.4-.2.2-.5.3-.7.3M3 13H1c-.6 0-1-.4-1-1s.4-1 1-1h2c.6 0 1 .4 1 1s-.4 1-1 1M23 13h-2c-.6 0-1-.4-1-1s.4-1 1-1h2c.6 0 1 .4 1 1s-.4 1-1 1M4.2 20.8c-.3 0-.5-.1-.7-.3-.4-.4-.4-1 0-1.4l1.4-1.4c.4-.4 1-.4 1.4 0s.4 1 0 1.4l-1.4 1.4c-.2.2-.4.3-.7.3M18.4 6.6c-.3 0-.5-.1-.7-.3-.4-.4-.4-1 0-1.4l1.4-1.4c.4-.4 1-.4 1.4 0s.4 1 0 1.4l-1.4 1.4c-.2.2-.5.3-.7.3"></path></svg><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24" class="hidden dark:block" width="18" height="18" fill="currentColor"><path d="M12.1 22h-.9c-5.5-.5-9.5-5.4-9-10.9.4-4.8 4.2-8.6 9-9 .4 0 .8.2 1 .5s.2.8-.1 1.1c-2 2.7-1.4 6.4 1.3 8.4 2.1 1.6 5 1.6 7.1 0 .3-.2.7-.3 1.1-.1.3.2.5.6.5 1-.2 2.7-1.5 5.1-3.6 6.8-1.9 1.4-4.1 2.2-6.4 2.2M9.3 4.4c-2.9 1-5 3.6-5.2 6.8-.4 4.4 2.8 8.3 7.2 8.7 2.1.2 4.2-.4 5.8-1.8 1.1-.9 1.9-2.1 2.4-3.4-2.5.9-5.3.5-7.5-1.1-2.8-2.2-3.9-5.9-2.7-9.2"></path></svg></div></div></div><div class="social-links menu-item_e90a6 flex-center relative"><div class="flex-center h-full gap-x-4 transition-colors duration-300 md:mr-2"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="social-links"><div class="social-links-icon_a4ad0"><div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a></div></div></div></div><div class="mobileNavMenu_e7045"><div class="navScreen_ec30c  rspress-nav-screen" id="navScreen"><div class="container_c935d"><div class="navMenu_b887b"><div class="navMenuItem_e7978 w-full"><a href="/HnsX/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154 activeItem_a28b5 text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">首页</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/blog/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">博客</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/guide/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">指南</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/design/vision" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">文档</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/design/server-design/api-design" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">API</div></a></div><div class="navMenuItem_e7978 w-full"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">GitHub</div></a></div></div><div class="flex-center flex-col gap-2"><div class="mt-2 navAppearance_bf893 flex justify-center"></div><div class="social-links menu-item_e90a6 flex-center relative"><div class="flex-center h-full gap-x-4 transition-colors duration-300 md:mr-2"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="social-links"><div class="social-links-icon_a4ad0"><div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a></div></div></div></div></div><button aria-label="mobile hamburger" class=" rspress-mobile-hamburger navHamburger_ac64c text-gray-500"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="currentColor"><circle cx="8" cy="16" r="2" fill="currentColor"></circle><circle cx="16" cy="16" r="2" fill="currentColor"></circle><circle cx="24" cy="16" r="2" fill="currentColor"></circle></svg></button></div></div></div></div><section><div class="docLayout_af141 pt-0"><div class="flex-1 relative min-w-0"><div class="rspress-sidebar-menu-container no-toc"><div class="rspress-sidebar-menu"></div></div><div class="content_ff766 rspress-doc-container flex"><div class="flex-1 overflow-x-auto"><div class="rspress-doc"><!--$--><h1 id="hnsx-官网--文档站-roadmaprspress" class="rspress-doc-title text-3xl mb-10 leading-10 tracking-tight title_fb7eb">HnsX 官网 + 文档站 Roadmap（Rspress）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#hnsx-官网--文档站-roadmaprspress">#</a></h1>
+<blockquote class="border-l-2 border-solid border-divider pl-4 my-6 transition-colors duration-500 blockquote_f1063">
+<p class="my-4 leading-7">日期：2026-07-11
+目标：把 HnsX 从「实验项目 GitHub 仓库」升级为「有 Landing Page + 产品文档」的可产品化站点
+北极星：<a href="/HnsX/../../vision.md" class="link_a7cea  link_a9ef4 inline-link_f855c"><code>docs/vision.md</code></a> — Harness as a Service
+当前分支：<code>feat/tui_migration</code>
+技术选型：<strong class="font-semibold">Rspress</strong>（基于 Rspack 的静态站点生成器，原生支持 Markdown 文档 + Landing Page）</p>
+</blockquote>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="0-范围与边界" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">0. 范围与边界<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#0-范围与边界">#</a></h2>
+<h3 id="做这个" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">做这个<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#做这个">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">新增一个独立的 <code>website/</code> 包，用 Rspress 承载：<!-- -->
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Landing Page</strong>：产品定位、核心能力、Quick Start、CTA</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">文档站</strong>：把现有 <code>docs/</code> 里的设计文档、know-how、API 设计等以可导航方式呈现</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">博客/更新日志</strong>（可选，先留坑）</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">接入 monorepo workspace，支持 <code>pnpm install</code> 统一依赖管理</li>
+<li class="[&amp;:not(:first-child)]:mt-2">本地开发：<code>pnpm dev</code> 预览；构建：<code>pnpm build</code> 输出静态站点到 <code>website/dist</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2">部署目标：<strong class="font-semibold">GitHub Pages</strong>（先免费跑通），后续可切到 <code>hnsx.dev</code></li>
+</ul>
+<h3 id="不做这个" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">不做这个<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#不做这个">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">不动现有 <code>docs/</code> 目录结构和已有 Markdown 内容（只加 <code>_meta.json</code> 做导航）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">不替换 <code>hnsx-console</code>（控制台保持独立，官网只做展示+文档）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">不一次性写光所有文档内容，先把框架和关键页面跑通</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="1-本轮基线" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">1. 本轮基线<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#1-本轮基线">#</a></h2>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">现状</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">问题</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">仓库有 <code>docs/</code> 但只是 GitHub 直接渲染</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">没有品牌首页、没有导航、没有搜索</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>hnsx-console</code> 是运营/审计控制台</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">不是给新用户看的产品官网</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">没有独立部署的静态站点</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">无法挂 <code>hnsx.dev</code>、无法做 SEO/分享卡片</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">monorepo 用 pnpm workspace</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">适合把 website 作为新 workspace package 加入</td>
+</tr>
+</tbody>
+</table>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="2-方案推荐" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">2. 方案（推荐）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#2-方案推荐">#</a></h2>
+<h3 id="目录结构" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">目录结构<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#目录结构">#</a></h3>
+<div class="language-text"><div class="rspress-code-content rspress-scrollbar"><div><pre class="code" style="background-color:inherit"><code class="language-text" style="white-space:pre"><span style="display:block;padding:0 1.25rem"><span>HnsX/
+</span></span><span style="display:block;padding:0 1.25rem">├── docs/                          # 保留现有设计文档（新增 _meta.json 做导航）
+</span><span style="display:block;padding:0 1.25rem">├── website/                       # 新增 Rspress 站点
+</span><span style="display:block;padding:0 1.25rem">│   ├── docs/                      # Rspress 文档根
+</span><span style="display:block;padding:0 1.25rem">│   │   ├── index.md               # Landing Page（Rspress home 页）
+</span><span style="display:block;padding:0 1.25rem">│   │   ├── _meta.json             # 顶层导航
+</span><span style="display:block;padding:0 1.25rem">│   │   ├── blog/                  # 产品博客
+</span><span style="display:block;padding:0 1.25rem">│   │   │   ├── _meta.json
+</span><span style="display:block;padding:0 1.25rem">│   │   │   ├── why-harness.md
+</span><span style="display:block;padding:0 1.25rem">│   │   │   ├── api-at-a-glance.md
+</span><span style="display:block;padding:0 1.25rem">│   │   │   └── vision-in-practice.md
+</span><span style="display:block;padding:0 1.25rem">│   │   └── design/                # 软链/映射到 docs/ 下设计文档
+</span><span style="display:block;padding:0 1.25rem">│   │       └── ...
+</span><span style="display:block;padding:0 1.25rem">│   ├── rspress.config.ts          # Rspress 配置
+</span><span style="display:block;padding:0 1.25rem">│   ├── package.json
+</span><span style="display:block;padding:0 1.25rem">│   ├── styles/                    # 自定义全局样式
+</span><span style="display:block;padding:0 1.25rem">│   │   └── index.css
+</span><span style="display:block;padding:0 1.25rem">│   └── .gitignore
+</span><span style="display:block;padding:0 1.25rem">├── pnpm-workspace.yaml            # 增加 website
+</span><span style="display:block;padding:0 1.25rem">└── .github/workflows/website.yml  # 自动部署到 GitHub Pages（待 Phase 4）</span></code></pre></div><div class="code-button-group_fb445"><button title="Toggle code wrap"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrapped_fb89b"><path fill="#22a041" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrap_ccd3d"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="code-copy-button_c5089" title="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 30 30" class="icon-copy_ef942"><path fill="currentColor" d="M28 10v18H10V10zm0-2H10a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 18H2V4a2 2 0 0 1 2-2h14v2H4Z"></path></svg><svg width="32" height="32" viewBox="0 0 30 30" class="icon-success_d5ec0"><path fill="#49cd37" d="m13 24-9-9 1.414-1.414L13 21.171 26.586 7.586 28 9z"></path></svg></button></div></div></div>
+<h3 id="关键技术决策" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">关键技术决策<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#关键技术决策">#</a></h3>
+<ol class="list-decimal pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><strong class="font-semibold">website 作为独立 package</strong>：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">自己的 <code>package.json</code>、<code>rspress</code> 依赖，避免和 <code>hnsx-console</code> 的 React 19 冲突</li>
+<li class="[&amp;:not(:first-child)]:mt-2">加入 root <code>pnpm-workspace.yaml</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>private: true</code></li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><strong class="font-semibold">复用现有 <code>docs/</code></strong>：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">在 <code>website/docs/design/</code> 下创建 <strong class="font-semibold">symlink</strong> 指向 <code>../../docs/</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2">Rspress 会自动把 symlink 目标中的 Markdown 纳入构建</li>
+<li class="[&amp;:not(:first-child)]:mt-2">好处：不移动文件、不破坏现有 GitHub 直接浏览、一处修改两处生效</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><strong class="font-semibold">Landing Page</strong>：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">使用 Rspress 原生 frontmatter 写法：<code>pageType: home</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2">Hero 区：一句话定位 + 两个 CTA 按钮（Quick Start / GitHub）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Features 区：Domain / Session / Policy / Observability / Eval / Multi-Agent</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Quick Start 区：3 步命令</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Footer：GitHub / Docs / Console 链接</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><strong class="font-semibold">样式与品牌</strong>：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">颜色沿用项目 CSS 变量：<code>--chart-1..5</code>、<code>--success</code>、<code>--warning</code>、<code>--danger</code>、<code>--info</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2">字体使用 <code>Geist</code>（和 console 一致）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">初版没有 logo SVG，先用文字 logo + 简洁几何图形占位</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><strong class="font-semibold">部署</strong>：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">GitHub Actions workflow：监听 <code>website/**</code> 和 <code>docs/**</code> 变更，推送到 <code>gh-pages</code> 分支</li>
+<li class="[&amp;:not(:first-child)]:mt-2">仓库 Settings → Pages → Source 设为 <code>gh-pages</code> 分支</li>
+<li class="[&amp;:not(:first-child)]:mt-2">站点路径：默认 <code>https://narcilee7.github.io/HnsX/</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>base</code> 按环境切换：本地开发用 <code>/</code>（避免 <code>localhost:3000/</code> 404），GitHub Actions 里设 <code>GH_PAGES=true</code> 切到 <code>/HnsX/</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2">后续买/配 <code>hnsx.dev</code> 时只需改 DNS + workflow 里去掉 <code>GH_PAGES</code>，让 <code>base</code> 保持 <code>/</code></li>
+</ul>
+</li>
+</ol>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="3-phase-划分" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">3. Phase 划分<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#3-phase-划分">#</a></h2>
+<h3 id="phase-1--骨架跑通1-天" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">Phase 1 — 骨架跑通（1 天）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#phase-1--骨架跑通1-天">#</a></h3>
+<p class="my-4 leading-7">目标：<code>cd website &amp;&amp; pnpm dev</code> 能看到 Hello World 首页。</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->创建 <code>website/package.json</code>，安装 <code>rspress</code> 及类型依赖</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->更新 root <code>pnpm-workspace.yaml</code> 加入 <code>website</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->创建 <code>website/rspress.config.ts</code>（基础配置：title、description、themeConfig）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->创建 <code>website/docs/index.md</code>（Landing Page 占位）和 <code>website/docs/_meta.json</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->创建 <code>website/styles/index.css</code> 引入项目基础色变量</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->跑通 <code>pnpm install</code> / <code>pnpm dev</code> / <code>pnpm build</code></li>
+</ul>
+<h4 id="验收" class="mt-8 leading-6 text-lg title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收">#</a></h4>
+<div class="language-bash"><div class="rspress-code-content rspress-scrollbar"><div><pre class="code" style="background-color:inherit"><code class="language-bash" style="white-space:pre"><span style="display:block;padding:0 1.25rem"><span class="token class-name" style="color:var(--code-token-symbol)">cd</span><span> website
+</span></span><span style="display:block;padding:0 1.25rem"><span></span><span class="token" style="color:var(--code-token-function)">pnpm</span><span> </span><span class="token" style="color:var(--code-token-function)">install</span><span>
+</span></span><span style="display:block;padding:0 1.25rem"><span></span><span class="token" style="color:var(--code-token-function)">pnpm</span><span> dev      </span><span class="token" style="color:var(--code-token-comment)"># 本地 3000 端口可访问</span><span>
+</span></span><span style="display:block;padding:0 1.25rem"><span></span><span class="token" style="color:var(--code-token-function)">pnpm</span><span> build    </span><span class="token" style="color:var(--code-token-comment)"># 生成 website/dist，无报错</span></span></code></pre></div><div class="code-button-group_fb445"><button title="Toggle code wrap"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrapped_fb89b"><path fill="#22a041" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrap_ccd3d"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="code-copy-button_c5089" title="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 30 30" class="icon-copy_ef942"><path fill="currentColor" d="M28 10v18H10V10zm0-2H10a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 18H2V4a2 2 0 0 1 2-2h14v2H4Z"></path></svg><svg width="32" height="32" viewBox="0 0 30 30" class="icon-success_d5ec0"><path fill="#49cd37" d="m13 24-9-9 1.414-1.414L13 21.171 26.586 7.586 28 9z"></path></svg></button></div></div></div>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h3 id="phase-2--landing-page-内容--品牌样式12-天" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">Phase 2 — Landing Page 内容 + 品牌样式（1–2 天）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#phase-2--landing-page-内容--品牌样式12-天">#</a></h3>
+<p class="my-4 leading-7">目标：首页看起来像个产品，而不是脚手架。</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->用 Rspress frontmatter 配置 Hero：标题、描述、两个按钮、背景</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->添加 Features 区（6 张卡片，对应核心能力）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->添加 Quick Start 区（复制即可运行的 3 条命令）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->添加 Footer 与导航</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->自定义 CSS：字体、配色、按钮、卡片阴影、响应式</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->添加 favicon（若无 logo，先用 emoji/纯文字占位）</li>
+</ul>
+<h4 id="验收-1" class="mt-8 leading-6 text-lg title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收-1">#</a></h4>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">桌面端首页无错位</li>
+<li class="[&amp;:not(:first-child)]:mt-2">移动端（&lt; 768px）Hero 文字换行合理、按钮堆叠</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Lighthouse 首屏性能 &gt; 70（静态站默认即可达到）</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h3 id="phase-3--文档导航与搜索12-天" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">Phase 3 — 文档导航与搜索（1–2 天）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#phase-3--文档导航与搜索12-天">#</a></h3>
+<p class="my-4 leading-7">目标：让现有 <code>docs/</code> 的内容能被网站导航和搜索到。</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->在 <code>website/docs/</code> 下创建 <code>design/</code> 目录，用 <strong class="font-semibold">symlink</strong> 指向 <code>../../docs/</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->为 <code>website/docs/design/</code> 及子目录写 <code>_meta.json</code>，按主题分组（vision / tech / know-how / server-design / console-design / SOP）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->在 <code>website/docs/blog/</code> 下新建产品博客：<!-- -->
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>why-harness.md</code>（Why harness）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>api-at-a-glance.md</code>（API 一览）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>vision-in-practice.md</code>（愿景落地）</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->在 <code>website/docs/guide/</code> 下新建入门指南：<!-- -->
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>quick-start.md</code>（5 分钟跑通）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>install.md</code>（curl / brew / 源码）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>domain-spec.md</code>（Domain 入门）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>cli-basics.md</code>（常用 CLI）</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->配置 Rspress <code>themeConfig.nav</code> 与 <code>sidebar</code>，让用户能在 landing、guide、blog、docs 间跳转</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->启用 Rspress 内置搜索（基于 FlexSearch）</li>
+</ul>
+<h4 id="验收-2" class="mt-8 leading-6 text-lg title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收-2">#</a></h4>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">左侧 sidebar 能展开所有设计文档分组</li>
+<li class="[&amp;:not(:first-child)]:mt-2">顶部 nav 可在 Home / Guide / Blog / Design / API / GitHub 间切换</li>
+<li class="[&amp;:not(:first-child)]:mt-2">搜索框能搜到 <code>docs/vision.md</code> 的关键词</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h3 id="phase-4--构建与-cicd1-天" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">Phase 4 — 构建与 CI/CD（1 天）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#phase-4--构建与-cicd1-天">#</a></h3>
+<p class="my-4 leading-7">目标：每次 push 到 <code>feat/tui_migration</code>（或 main）自动部署。</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->创建 <code>.github/workflows/website.yml</code>：<!-- -->
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">trigger: <code>push</code> 到 main / <code>feat/tui_migration</code>，或 <code>website/**</code>、<code>docs/**</code> 变更</li>
+<li class="[&amp;:not(:first-child)]:mt-2">job: pnpm install → 带 <code>GH_PAGES=true</code> 构建 website → deploy to <code>gh-pages</code></li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->Rspress <code>base</code> 配置按环境切换：本地 <code>/</code>，GitHub Pages <code>/HnsX/</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->验证 GitHub Pages 站点能正常访问，资源路径正确</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->更新 <code>README.md</code> 和 <code>docs/cli-roadmap.md</code> 里的 <code>hnsx.dev</code> 链接说明（若已部署）</li>
+</ul>
+<h4 id="验收-3" class="mt-8 leading-6 text-lg title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收-3">#</a></h4>
+<div class="language-bash"><div class="rspress-code-content rspress-scrollbar"><div><pre class="code" style="background-color:inherit"><code class="language-bash" style="white-space:pre"><span style="display:block;padding:0 1.25rem"><span class="token" style="color:var(--code-token-comment)"># push 后</span><span>
+</span></span><span style="display:block;padding:0 1.25rem"><span></span><span class="token" style="color:var(--code-token-function)">open</span><span> https://narcilee7.github.io/HnsX/
+</span></span><span style="display:block;padding:0 1.25rem"><span></span><span class="token" style="color:var(--code-token-comment)"># 首页、文档页、搜索均正常</span></span></code></pre></div><div class="code-button-group_fb445"><button title="Toggle code wrap"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrapped_fb89b"><path fill="#22a041" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrap_ccd3d"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="code-copy-button_c5089" title="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 30 30" class="icon-copy_ef942"><path fill="currentColor" d="M28 10v18H10V10zm0-2H10a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 18H2V4a2 2 0 0 1 2-2h14v2H4Z"></path></svg><svg width="32" height="32" viewBox="0 0 30 30" class="icon-success_d5ec0"><path fill="#49cd37" d="m13 24-9-9 1.414-1.414L13 21.171 26.586 7.586 28 9z"></path></svg></button></div></div></div>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h3 id="phase-5--打磨与-seo051-天" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">Phase 5 — 打磨与 SEO（0.5–1 天）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#phase-5--打磨与-seo051-天">#</a></h3>
+<p class="my-4 leading-7">目标：站点在社交媒体上分享时像模像样。</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->配置 Rspress <code>head</code>：title、description、og:image、twitter:card</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->生成/绘制 Open Graph 图片（1200×630）和 favicon</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->自定义 404 页面</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->检查所有内部链接是否可点（无死链）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->加 <code>sitemap.xml</code>（Rspress 插件或构建后生成）</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="4-风险与依赖" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">4. 风险与依赖<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#4-风险与依赖">#</a></h2>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">风险</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">应对</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Rspress 与 React 19 workspace 冲突</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">website 独立依赖，不继承 workspace React</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>docs/</code> 里 Markdown 有非标准语法导致 Rspress 渲染异常</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Phase 3 先 build，遇到报错再逐个修复 frontmatter</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">GitHub Pages 子路径 <code>/HnsX/</code> 导致资源 404</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">配置 Rspress <code>base: &#x27;/HnsX/&#x27;</code> 并在 workflow 后用 <code>actions/deploy-pages</code></td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">后续切自定义域名 <code>hnsx.dev</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">只需改 DNS + <code>base: &#x27;/&#x27;</code>，workflow 不变</td>
+</tr>
+</tbody>
+</table>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="5-验收总标准" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">5. 验收总标准<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#5-验收总标准">#</a></h2>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <code>cd website &amp;&amp; pnpm build</code> 成功，产物在 <code>website/dist</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->GitHub Pages 站点可访问，首页、文档页、搜索、导航正常</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->站点风格与 <code>hnsx-console</code> 一致（字体、主色、简洁感）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->不破坏现有 <code>docs/</code> 的 GitHub 直接浏览</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->不破坏现有 monorepo 的 <code>pnpm -r build</code> / <code>pnpm -r test</code></li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="6-参考" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">6. 参考<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#6-参考">#</a></h2>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">Rspress 文档：<a href="https://rspress.dev/" target="_blank" rel="noopener noreferrer" class="link_a7cea  link_a9ef4 inline-link_f855c">https://rspress.dev/</a></li>
+<li class="[&amp;:not(:first-child)]:mt-2">Rspress 多语言 / home 页配置：<a href="https://rspress.dev/guide/basic/home-page" target="_blank" rel="noopener noreferrer" class="link_a7cea  link_a9ef4 inline-link_f855c">https://rspress.dev/guide/basic/home-page</a></li>
+<li class="[&amp;:not(:first-child)]:mt-2">GitHub Pages + pnpm + Rspack 部署示例：community actions <code>peaceiris/actions-gh-pages</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2">现有设计文档入口：<a href="/HnsX/../../vision.md" class="link_a7cea  link_a9ef4 inline-link_f855c"><code>docs/vision.md</code></a>、<a href="/HnsX/../../tech_overview.md" class="link_a7cea  link_a9ef4 inline-link_f855c"><code>docs/tech_overview.md</code></a></li>
+</ul><!--/$--></div><div class="rspress-doc-footer"><footer class="mt-8"><div class="xs:flex pb-5 px-2 justify-end items-center"></div><div class="flex flex-col"></div><div class="flex flex-col sm:flex-row sm:justify-around gap-4 pt-6"><div class="prev_c92d1 flex flex-col"></div><div class="next_c11be flex flex-col"></div></div></footer></div></div></div></div></div></section></div>
+    <div id="search-container"></div>
+  </body>
+</html>

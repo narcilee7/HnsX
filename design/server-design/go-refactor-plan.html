@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content="Rspress v1.47.1">
+    <meta property="og:title"content="HnsX — Harness as a Service"><meta property="og:description"content="HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI 等最强 Agent。"><meta property="og:type"content="website"><meta property="og:image"content="https://narcilee7.github.io/HnsX/og-image.png"><meta name="twitter:card"content="summary_large_image"><title data-rh="true">HnsX — Harness as a Service</title><meta data-rh="true" name="description" content="HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI 等最强 Agent。"/>
+  <script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const isDark = !saved || saved === 'auto' ? preferDark : saved === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script><link rel="icon" href="/HnsX/favicon.png"><script defer src="/HnsX/static/js/styles.ae5ec2d0.js"></script><script defer src="/HnsX/static/js/lib-react.0aff66c0.js"></script><script defer src="/HnsX/static/js/lib-router.0d65c259.js"></script><script defer src="/HnsX/static/js/641.c64fbc03.js"></script><script defer src="/HnsX/static/js/index.7e3760f1.js"></script><link href="/HnsX/static/css/styles.f27a1667.css" rel="stylesheet"></head>
+
+  <body >
+    <div id="root"><div class="navContainer_d18b1 rspress-nav px-6  sticky_ddfa7"><div class="container_e4235 flex justify-between items-center h-full"><div class="navBarTitle_c5f07"><a href="/HnsX/index" class="link_a7cea flex items-center w-full h-full text-base font-semibold transition-opacity duration-300 hover:opacity-60"><span>HnsX — Harness as a Service</span></a></div><div class="flex flex-1 justify-end items-center"><div class="leftNav_e6722"><div class="rspress-nav-menu menu h-14"><a href="/HnsX/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154 activeItem_a28b5 text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">首页</div></a><a href="/HnsX/blog/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">博客</div></a><a href="/HnsX/guide/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">指南</div></a><a href="/HnsX/design/vision" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">文档</div></a><a href="/HnsX/design/server-design/api-design" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">API</div></a></div></div><div class="rightNav_a2fea"><div class="flex sm:flex-1 items-center sm:pl-4 sm:pr-2"><div class="rspress-nav-search-button navSearchButton_df1fb"><button><svg width="18" height="18" viewBox="0 0 32 32"><path fill="var(--rp-c-gray)" d="m29 27.586-7.552-7.552a11.018 11.018 0 1 0-1.414 1.414L27.586 29ZM4 13a9 9 0 1 1 9 9 9.01 9.01 0 0 1-9-9"></path></svg><p class="searchWord_af2c1">Search</p><div style="opacity:0"><span></span><span>K</span></div></button></div><div class="mobileNavSearchButton_d85a9"><svg width="24" height="24" viewBox="0 0 32 32"><path fill="var(--rp-c-gray)" d="m29 27.586-7.552-7.552a11.018 11.018 0 1 0-1.414 1.414L27.586 29ZM4 13a9 9 0 1 1 9 9 9.01 9.01 0 0 1-9-9"></path></svg></div></div><div class="rspress-nav-menu menu h-14"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">GitHub</div></a></div><div class="flex-center flex-row"><div class="mx-2"><div class="md:mr-2 rspress-nav-appearance"><div class="p-1 border border-solid border-gray-300 text-gray-400  cursor-pointer rounded-md hover:border-gray-600 hover:text-gray-600 dark:hover:border-gray-200 dark:hover:text-gray-200 transition-all duration-300 w-7 h-7"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24" class="dark:hidden" width="18" height="18" fill="currentColor"><path d="M12 18c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6m0-10c-2.2 0-4 1.8-4 4s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4M12 4c-.6 0-1-.4-1-1V1c0-.6.4-1 1-1s1 .4 1 1v2c0 .6-.4 1-1 1M12 24c-.6 0-1-.4-1-1v-2c0-.6.4-1 1-1s1 .4 1 1v2c0 .6-.4 1-1 1M5.6 6.6c-.3 0-.5-.1-.7-.3L3.5 4.9c-.4-.4-.4-1 0-1.4s1-.4 1.4 0l1.4 1.4c.4.4.4 1 0 1.4-.1.2-.4.3-.7.3M19.8 20.8c-.3 0-.5-.1-.7-.3l-1.4-1.4c-.4-.4-.4-1 0-1.4s1-.4 1.4 0l1.4 1.4c.4.4.4 1 0 1.4-.2.2-.5.3-.7.3M3 13H1c-.6 0-1-.4-1-1s.4-1 1-1h2c.6 0 1 .4 1 1s-.4 1-1 1M23 13h-2c-.6 0-1-.4-1-1s.4-1 1-1h2c.6 0 1 .4 1 1s-.4 1-1 1M4.2 20.8c-.3 0-.5-.1-.7-.3-.4-.4-.4-1 0-1.4l1.4-1.4c.4-.4 1-.4 1.4 0s.4 1 0 1.4l-1.4 1.4c-.2.2-.4.3-.7.3M18.4 6.6c-.3 0-.5-.1-.7-.3-.4-.4-.4-1 0-1.4l1.4-1.4c.4-.4 1-.4 1.4 0s.4 1 0 1.4l-1.4 1.4c-.2.2-.5.3-.7.3"></path></svg><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24" class="hidden dark:block" width="18" height="18" fill="currentColor"><path d="M12.1 22h-.9c-5.5-.5-9.5-5.4-9-10.9.4-4.8 4.2-8.6 9-9 .4 0 .8.2 1 .5s.2.8-.1 1.1c-2 2.7-1.4 6.4 1.3 8.4 2.1 1.6 5 1.6 7.1 0 .3-.2.7-.3 1.1-.1.3.2.5.6.5 1-.2 2.7-1.5 5.1-3.6 6.8-1.9 1.4-4.1 2.2-6.4 2.2M9.3 4.4c-2.9 1-5 3.6-5.2 6.8-.4 4.4 2.8 8.3 7.2 8.7 2.1.2 4.2-.4 5.8-1.8 1.1-.9 1.9-2.1 2.4-3.4-2.5.9-5.3.5-7.5-1.1-2.8-2.2-3.9-5.9-2.7-9.2"></path></svg></div></div></div><div class="social-links menu-item_e90a6 flex-center relative"><div class="flex-center h-full gap-x-4 transition-colors duration-300 md:mr-2"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="social-links"><div class="social-links-icon_a4ad0"><div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a></div></div></div></div><div class="mobileNavMenu_e7045"><div class="navScreen_ec30c  rspress-nav-screen" id="navScreen"><div class="container_c935d"><div class="navMenu_b887b"><div class="navMenuItem_e7978 w-full"><a href="/HnsX/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154 activeItem_a28b5 text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">首页</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/blog/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">博客</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/guide/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">指南</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/design/vision" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">文档</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/design/server-design/api-design" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">API</div></a></div><div class="navMenuItem_e7978 w-full"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">GitHub</div></a></div></div><div class="flex-center flex-col gap-2"><div class="mt-2 navAppearance_bf893 flex justify-center"></div><div class="social-links menu-item_e90a6 flex-center relative"><div class="flex-center h-full gap-x-4 transition-colors duration-300 md:mr-2"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="social-links"><div class="social-links-icon_a4ad0"><div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a></div></div></div></div></div><button aria-label="mobile hamburger" class=" rspress-mobile-hamburger navHamburger_ac64c text-gray-500"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="currentColor"><circle cx="8" cy="16" r="2" fill="currentColor"></circle><circle cx="16" cy="16" r="2" fill="currentColor"></circle><circle cx="24" cy="16" r="2" fill="currentColor"></circle></svg></button></div></div></div></div><section><div class="docLayout_af141 pt-0"><div class="flex-1 relative min-w-0"><div class="rspress-sidebar-menu-container no-toc"><div class="rspress-sidebar-menu"></div></div><div class="content_ff766 rspress-doc-container flex"><div class="flex-1 overflow-x-auto"><div class="rspress-doc"><!--$--><h1 id="go-服务改造设计方案下一步" class="rspress-doc-title text-3xl mb-10 leading-10 tracking-tight title_fb7eb">Go 服务改造设计方案（下一步）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#go-服务改造设计方案下一步">#</a></h1>
+<blockquote class="border-l-2 border-solid border-divider pl-4 my-6 transition-colors duration-500 blockquote_f1063">
+<p class="my-4 leading-7">状态：设计稿，待 review。作者：Claude Code。日期：2026-07-10。
+关联：<code>docs/tech_overview.md</code>（Phase 划分）、<code>docs/server-design/api-design.md</code>（API 契约）、<code>proto/hnsx/v1/*.proto</code>（协议真相源）。</p>
+</blockquote>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="0-背景与目标" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">0. 背景与目标<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#0-背景与目标">#</a></h2>
+<p class="my-4 leading-7">对照文档 Phase 地图，Go 服务当前位置：</p>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">能力</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">文档 Phase</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">现状</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Domain CRUD / Session Trigger / SSE / Trace 查询</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">P1</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">✅ 完整</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Eval / Metric / Audit API</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">P2</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">⚠️ Metric/Audit 完整，<strong class="font-semibold">RunEval 是 neutral-score 骨架</strong></td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Approval / Runtime / Secret / Policy API</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">P3</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">❌ 全 stub</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">gRPC 全服务 + 认证</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">P4</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">⚠️ 仅 Worker/Scheduler 两个服务实装</td>
+</tr>
+</tbody>
+</table>
+<p class="my-4 leading-7">进程骨架、gin 路由、Postgres+goose、Repository 双实现、Worker 池+Redis、<code>single</code>/<code>workflow</code> runtime、SSE broadcaster 均已完整。因此本轮<strong class="font-semibold">不是补零功能，而是还三处结构性欠债</strong>：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">A. Trace API 归位</strong> —— 数据层（<code>observations</code> 表 + <code>internal/trace</code> 聚合）已就绪，但 REST handler 走了 session 转换的捷径。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">B. Eval 执行闭环</strong> —— worker/Executor 已能跑 session，RunEval 却还在返 neutral score。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">C. 协议栈收敛（Connect-RPC）</strong> —— <code>v1connect/</code> 已生成零引用；gin 手写 handler 与 gRPC 定义正在各自漂移；CLI 名义走 gRPC 实际走 HTTP。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">D. Phase 3 控制面</strong> —— Secret / Policy / Approval / Runtime 四个 stub 变真。</li>
+</ul>
+<p class="my-4 leading-7"><strong class="font-semibold">本轮范围</strong>：A + B + C + D。质量债（handler 测试、死代码清理、tenant 解析）作为每个 Track 的伴随项，不单列。</p>
+<p class="my-4 leading-7"><strong class="font-semibold">不做</strong>：真实 LLM Adapter、MCP Client、非 None Sandbox、supervisor/autonomous 编排模式、多租户 SaaS —— 这些是 runtime/后续 Phase 的事。</p>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="1-改造总览与顺序" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">1. 改造总览与顺序<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#1-改造总览与顺序">#</a></h2>
+<div class="language-bash"><div class="rspress-code-content rspress-scrollbar"><code>里程碑 M1 ──► M2 ──► M3 ──► M4
+   A         B       D       C
+Trace归位   Eval闭环  P3控制面  协议收敛
+(低风险)   (中风险)  (中风险)  (高风险,压轴)
+</code></div></div>
+<p class="my-4 leading-7">排序理由：A/B 前置依赖已就绪、ROI 最高、直接兑现 vision 的「可观测 + 可评估」；D 是纯增量、彼此独立、可并行拆；C 是大改动高风险，放最后并单独开分支，前面几个 Track 先把内部 service 边界理清，正好为 C 抽出干净的「一份实现、两个传输」打好底。</p>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="2-track-a--trace-api-归位里程碑-m1" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">2. Track A —— Trace API 归位（里程碑 M1）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#2-track-a--trace-api-归位里程碑-m1">#</a></h2>
+<h3 id="现状问题" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">现状问题<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#现状问题">#</a></h3>
+<p class="my-4 leading-7"><code>pkg/api/auxiliary.go:18-72</code> 的 <code>ListTraces</code>/<code>GetTrace</code> 把 session 列表伪装成 trace，<code>trace_id == session_id</code>，<code>observations</code> 完全没进来。而 <code>internal/trace/repository</code> 已实装 <code>BySession/ByTrace/Aggregate</code> 且有测试，<code>GET /api/v1/sessions/:id/trace</code>（<code>sessions.go:245</code>）已经正确用上了它。也就是说<strong class="font-semibold">能力在，只是 traces 顶层 endpoint 没接</strong>。</p>
+<h3 id="目标" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">目标<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#目标">#</a></h3>
+<p class="my-4 leading-7"><code>GET /api/v1/traces</code> 与 <code>GET /api/v1/traces/:traceId</code> 直接建在 trace 聚合上，返回契约对齐 <code>api-design.md §5</code>。</p>
+<h3 id="落点" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">落点<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#落点">#</a></h3>
+<ol class="list-decimal pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>internal/trace/service</code>（若无 List 方法则新增）暴露：<!-- -->
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>ListTraces(tenant, filter TraceFilter) ([]TraceSummary, int, error)</code> —— filter 支持 <code>domain / session / from / to / limit / offset</code>。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>GetTrace(tenant, traceID) (TraceDetail, error)</code> —— 返回 <code>trace_id + session_id + observations[]</code>。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Summary 用 repository 的 <code>Aggregate</code>（trace_id 聚合出 status/started_at/duration/cost）。</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>internal/trace/repository/postgres.go</code> 补一个按 <code>created_at</code> 范围 + <code>domain_id</code> 过滤的 <code>List</code>（<code>observations</code> 表已有 <code>(session_id, created_at)</code>、<code>trace_id</code>、<code>kind</code>、<code>agent_id</code> 索引；若按 domain 过滤命中不了索引，加一条 <code>(domain_id, created_at)</code> 迁移 <code>000004</code>）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>pkg/api/auxiliary.go</code>：<code>ListTraces</code>/<code>GetTrace</code> 改调 <code>s.TraceService</code>，删掉 session 转换分支。<code>GetTrace</code> 的 404 用 <code>TRACE_NOT_FOUND</code>。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>internal/app/application.go</code>：确认 <code>TraceService</code> 已注入 Server（<code>GetSessionTrace</code> 已依赖它，应已在）。</li>
+</ol>
+<h3 id="验收" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>GET /api/v1/traces?domain=x&amp;from=&amp;to=&amp;limit=</code> 返回真实聚合，分页正确。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>GET /api/v1/traces/:id</code> 返回 observations 数组。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">新增 <code>pkg/api</code> handler 测试（用 InMemory trace repo）—— 顺带开 handler 测试的头。</li>
+</ul>
+<h3 id="风险" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">风险<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#风险">#</a></h3>
+<p class="my-4 leading-7">低。纯读路径，不动写入。唯一注意：<code>traceId</code> 语义从「= session_id」变成「真 trace_id」，需确认 Console 侧 <code>mappers.ts</code> 是否假设两者相等。<strong class="font-semibold">行动</strong>：改动前 grep console 的 <code>trace_id</code>/<code>traceId</code> 用法，必要时同步调 ViewModel。</p>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="3-track-b--eval-执行闭环里程碑-m2" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">3. Track B —— Eval 执行闭环（里程碑 M2）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#3-track-b--eval-执行闭环里程碑-m2">#</a></h2>
+<h3 id="现状问题-1" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">现状问题<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#现状问题-1">#</a></h3>
+<p class="my-4 leading-7"><code>RunEval</code>（<code>auxiliary.go:239-292</code>）创建 <code>EvalRun</code> 后立即 <code>FinishRun(run.ID, 0.0, 0, total, 0, 0)</code>，注释明说「等 worker pipeline 能 batch 跑 session」。而 batch 能力现在<strong class="font-semibold">已经有了</strong>：<code>triggerSession</code> 已能走 <code>SessionQueue</code>（worker 模式）或 <code>Executor</code>（本地模式）。</p>
+<h3 id="目标-1" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">目标<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#目标-1">#</a></h3>
+<p class="my-4 leading-7">RunEval 真正为每个 <code>EvalCase</code> 触发一次 session、收集输出、跑 scorer 打分、聚合成 EvalRun。对齐 <code>api-design.md §6.6/§6.7</code> 与 <code>tech_overview.md §7.3</code> 的 Eval 数据流。</p>
+<h3 id="设计新增-internalevaluationrunner" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">设计：新增 <code>internal/evaluation/runner</code><a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#设计新增-internalevaluationrunner">#</a></h3>
+<p class="my-4 leading-7">把执行逻辑从 handler 里拆出来，handler 只负责建 run + 起异步 runner（与 session trigger 的 <code>go runInBackground</code> 同构）。</p>
+<div class="language-bash"><div class="rspress-code-content rspress-scrollbar"><code>EvalRunner.Run(ctx, run, set, domain):
+  for case in set.Cases:                     # 顺序或有界并发(信号量, 默认 4)
+    sess := triggerSessionForEval(domain, case.Input)   # 复用 SessionCommands.Trigger
+    waitForTerminal(sess.ID)                 # 订阅 broadcaster 或轮询 session 状态
+    output := sess.Result
+    score := Scorer.Score(case, output)      # 见下
+    accumulate(score, cost, passed)
+  EvalService.FinishRun(run.ID, avgScore, passed, total, totalCost, durationMs)
+  # 每个 case 落一条 eval_case_result(见迁移)
+</code></div></div>
+<h3 id="scorer本轮只做规则类够闭环" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">Scorer（本轮只做规则类，够闭环）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#scorer本轮只做规则类够闭环">#</a></h3>
+<p class="my-4 leading-7"><code>internal/evaluation/scorer</code>，接口 <code>Score(case EvalCase, actual any) (float64, bool, details)</code>。对齐 proto <code>Scorer{name,kind,weight,config}</code>：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>exact</code> —— 精确匹配 <code>case.Expect</code>。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>contains</code> —— 子串/包含。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>json_match</code> —— 结构等价。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>llm_judge</code> —— <strong class="font-semibold">本轮留接口 stub</strong>（依赖真实 Adapter，不在范围内），注册但返 <code>ErrScorerNotAvailable</code>，多 scorer 按 <code>weight</code> 加权，遇不可用的降级跳过并在 details 标注。</li>
+</ul>
+<h3 id="落点-1" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">落点<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#落点-1">#</a></h3>
+<ol class="list-decimal pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>internal/evaluation/runner/runner.go</code> 新增（含并发信号量、超时、取消）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>internal/evaluation/scorer/{scorer.go,exact.go,contains.go,json.go}</code> 新增。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">迁移 <code>000005_eval_case_results</code>（若 <code>eval_cases</code>/<code>eval_case_results</code> 未覆盖 per-case 结果）：<code>eval_case_id / eval_run_id / session_id / score / passed / actual / details</code>。对齐 proto <code>EvalCaseResult</code>。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>EvalService</code> 补 <code>RecordCaseResult</code> + <code>GetRun</code> 带 cases。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>pkg/api/auxiliary.go:RunEval</code>：删 skeleton，改成建 run → <code>go runner.Run(...)</code> → 返 <code>202 {run_id, state:&quot;running&quot;}</code>。<code>GetEvalRun</code> 已能读回，补 <code>cases[]</code> 字段（对齐 §6.7）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">复用而非新造：session 触发走现有 <code>SessionCommands.Trigger</code>；等终态复用 <code>broadcaster</code> 或 session repo 轮询。</li>
+</ol>
+<h3 id="关键决策点需-review-确认" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">关键决策点（需 review 确认）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#关键决策点需-review-确认">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">执行位置</strong>：Eval 的 case session 走 worker 队列 还是本地 Executor？建议<strong class="font-semibold">跟随部署形态</strong>——有 <code>SessionQueue</code> 就入队（团队/生产），否则本地 Executor（本地开发）。与 <code>triggerSession</code> 保持同一策略，零新分支。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">并发度</strong>：默认 4，<code>Policy.budget_usd</code> 做全局熔断（跑超预算即停并标 run failed）。</li>
+</ul>
+<h3 id="风险-1" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">风险<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#风险-1">#</a></h3>
+<p class="my-4 leading-7">中。异步执行 + 状态回写有竞态；case session 失败要不要整 run failed（建议：单 case 失败记 0 分继续，run 只在超预算/取消时 failed）。<strong class="font-semibold">回滚</strong>：runner 出问题时 handler 可 feature-flag 退回 skeleton（<code>HNSX_EVAL_RUNNER=off</code>）。</p>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="4-track-d--phase-3-控制面里程碑-m3" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">4. Track D —— Phase 3 控制面（里程碑 M3）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#4-track-d--phase-3-控制面里程碑-m3">#</a></h2>
+<p class="my-4 leading-7">四个子项彼此独立，可并行拆票。共同模式：<code>internal/&lt;x&gt;/{model,repository,service}</code> 已有骨架的就填实，没有的补齐 Postgres+InMemory 双实现，handler 去掉 stub 分支。</p>
+<h3 id="d1-secretauxiliarygo451-480现返-adapter_not_implemented" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">D1. Secret（<code>auxiliary.go:451-480</code>，现返 <code>ADAPTER_NOT_IMPLEMENTED</code>）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#d1-secretauxiliarygo451-480现返-adapter_not_implemented">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">迁移 <code>000003</code> 已建 secret 子表；<code>internal/secret/{model,repository}</code> 骨架在，缺 service + 测试。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">安全底线</strong>：value 落库前加密（本轮至少 AES-GCM + 来自 <code>HNSX_SECRET_KEY</code> 的主密钥；<code>List</code>/<code>Get</code> <strong class="font-semibold">绝不回显明文</strong>，只返 <code>id/created_at/masked_preview</code>）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">打通 <code>${secret:name}</code> 注入：runtime 解释 DomainSpec 时从 secret store 解引用（<code>internal/secret/model</code> 注释已提到占位解析）。<strong class="font-semibold">注意</strong>：这一步触碰 runtime，范围内只做「store + API + 注入点接口」，不做 Adapter 侧真实使用。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">handler：<code>List/Create/Update/Delete</code> 接真 service，<code>Create</code> 返 201 不含 value。</li>
+</ul>
+<h3 id="d2-policyauxiliarygo483现返空数组" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">D2. Policy（<code>auxiliary.go:483</code>，现返空数组）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#d2-policyauxiliarygo483现返空数组">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>internal/policy</code> 聚合 + repository 已实装且有测试，<code>pkg/policy.Engine</code> 也在。缺的是 <strong class="font-semibold">CRUD handler + Domain 绑定</strong>。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">落点：<code>ListPolicies</code> 接 repo；补 <code>CreatePolicy</code> / <code>POST /domains/:id/policies</code>（绑定，对齐 §12.3）。绑定关系存 <code>domain_policies</code> 关联表（迁移 <code>000006</code>）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">运行时已有 <code>pkg/policy.Engine</code> 做预算/权限，绑定后 Executor 读生效 policy。</li>
+</ul>
+<h3 id="d3-runtimeauxiliarygo435现硬编码-fake-local-control-planephase1" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">D3. Runtime（<code>auxiliary.go:435</code>，现硬编码 fake <code>local-control-plane/phase1</code>）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#d3-runtimeauxiliarygo435现硬编码-fake-local-control-planephase1">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">真实数据源已存在：<code>internal/worker</code>（Registry + 心跳 + Postgres 持久化 + 60s GC）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">落点：<code>ListRuntimes</code>/<code>GetRuntime</code> 改读 <code>worker.Registry</code>/worker repo，映射 <code>WorkerInfo</code>→REST（对齐 §10 与 proto <code>WorkerInfo/ResourceCapacity/ResourceUsage/WorkerHealth</code>）。删硬编码。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">这是四项里最省的——<strong class="font-semibold">只是把已有 worker 数据换个 REST 视图</strong>。</li>
+</ul>
+<h3 id="d4-approvalauxiliarygo74-98现全-stub" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">D4. Approval（<code>auxiliary.go:74-98</code>，现全 stub）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#d4-approvalauxiliarygo74-98现全-stub">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">从零：<code>internal/approval/{model,repository,service}</code> 新增 + 迁移 <code>000007_approvals</code>（<code>id/session_id/domain_id/action/resource/status/comment/created_at/decided_at/decided_by</code>）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">与 Policy <code>require_human_approval</code> + runtime 联动：Executor 命中需审批的动作时<strong class="font-semibold">挂起 session + 建 approval 记录</strong>，SSE 推 <code>event: approval_required</code>；<code>approve/reject</code> 后恢复/终止。<strong class="font-semibold">注意</strong>：挂起/恢复触碰 runtime 执行流，是本 Track 最重的一项。若想控风险，可拆两步：先做 Approval 的 CRUD + 列表（Console 可见），runtime 挂起联动作为 M3.5 独立票。</li>
+</ul>
+<h3 id="风险-2" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">风险<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#风险-2">#</a></h3>
+<p class="my-4 leading-7">中。D1 加密密钥管理、D4 runtime 挂起是主要风险点。D2/D3 低。<strong class="font-semibold">建议顺序</strong>：D3 → D2 → D1 → D4（由易到难，D4 的 runtime 联动可延后）。</p>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="5-track-c--协议栈收敛connect-rpc里程碑-m4压轴" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">5. Track C —— 协议栈收敛（Connect-RPC，里程碑 M4，压轴）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#5-track-c--协议栈收敛connect-rpc里程碑-m4压轴">#</a></h2>
+<h3 id="现状问题-2" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">现状问题<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#现状问题-2">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">文档：CLI/内部走 gRPC，Console/SDK 走 REST。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">实际：CLI 的 <code>internal/client</code> 打 <strong class="font-semibold">HTTP</strong> <code>http://127.0.0.1:50051</code>；gRPC 只有 Worker/Scheduler；其余 6 个 control_plane service 是 protoc <code>Unimplemented</code>；gin handler 与 proto 各写各的，字段映射靠手抄，正在漂移。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>proto/gen/go/hnsx/v1/v1connect/</code> 已生成，<strong class="font-semibold">零引用</strong>。</li>
+</ul>
+<h3 id="目标-2" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">目标<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#目标-2">#</a></h3>
+<p class="my-4 leading-7">用 <strong class="font-semibold">Connect-RPC</strong> 做「一份 service 实现，同时讲 gRPC + gRPC-Web + HTTP/JSON」，消除 gin 手写 handler 与 gRPC 定义的双栈重复。<code>connectrpc.com/connect v1.18.1</code> 已在 go.mod。</p>
+<h3 id="收敛策略务实不推倒重来" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">收敛策略（务实，不推倒重来）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#收敛策略务实不推倒重来">#</a></h3>
+<p class="my-4 leading-7">不追求一次替换所有 gin 路由。分两层：</p>
+<ol class="list-decimal pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">内部/控制面 RPC 走 Connect</strong>：<code>DomainRegistry / SessionScheduler(GetSession,ListSessions) / RuntimeDiscovery / Telemetry / Eval</code> 用 Connect handler 实装，CLI <code>internal/client</code> 从手写 HTTP 换成 <strong class="font-semibold">Connect Go client</strong>，让「CLI↔Control Plane 走 gRPC」名副其实。Worker/Scheduler 保持现有 grpc-go（bidi stream 更成熟，不动）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">REST 对外保留 gin</strong>：Console/SDK 面向的 <code>/api/v1/*</code> REST + SSE 保持不变——它们是外部契约，且 SSE 用 gin 更顺手。但 <strong class="font-semibold">handler 内部改为调用同一批 Connect service 实现</strong>（而非各写一份逻辑），让 REST 退化成「协议适配壳」，业务逻辑唯一化。</li>
+</ol>
+<p class="my-4 leading-7">即目标态：</p>
+<div class="language-bash"><div class="rspress-code-content rspress-scrollbar"><code>              ┌───────────────────────────────┐
+   Console/SDK│ gin REST + SSE (/api/v1/*)      │─┐
+              └───────────────────────────────┘ │
+                                                 ├─► 同一批 service 实现
+   CLI/内部    ┌───────────────────────────────┐ │   (internal/*/service)
+              │ Connect handler (gRPC+JSON)     │─┘
+              └───────────────────────────────┘
+   Worker     ┌───────────────────────────────┐
+              │ grpc-go bidi (worker.proto)     │  ← 保持不动
+              └───────────────────────────────┘
+</code></div></div>
+<h3 id="落点-2" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">落点<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#落点-2">#</a></h3>
+<ol class="list-decimal pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>make proto</code> 确认 buf 生成 <code>v1connect</code>（已生成，验证 codegen 配置在案）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>pkg/controlplane/</code> 或新 <code>internal/rpc/</code>：为 5 个 control_plane service 写 Connect handler，直接调 <code>internal/*/service</code>。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>internal/client</code>：手写 HTTP client → Connect Go client。CLI <code>remote</code> 子命令改造，输出契约不变。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>pkg/api/*</code>：handler 抽掉内联业务逻辑，改调 service（很多已经是这样，Track A/B/D 会进一步理清 service 边界——这也是把 C 放最后的原因）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">删死代码：<code>server/</code>、<code>pkg/observation/</code>、<code>hnsx-core</code> 空子模块。</li>
+</ol>
+<h3 id="风险-3" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">风险<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#风险-3">#</a></h3>
+<p class="my-4 leading-7">高。这是唯一动到外部/CLI 契约的 Track。<strong class="font-semibold">强制要求</strong>：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">单开 <code>feat/connect-rpc</code> 分支，不与 A/B/D 混。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">CLI 输出做 golden 测试锁契约，改造前后 diff 为空。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">分服务灰度：一次迁一个 service，<code>internal/client</code> 保留 HTTP fallback 到全部迁完再删。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">若 review 认为 ROI 不足以承担风险，<strong class="font-semibold">C 可整体延后</strong>——A/B/D 完成即已兑现本轮核心价值，C 是纯技术债偿还。</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="6-里程碑与验收" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">6. 里程碑与验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#6-里程碑与验收">#</a></h2>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">里程碑</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">Track</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">交付</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">验收</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">M1</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">A</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Trace API 归位</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>/api/v1/traces</code> 返真实聚合；新增 handler 测试；Console trace 页正常</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">M2</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">B</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Eval 执行闭环</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>RunEval</code> 真跑 case，<code>GetEvalRun</code> 返 per-case 分数；规则 scorer 测试覆盖</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">M3</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">D</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Phase 3 控制面</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Secret 加密不回显 / Policy CRUD+绑定 / Runtime 读真 worker / Approval CRUD</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">M4</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">C</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">协议收敛</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">CLI 走 Connect；业务逻辑单一化；死代码清零；CLI golden 测试 diff 空</td>
+</tr>
+</tbody>
+</table>
+<p class="my-4 leading-7">每个里程碑收尾必跑：<code>cd hnsx-server &amp;&amp; go build ./... &amp;&amp; go test ./...</code>；触碰 proto 的跑 <code>make proto</code>；触碰 Console 契约的到 <code>hnsx-console</code> 跑 <code>pnpm type-check</code>。</p>
+<h2 id="7-伴随质量债穿插不单列里程碑" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">7. 伴随质量债（穿插，不单列里程碑）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#7-伴随质量债穿插不单列里程碑">#</a></h2>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">每个 Track 给新增/改动的 handler 补测试（<code>pkg/api</code> 当前近零覆盖）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">M1 顺带清 <code>server/</code>、<code>pkg/observation/</code> 空目录（M4 统一删避免冲突则延后）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">tenant 解析：中间件已读 <code>X-Tenant-ID</code>，但无 token→tenant 映射；本轮先保持 single-tenant <code>DefaultID</code>，仅在文档标注为 P4 认证的前置。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>ListDomainVersions</code>（<code>domains.go:123</code> 硬编码单版本）接 <code>domain_versions</code> 表——可并入 M1 或独立小票。</li>
+</ul>
+<h2 id="8-开放问题待-review-拍板" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">8. 开放问题（待 review 拍板）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#8-开放问题待-review-拍板">#</a></h2>
+<ol class="list-decimal pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">C 做不做</strong>：Connect 收敛 ROI vs 风险，是否本轮纳入，还是仅完成 A/B/D。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Eval 执行位置</strong>：跟随部署形态（有队列入队，无则本地）是否认可。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Approval runtime 联动</strong>：M3 一次做完，还是拆「CRUD 先行 + 挂起联动延后」。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Secret 主密钥来源</strong>：本轮 <code>HNSX_SECRET_KEY</code> 环境变量够用，还是要接 KMS/外部保险箱接口。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">trace_id 语义变更</strong>对 Console <code>mappers.ts</code> 的影响面确认。</li>
+</ol><!--/$--></div><div class="rspress-doc-footer"><footer class="mt-8"><div class="xs:flex pb-5 px-2 justify-end items-center"></div><div class="flex flex-col"></div><div class="flex flex-col sm:flex-row sm:justify-around gap-4 pt-6"><div class="prev_c92d1 flex flex-col"></div><div class="next_c11be flex flex-col"></div></div></footer></div></div></div></div></div></section></div>
+    <div id="search-container"></div>
+  </body>
+</html>

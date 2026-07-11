@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content="Rspress v1.47.1">
+    <meta property="og:title"content="HnsX — Harness as a Service"><meta property="og:description"content="HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI 等最强 Agent。"><meta property="og:type"content="website"><meta property="og:image"content="https://narcilee7.github.io/HnsX/og-image.png"><meta name="twitter:card"content="summary_large_image"><title data-rh="true">HnsX — Harness as a Service</title><meta data-rh="true" name="description" content="HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI 等最强 Agent。"/>
+  <script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const isDark = !saved || saved === 'auto' ? preferDark : saved === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script><link rel="icon" href="/HnsX/favicon.png"><script defer src="/HnsX/static/js/styles.ae5ec2d0.js"></script><script defer src="/HnsX/static/js/lib-react.0aff66c0.js"></script><script defer src="/HnsX/static/js/lib-router.0d65c259.js"></script><script defer src="/HnsX/static/js/641.c64fbc03.js"></script><script defer src="/HnsX/static/js/index.7e3760f1.js"></script><link href="/HnsX/static/css/styles.f27a1667.css" rel="stylesheet"></head>
+
+  <body >
+    <div id="root"><div class="navContainer_d18b1 rspress-nav px-6  sticky_ddfa7"><div class="container_e4235 flex justify-between items-center h-full"><div class="navBarTitle_c5f07"><a href="/HnsX/index" class="link_a7cea flex items-center w-full h-full text-base font-semibold transition-opacity duration-300 hover:opacity-60"><span>HnsX — Harness as a Service</span></a></div><div class="flex flex-1 justify-end items-center"><div class="leftNav_e6722"><div class="rspress-nav-menu menu h-14"><a href="/HnsX/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154 activeItem_a28b5 text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">首页</div></a><a href="/HnsX/blog/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">博客</div></a><a href="/HnsX/guide/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">指南</div></a><a href="/HnsX/design/vision" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">文档</div></a><a href="/HnsX/design/server-design/api-design" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">API</div></a></div></div><div class="rightNav_a2fea"><div class="flex sm:flex-1 items-center sm:pl-4 sm:pr-2"><div class="rspress-nav-search-button navSearchButton_df1fb"><button><svg width="18" height="18" viewBox="0 0 32 32"><path fill="var(--rp-c-gray)" d="m29 27.586-7.552-7.552a11.018 11.018 0 1 0-1.414 1.414L27.586 29ZM4 13a9 9 0 1 1 9 9 9.01 9.01 0 0 1-9-9"></path></svg><p class="searchWord_af2c1">Search</p><div style="opacity:0"><span></span><span>K</span></div></button></div><div class="mobileNavSearchButton_d85a9"><svg width="24" height="24" viewBox="0 0 32 32"><path fill="var(--rp-c-gray)" d="m29 27.586-7.552-7.552a11.018 11.018 0 1 0-1.414 1.414L27.586 29ZM4 13a9 9 0 1 1 9 9 9.01 9.01 0 0 1-9-9"></path></svg></div></div><div class="rspress-nav-menu menu h-14"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">GitHub</div></a></div><div class="flex-center flex-row"><div class="mx-2"><div class="md:mr-2 rspress-nav-appearance"><div class="p-1 border border-solid border-gray-300 text-gray-400  cursor-pointer rounded-md hover:border-gray-600 hover:text-gray-600 dark:hover:border-gray-200 dark:hover:text-gray-200 transition-all duration-300 w-7 h-7"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24" class="dark:hidden" width="18" height="18" fill="currentColor"><path d="M12 18c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6m0-10c-2.2 0-4 1.8-4 4s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4M12 4c-.6 0-1-.4-1-1V1c0-.6.4-1 1-1s1 .4 1 1v2c0 .6-.4 1-1 1M12 24c-.6 0-1-.4-1-1v-2c0-.6.4-1 1-1s1 .4 1 1v2c0 .6-.4 1-1 1M5.6 6.6c-.3 0-.5-.1-.7-.3L3.5 4.9c-.4-.4-.4-1 0-1.4s1-.4 1.4 0l1.4 1.4c.4.4.4 1 0 1.4-.1.2-.4.3-.7.3M19.8 20.8c-.3 0-.5-.1-.7-.3l-1.4-1.4c-.4-.4-.4-1 0-1.4s1-.4 1.4 0l1.4 1.4c.4.4.4 1 0 1.4-.2.2-.5.3-.7.3M3 13H1c-.6 0-1-.4-1-1s.4-1 1-1h2c.6 0 1 .4 1 1s-.4 1-1 1M23 13h-2c-.6 0-1-.4-1-1s.4-1 1-1h2c.6 0 1 .4 1 1s-.4 1-1 1M4.2 20.8c-.3 0-.5-.1-.7-.3-.4-.4-.4-1 0-1.4l1.4-1.4c.4-.4 1-.4 1.4 0s.4 1 0 1.4l-1.4 1.4c-.2.2-.4.3-.7.3M18.4 6.6c-.3 0-.5-.1-.7-.3-.4-.4-.4-1 0-1.4l1.4-1.4c.4-.4 1-.4 1.4 0s.4 1 0 1.4l-1.4 1.4c-.2.2-.5.3-.7.3"></path></svg><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24" class="hidden dark:block" width="18" height="18" fill="currentColor"><path d="M12.1 22h-.9c-5.5-.5-9.5-5.4-9-10.9.4-4.8 4.2-8.6 9-9 .4 0 .8.2 1 .5s.2.8-.1 1.1c-2 2.7-1.4 6.4 1.3 8.4 2.1 1.6 5 1.6 7.1 0 .3-.2.7-.3 1.1-.1.3.2.5.6.5 1-.2 2.7-1.5 5.1-3.6 6.8-1.9 1.4-4.1 2.2-6.4 2.2M9.3 4.4c-2.9 1-5 3.6-5.2 6.8-.4 4.4 2.8 8.3 7.2 8.7 2.1.2 4.2-.4 5.8-1.8 1.1-.9 1.9-2.1 2.4-3.4-2.5.9-5.3.5-7.5-1.1-2.8-2.2-3.9-5.9-2.7-9.2"></path></svg></div></div></div><div class="social-links menu-item_e90a6 flex-center relative"><div class="flex-center h-full gap-x-4 transition-colors duration-300 md:mr-2"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="social-links"><div class="social-links-icon_a4ad0"><div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a></div></div></div></div><div class="mobileNavMenu_e7045"><div class="navScreen_ec30c  rspress-nav-screen" id="navScreen"><div class="container_c935d"><div class="navMenu_b887b"><div class="navMenuItem_e7978 w-full"><a href="/HnsX/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154 activeItem_a28b5 text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">首页</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/blog/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">博客</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/guide/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">指南</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/design/vision" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">文档</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/design/server-design/api-design" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">API</div></a></div><div class="navMenuItem_e7978 w-full"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">GitHub</div></a></div></div><div class="flex-center flex-col gap-2"><div class="mt-2 navAppearance_bf893 flex justify-center"></div><div class="social-links menu-item_e90a6 flex-center relative"><div class="flex-center h-full gap-x-4 transition-colors duration-300 md:mr-2"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="social-links"><div class="social-links-icon_a4ad0"><div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a></div></div></div></div></div><button aria-label="mobile hamburger" class=" rspress-mobile-hamburger navHamburger_ac64c text-gray-500"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="currentColor"><circle cx="8" cy="16" r="2" fill="currentColor"></circle><circle cx="16" cy="16" r="2" fill="currentColor"></circle><circle cx="24" cy="16" r="2" fill="currentColor"></circle></svg></button></div></div></div></div><section><div class="docLayout_af141 pt-0"><div class="flex-1 relative min-w-0"><div class="rspress-sidebar-menu-container no-toc"><div class="rspress-sidebar-menu"></div></div><div class="content_ff766 rspress-doc-container flex"><div class="flex-1 overflow-x-auto"><div class="rspress-doc"><!--$--><h1 id="todo-management" class="rspress-doc-title text-3xl mb-10 leading-10 tracking-tight title_fb7eb">TODO Management<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#todo-management">#</a></h1>
+<blockquote class="border-l-2 border-solid border-divider pl-4 my-6 transition-colors duration-500 blockquote_f1063">
+<p class="my-4 leading-7">周期：2026.07.08（本周）<!-- -->
+北极星：跑通 <code>CLI → Go Control Plane → Python Worker → Noop Adapter → Observation</code> 的最小端到端链路。</p>
+</blockquote>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="本周目标" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">本周目标<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#本周目标">#</a></h2>
+<ol class="list-decimal pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">后端 Worker</strong>：完成 Python worker parent 进程、SessionRuntime 子进程和 Noop adapter，能独立跑通一次完整 Session。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Go 服务调度</strong>：完成 WorkerRegistry / Scheduler 与 Python worker 的 gRPC 对接，支持心跳、任务拉取和双向流取消。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">前端工程化</strong>：补齐控制台与后端 API 的对接，重点把 Domain 列表、Session 触发、SSE Observation 实时流页面串起来。</li>
+</ol>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="1-后端-workerhnsx-worker" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">1. 后端 Worker（hnsx-worker）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#1-后端-workerhnsx-worker">#</a></h2>
+<h3 id="11-worker-parent-进程" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">1.1 Worker parent 进程<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#11-worker-parent-进程">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->实现 <code>hnsx-worker run --server=... --worker-id=...</code> CLI 入口</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->通过 gRPC <code>PullSession</code> 长轮询从 Go Scheduler 拉取待执行 Session</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->每 5s 发送 <code>Heartbeat</code>，上报 worker 状态与当前负载</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->维护 <code>StreamChannel</code> 双向流，上传 Observation / 接收 Cancel</li>
+</ul>
+<h3 id="12-sessionruntime-子进程" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">1.2 SessionRuntime 子进程<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#12-sessionruntime-子进程">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->用 <code>subprocess.Popen</code> 隔离每个 Session 执行</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->子进程内加载 DomainSpec 并校验 Harness 配置</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->子进程退出时父进程回收资源，异常退出时上报 error observation</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->收到 Cancel 信号时向子进程发送 SIGTERM，支持优雅退出</li>
+</ul>
+<h3 id="13-noop-adapter" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">1.3 Noop adapter<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#13-noop-adapter">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->实现 <code>NoopAdapter</code>，直接返回固定文本 observation</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->跑通 <code>trigger → session → turn → observation → end</code> 的完整状态机</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->把 observation 序列通过 <code>StreamChannel</code> 实时回传 Go Control Plane</li>
+</ul>
+<h3 id="14-测试与验收" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">1.4 测试与验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#14-测试与验收">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <code>make worker-test</code> 全部通过</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->端到端覆盖：拉任务 → fork runtime → noop adapter → 回传 3 条以上 observation（见 <code>scripts/smoke-worker.sh</code>）</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="2-go-服务调度hnsx-server" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">2. Go 服务调度（hnsx-server）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#2-go-服务调度hnsx-server">#</a></h2>
+<h3 id="21-worker-registry" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">2.1 Worker Registry<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#21-worker-registry">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->维护内存中的 worker 列表（worker-id、capabilities、last heartbeat、current session）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->心跳超时通过 <code>EvictStale</code> 自动清理离线 worker</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->提供 <code>Register</code> / <code>Heartbeat</code> / <code>List</code> / <code>Get</code> / <code>Inbound</code> 接口</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->新增 <code>AssignSession</code> / <code>SessionWorker</code> / <code>UnassignSession</code>，维护 session → worker 映射</li>
+</ul>
+<h3 id="22-scheduler" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">2.2 Scheduler<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#22-scheduler">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->Session 触发后 <code>Enqueue</code> 到 <code>SessionQueue</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->Worker 通过 <code>PullSession</code> 长轮询拉取任务</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->Worker 离线时自动重新调度（当前行为：等长轮询 30s 超时后重新入队；需 queue 感知 worker liveness）</li>
+</ul>
+<h3 id="23-grpc-服务对接" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">2.3 gRPC 服务对接<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#23-grpc-服务对接">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->补全 <code>proto/hnsx/v1/worker.proto</code> 的 Go service 实现：<!-- -->
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>PullSession</code>（long-poll）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>Heartbeat</code>（unary）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>StreamChannel</code>（bidirectional streaming）</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->与 Python worker 完成真实 gRPC 握手并跑通全链路</li>
+</ul>
+<h3 id="24-cancel-传播" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">2.4 Cancel 传播<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#24-cancel-传播">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->Console / CLI 调用 Cancel Session 时，通过 <code>Registry.SessionWorker</code> 找到对应 worker</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->通过 <code>StreamChannel</code> 下发 <code>CancelSessionCommand</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->Python worker 收到后终止子进程并回传 <code>cancelled</code> observation</li>
+</ul>
+<h3 id="25-测试与验收" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">2.5 测试与验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#25-测试与验收">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <code>go test ./pkg/worker/... ./pkg/controlplane/... ./pkg/api/...</code> 通过</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->端到端 smoke：<code>scripts/smoke-worker.sh</code> 验证注册 → 拉任务 → 回传 observation → cancel</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="3-前端工程化hnsx-console" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">3. 前端工程化（hnsx-console）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#3-前端工程化hnsx-console">#</a></h2>
+<h3 id="31-api-层补齐" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">3.1 API 层补齐<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#31-api-层补齐">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->确认并统一 <code>src/api/client.ts</code> 的 base URL / 错误处理 / JSON 解析</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->补齐 Domain 相关 API：list、get、create、update、validate</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->补齐 Session 相关 API：trigger、get、list、cancel</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->补齐 SSE 实时 Observation 消费：<code>GET /api/v1/sessions/:id/events</code></li>
+</ul>
+<h3 id="32-页面与组件" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">3.2 页面与组件<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#32-页面与组件">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <code>DomainsPage</code>：Domain 列表 + 新建入口</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <code>DomainDetailPage</code>：YAML/JSON 编辑器（Monaco）+ 版本切换 + 保存/校验</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <code>DomainRunPage</code>：选择 Domain、填写 trigger、触发 Session</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <code>SessionDetailPage</code>：SSE 接收 observation，用 <code>ObservationTimeline</code> 实时渲染</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->错误/加载态统一走 <code>src/components/ui/Error.tsx</code>、<code>Loading.tsx</code>、<code>Empty.tsx</code></li>
+</ul>
+<h3 id="33-工程化规范" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">3.3 工程化规范<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#33-工程化规范">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <code>pnpm type-check</code> 通过</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <code>pnpm build</code> 通过</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>pnpm lint</code> / <code>pnpm test</code> / <code>pnpm dead-deps</code> 尚未跑（本周重点在端到端链路）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->主题/颜色统一走 CSS 变量（<code>--chart-1..5</code>、<code>--success/warning/danger/info</code>），不硬编码色值</li>
+</ul>
+<h3 id="34-与-sdk--observability-workspace-联动" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">3.4 与 SDK / observability workspace 联动<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#34-与-sdk--observability-workspace-联动">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->确认 <code>@hnsx/sdk-node</code> 提供的类型与 API 返回一致</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->确认 <code>@hnsx/observability</code> 组件在控制台能正常渲染 trace/metric 数据</li>
+</ul>
+<h3 id="35-验收" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">3.5 验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#35-验收">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <code>pnpm build</code> 成功产出 dist</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->控制台能：列出 Domain → 编辑保存 → 触发 Session → 实时看到 Observation 流</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="跨线集成验收本周终极目标" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">跨线集成验收（本周终极目标）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#跨线集成验收本周终极目标">#</a></h2>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->启动 Go server</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->启动 Python worker 并注册成功</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->控制台（或 CLI）触发一个 Session</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->Go Scheduler 把任务分发给 Python worker</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->Python worker fork SessionRuntime，Noop adapter 产生 observation</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->observation 经 gRPC 回传到 Go server，再经 SSE 推送到控制台展示</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <!-- -->整个链路的 trace / cost / audit 有记录（trace 通过 session id 关联；cost 由 noop 产生零值记录）</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="遗留问题--下周入口" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">遗留问题 / 下周入口<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#遗留问题--下周入口">#</a></h2>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Worker 异常断开时的 queue waiter</strong>：如果 worker 在 <code>PullSession</code> 长轮询中异常断开，它占用的 waiter 会让新 session 延迟到 30s 超时后才重新可见。需要让 <code>SessionQueue.Dequeue</code> 感知 worker liveness 或支持主动取消 waiter。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">前端 lint / test / dead-deps</strong>：下周补齐并加入 CI。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">真实 Anthropic / OpenAI adapter</strong>：V1.1 Step 3，接入真实 LLM provider。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Trace / cost / audit 持久化</strong>：当前 observation 只走内存 broadcaster，DB 持久化未接入。</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="不在这周做的事" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">不在这周做的事<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#不在这周做的事">#</a></h2>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">真实 Anthropic / OpenAI adapter 调用（Step 3，下周）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Tools / MCP / Sandbox / Memory 完整实现（Step 5）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Supervisor / workflow / autonomous 编排（Step 6）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Helm / K8s / 多租户 SaaS</li>
+<li class="[&amp;:not(:first-child)]:mt-2">复杂 Workflow DAG 可视化编辑器</li>
+</ul><!--/$--></div><div class="rspress-doc-footer"><footer class="mt-8"><div class="xs:flex pb-5 px-2 justify-end items-center"></div><div class="flex flex-col"></div><div class="flex flex-col sm:flex-row sm:justify-around gap-4 pt-6"><div class="prev_c92d1 flex flex-col"></div><div class="next_c11be flex flex-col"></div></div></footer></div></div></div></div></div></section></div>
+    <div id="search-container"></div>
+  </body>
+</html>

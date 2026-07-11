@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content="Rspress v1.47.1">
+    <meta property="og:title"content="HnsX — Harness as a Service"><meta property="og:description"content="HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI 等最强 Agent。"><meta property="og:type"content="website"><meta property="og:image"content="https://narcilee7.github.io/HnsX/og-image.png"><meta name="twitter:card"content="summary_large_image"><title data-rh="true">HnsX — Harness as a Service</title><meta data-rh="true" name="description" content="HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI 等最强 Agent。"/>
+  <script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const isDark = !saved || saved === 'auto' ? preferDark : saved === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script><link rel="icon" href="/HnsX/favicon.png"><script defer src="/HnsX/static/js/styles.ae5ec2d0.js"></script><script defer src="/HnsX/static/js/lib-react.0aff66c0.js"></script><script defer src="/HnsX/static/js/lib-router.0d65c259.js"></script><script defer src="/HnsX/static/js/641.c64fbc03.js"></script><script defer src="/HnsX/static/js/index.7e3760f1.js"></script><link href="/HnsX/static/css/styles.f27a1667.css" rel="stylesheet"></head>
+
+  <body >
+    <div id="root"><div class="navContainer_d18b1 rspress-nav px-6  sticky_ddfa7"><div class="container_e4235 flex justify-between items-center h-full"><div class="navBarTitle_c5f07"><a href="/HnsX/index" class="link_a7cea flex items-center w-full h-full text-base font-semibold transition-opacity duration-300 hover:opacity-60"><span>HnsX — Harness as a Service</span></a></div><div class="flex flex-1 justify-end items-center"><div class="leftNav_e6722"><div class="rspress-nav-menu menu h-14"><a href="/HnsX/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154 activeItem_a28b5 text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">首页</div></a><a href="/HnsX/blog/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">博客</div></a><a href="/HnsX/guide/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">指南</div></a><a href="/HnsX/design/vision" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">文档</div></a><a href="/HnsX/design/server-design/api-design" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">API</div></a></div></div><div class="rightNav_a2fea"><div class="flex sm:flex-1 items-center sm:pl-4 sm:pr-2"><div class="rspress-nav-search-button navSearchButton_df1fb"><button><svg width="18" height="18" viewBox="0 0 32 32"><path fill="var(--rp-c-gray)" d="m29 27.586-7.552-7.552a11.018 11.018 0 1 0-1.414 1.414L27.586 29ZM4 13a9 9 0 1 1 9 9 9.01 9.01 0 0 1-9-9"></path></svg><p class="searchWord_af2c1">Search</p><div style="opacity:0"><span></span><span>K</span></div></button></div><div class="mobileNavSearchButton_d85a9"><svg width="24" height="24" viewBox="0 0 32 32"><path fill="var(--rp-c-gray)" d="m29 27.586-7.552-7.552a11.018 11.018 0 1 0-1.414 1.414L27.586 29ZM4 13a9 9 0 1 1 9 9 9.01 9.01 0 0 1-9-9"></path></svg></div></div><div class="rspress-nav-menu menu h-14"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">GitHub</div></a></div><div class="flex-center flex-row"><div class="mx-2"><div class="md:mr-2 rspress-nav-appearance"><div class="p-1 border border-solid border-gray-300 text-gray-400  cursor-pointer rounded-md hover:border-gray-600 hover:text-gray-600 dark:hover:border-gray-200 dark:hover:text-gray-200 transition-all duration-300 w-7 h-7"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24" class="dark:hidden" width="18" height="18" fill="currentColor"><path d="M12 18c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6m0-10c-2.2 0-4 1.8-4 4s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4M12 4c-.6 0-1-.4-1-1V1c0-.6.4-1 1-1s1 .4 1 1v2c0 .6-.4 1-1 1M12 24c-.6 0-1-.4-1-1v-2c0-.6.4-1 1-1s1 .4 1 1v2c0 .6-.4 1-1 1M5.6 6.6c-.3 0-.5-.1-.7-.3L3.5 4.9c-.4-.4-.4-1 0-1.4s1-.4 1.4 0l1.4 1.4c.4.4.4 1 0 1.4-.1.2-.4.3-.7.3M19.8 20.8c-.3 0-.5-.1-.7-.3l-1.4-1.4c-.4-.4-.4-1 0-1.4s1-.4 1.4 0l1.4 1.4c.4.4.4 1 0 1.4-.2.2-.5.3-.7.3M3 13H1c-.6 0-1-.4-1-1s.4-1 1-1h2c.6 0 1 .4 1 1s-.4 1-1 1M23 13h-2c-.6 0-1-.4-1-1s.4-1 1-1h2c.6 0 1 .4 1 1s-.4 1-1 1M4.2 20.8c-.3 0-.5-.1-.7-.3-.4-.4-.4-1 0-1.4l1.4-1.4c.4-.4 1-.4 1.4 0s.4 1 0 1.4l-1.4 1.4c-.2.2-.4.3-.7.3M18.4 6.6c-.3 0-.5-.1-.7-.3-.4-.4-.4-1 0-1.4l1.4-1.4c.4-.4 1-.4 1.4 0s.4 1 0 1.4l-1.4 1.4c-.2.2-.5.3-.7.3"></path></svg><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24" class="hidden dark:block" width="18" height="18" fill="currentColor"><path d="M12.1 22h-.9c-5.5-.5-9.5-5.4-9-10.9.4-4.8 4.2-8.6 9-9 .4 0 .8.2 1 .5s.2.8-.1 1.1c-2 2.7-1.4 6.4 1.3 8.4 2.1 1.6 5 1.6 7.1 0 .3-.2.7-.3 1.1-.1.3.2.5.6.5 1-.2 2.7-1.5 5.1-3.6 6.8-1.9 1.4-4.1 2.2-6.4 2.2M9.3 4.4c-2.9 1-5 3.6-5.2 6.8-.4 4.4 2.8 8.3 7.2 8.7 2.1.2 4.2-.4 5.8-1.8 1.1-.9 1.9-2.1 2.4-3.4-2.5.9-5.3.5-7.5-1.1-2.8-2.2-3.9-5.9-2.7-9.2"></path></svg></div></div></div><div class="social-links menu-item_e90a6 flex-center relative"><div class="flex-center h-full gap-x-4 transition-colors duration-300 md:mr-2"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="social-links"><div class="social-links-icon_a4ad0"><div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a></div></div></div></div><div class="mobileNavMenu_e7045"><div class="navScreen_ec30c  rspress-nav-screen" id="navScreen"><div class="container_c935d"><div class="navMenu_b887b"><div class="navMenuItem_e7978 w-full"><a href="/HnsX/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154 activeItem_a28b5 text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">首页</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/blog/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">博客</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/guide/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">指南</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/design/vision" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">文档</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/design/server-design/api-design" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">API</div></a></div><div class="navMenuItem_e7978 w-full"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">GitHub</div></a></div></div><div class="flex-center flex-col gap-2"><div class="mt-2 navAppearance_bf893 flex justify-center"></div><div class="social-links menu-item_e90a6 flex-center relative"><div class="flex-center h-full gap-x-4 transition-colors duration-300 md:mr-2"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="social-links"><div class="social-links-icon_a4ad0"><div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a></div></div></div></div></div><button aria-label="mobile hamburger" class=" rspress-mobile-hamburger navHamburger_ac64c text-gray-500"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="currentColor"><circle cx="8" cy="16" r="2" fill="currentColor"></circle><circle cx="16" cy="16" r="2" fill="currentColor"></circle><circle cx="24" cy="16" r="2" fill="currentColor"></circle></svg></button></div></div></div></div><section><div class="docLayout_af141 pt-0"><div class="flex-1 relative min-w-0"><div class="rspress-sidebar-menu-container no-toc"><div class="rspress-sidebar-menu"></div></div><div class="content_ff766 rspress-doc-container flex"><div class="flex-1 overflow-x-auto"><div class="rspress-doc"><!--$--><h1 id="hnsx-技术总览v1" class="rspress-doc-title text-3xl mb-10 leading-10 tracking-tight title_fb7eb">HnsX 技术总览（V1）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#hnsx-技术总览v1">#</a></h1>
+<blockquote class="border-l-2 border-solid border-divider pl-4 my-6 transition-colors duration-500 blockquote_f1063">
+<p class="my-4 leading-7">基于 <a href="/HnsX/./vision.md" class="link_a7cea  link_a9ef4 inline-link_f855c"><code>vision.md</code></a> 推导。HnsX 不是又一个 Agent，而是让企业安全、可控、可评估地驾驭最强 Agent 的 <strong class="font-semibold">Harness-as-a-Service</strong>。</p>
+</blockquote>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="1-我们解决什么问题" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">1. 我们解决什么问题<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#1-我们解决什么问题">#</a></h2>
+<p class="my-4 leading-7">Claude Code、Codex 等 Coding Agent 的能力已经很强，但企业直接落地时遇到的真实问题是：</p>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">问题</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">表现</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">不可控</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Agent 能读代码、能调工具、能联网，但什么能做什么不能做，没有统一策略。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">不可审计</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">一次会话里调了哪些工具、改了哪些文件、花了多少 token，事后说不清楚。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">不可复用</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">每个业务线都把领域知识写成一次性 prompt，没有沉淀成可复用的 Skill / Rule。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">不可评估</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">不知道 Agent 在真实业务场景下到底好不好，没法持续进化。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">不可部署</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">本地跑得很开心，一到团队/生产环境就没有管控面、没有沙箱、没有成本预算。</td>
+</tr>
+</tbody>
+</table>
+<p class="my-4 leading-7"><strong class="font-semibold">HnsX 的解法</strong>：给企业一个声明式的 Harness 层，把领域知识、约束策略、执行沙箱、观测审计、评估体系整合起来，让最强的 Agent 在安全边界内为企业工作。</p>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="2-核心定位" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">2. 核心定位<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#2-核心定位">#</a></h2>
+<h3 id="21-我们不做什么" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">2.1 我们不做什么<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#21-我们不做什么">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">不造 Agent 底座</strong>：Claude Code、Codex、OpenAI、Anthropic、Ollama、未来的 Agent，都不是 HnsX 自己实现。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">不做低代码 Workflow 编辑器</strong>：那不是 Harness 的核心。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">不做模型训练平台</strong>：我们不微调模型。</li>
+</ul>
+<h3 id="22-我们做什么" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">2.2 我们做什么<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#22-我们做什么">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Harness 层</strong>：System Prompt、Knowledge、Skills、Rules、Tools、MCP、Sandbox、Policy、Memory、Eval 的声明式定义与运行时。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Agent 运行时编排</strong>：细粒度到 Session / Turn / Observation 的编排，而不只是 DAG。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">约束与治理</strong>：Sandbox、Policy、Budget、Guardrails、Human-in-the-loop。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">观测与审计</strong>：每个 token、每次工具调用、每次成本消耗都可追踪。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">评估体系</strong>：评测集驱动 Harness 与 Agent 共同进化。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">部署与控制面</strong>：从本地开发到团队托管再到 SaaS 的渐进部署。</li>
+</ul>
+<p class="my-4 leading-7"><strong class="font-semibold">Agent 是燃料，Harness 是引擎和方向盘。</strong></p>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="3-总体架构" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">3. 总体架构<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#3-总体架构">#</a></h2>
+<div class="language-text"><div class="rspress-code-content rspress-scrollbar"><div><pre class="code" style="background-color:inherit"><code class="language-text" style="white-space:pre"><span style="display:block;padding:0 1.25rem"><span>┌─────────────────────────────────────────────────────────────────────────────┐
+</span></span><span style="display:block;padding:0 1.25rem">│                              用户与消费层                                     │
+</span><span style="display:block;padding:0 1.25rem">│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+</span><span style="display:block;padding:0 1.25rem">│  │ hnsx CLI     │  │ React Console│  │ Python SDK   │  │ Node.js SDK  │     │
+</span><span style="display:block;padding:0 1.25rem">│  │   (Go)       │  │   (React/TS) │  │              │  │              │     │
+</span><span style="display:block;padding:0 1.25rem">│  │  for AI Agent│  │  管理/审批   │  │  Skill/Tool  │  │  前端/集成   │     │
+</span><span style="display:block;padding:0 1.25rem">│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
+</span><span style="display:block;padding:0 1.25rem">└─────────┼────────────────┼────────────────┼────────────────┼───────────────┘
+</span><span style="display:block;padding:0 1.25rem">          │                │                │                │
+</span><span style="display:block;padding:0 1.25rem">          │  gRPC/HTTP     │  HTTP/SSE      │  HTTP/gRPC     │  HTTP/gRPC
+</span><span style="display:block;padding:0 1.25rem">          │                │                │                │
+</span><span style="display:block;padding:0 1.25rem">┌─────────┼────────────────┴────────────────┴────────────────┼───────────────┐
+</span><span style="display:block;padding:0 1.25rem">│         │              Control Plane（Go）                  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  ┌─────────────────────────────────────────────┐ │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │ Domain Registry / Versioning / Marketplace  │ │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │ Session Scheduler / Trigger Router          │ │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │ Eval / Benchmark Registry &amp; Runner          │ │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │ Telemetry Aggregation / Audit Log / Cost    │ │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │ Secret / Policy / Sandbox Profile Store     │ │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  └─────────────────────────────────────────────┘ │               │
+</span><span style="display:block;padding:0 1.25rem">│         └─────────────────────┬─────────────────────────────┘               │
+</span><span style="display:block;padding:0 1.25rem">│                               │                                             │
+</span><span style="display:block;padding:0 1.25rem">│         ┌─────────────────────┴─────────────────────────────┐               │
+</span><span style="display:block;padding:0 1.25rem">│         │              Harness Runtime（Go Worker）            │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  ┌─────────────┐ ┌─────────────┐ ┌──────────────┐  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │ DomainSpec  │ │  Harness    │ │   Session    │  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │   Loader    │ │  Runner     │ │  / Turn /    │  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │  Validator  │ │             │ │ Observation  │  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  └─────────────┘ └──────┬──────┘ └──────┬───────┘  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │                         │               │           │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  ┌──────────────────────┼───────────────┼────────┐  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │      Agent Integration Layer                    │  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │  Adapter（Claude Code / Codex / OpenAI / ...）  │  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │  MCP Client（优先接入外部 Agent 能力）           │  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  └──────────────────────┴───────────────┴────────┘  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │                         │                           │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  ┌──────────────────────┼────────────────────────┐  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │        Capability Layer                         │  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │  Tools  │  Skills  │  MCP Servers  │  Prompts   │  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  └──────────────────────┴────────────────────────┘  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │                         │                           │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  ┌──────────────────────┼────────────────────────┐  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │        Constraint Layer                         │  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │  Sandbox  │  Policy  │  Guardrails  │  Budget  │  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  └──────────────────────┴────────────────────────┘  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │                         │                           │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  ┌──────────────────────┴────────────────────────┐  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │        State &amp; Observability Layer              │  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  │  Memory（Context） │  Telemetry（Trace/Metric） │  │               │
+</span><span style="display:block;padding:0 1.25rem">│         │  └─────────────────────────────────────────────────┘  │               │
+</span><span style="display:block;padding:0 1.25rem">│         └─────────────────────────────────────────────────────┘               │
+</span><span style="display:block;padding:0 1.25rem">└─────────────────────────────────────────────────────────────────────────────┘</span></code></pre></div><div class="code-button-group_fb445"><button title="Toggle code wrap"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrapped_fb89b"><path fill="#22a041" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrap_ccd3d"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="code-copy-button_c5089" title="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 30 30" class="icon-copy_ef942"><path fill="currentColor" d="M28 10v18H10V10zm0-2H10a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 18H2V4a2 2 0 0 1 2-2h14v2H4Z"></path></svg><svg width="32" height="32" viewBox="0 0 30 30" class="icon-success_d5ec0"><path fill="#49cd37" d="m13 24-9-9 1.414-1.414L13 21.171 26.586 7.586 28 9z"></path></svg></button></div></div></div>
+<p class="my-4 leading-7">关键分层：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Control Plane</strong>：治理中心，所有 Domain、Session、Policy、Secret、Eval、Telemetry 的归集点。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Runtime Worker</strong>：实际执行 Harness 的无状态工作节点，可以被 Scheduler 调度。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Agent Integration Layer</strong>：Adapter 和 MCP Client，负责把外部 Agent 接入 Harness，但不属于核心价值层。</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="4-核心抽象" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">4. 核心抽象<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#4-核心抽象">#</a></h2>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">概念</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Domain</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">一个业务领域配置包，包含 Harness 定义，是 HnsX 管理、版本化、评估的最小单元。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Harness</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">驾驭体系，由 Agent、Prompt、Skill、Tool、MCP、Sandbox、Policy、Memory、Session、Eval 组成。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Agent</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">被 Harness 接入的外部 Agent（Claude Code、Codex、OpenAI、Anthropic 等），HnsX 不实现 Agent。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Adapter</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">把统一运行时请求翻译为具体 Agent 调用形式的适配器；负责认证、流式、重试、成本采集。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Session</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">一次用户触发产生的运行会话，有生命周期和状态机。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Turn</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Session 内的一次交互轮次（user → agent → observation → response）。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Observation</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Agent 产生的可被审计的中间产物：文本、工具调用、错误、成本、延迟。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Skill</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">可复用的业务能力包，包含 Prompt、Tool、MCP、示例、评估用例。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Tool</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">内置或用户扩展的原子能力：http、shell、sql、python、file 等。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">MCP</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Model Context Protocol Client，把外部 MCP Server 接入为 Skill/Tool 来源。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Sandbox</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">执行隔离策略，决定 Agent/Tool 能在什么环境里运行。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Policy</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">预算、权限、人工介入、输出校验等约束规则。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Memory</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">跨 Session 的上下文存储，支持短期工作记忆和长期知识。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Eval</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">评测集与评估运行器，量化 Harness 与 Agent 在业务场景下的表现。</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Telemetry</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Trace、Metric、Cost、Audit 的采集与输出。</td>
+</tr>
+</tbody>
+</table>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="5-技术栈优先使用开源方案少造轮子" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">5. 技术栈：优先使用开源方案，少造轮子<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#5-技术栈优先使用开源方案少造轮子">#</a></h2>
+<h3 id="51-cligo-实现为-ai-agent-设计" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">5.1 CLI：Go 实现，为 AI Agent 设计<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#51-cligo-实现为-ai-agent-设计">#</a></h3>
+<p class="my-4 leading-7">CLI 是独立的用户入口，<strong class="font-semibold">专门设计为可被 AI Agent 调用和理解</strong>。</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">实现</strong>：Go，单二进制，无外部依赖即可运行。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">命令风格</strong>：稳定、幂等、结构化输出优先，类 <code>gh</code>、<code>awscli</code>、<code>kubectl</code>。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">AI Agent 友好原则</strong>：<!-- -->
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">所有输出默认提供 <code>--json</code> / <code>--yaml</code> 结构化模式，方便 Agent 解析。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">错误信息机器可读，包含稳定的错误码。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">命令名自解释，避免歧义缩写。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">支持 <code>--dry-run</code> 让 Agent 在真实执行前预览影响。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">支持 <code>--output-format</code> 统一输出形状。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">环境变量与配置文件一致，Agent 容易注入。</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">核心命令</strong>（v1.0；完整词表见 <a href="/HnsX/cli-roadmap.md" class="link_a7cea  link_a9ef4 inline-link_f855c"><code>docs/cli-roadmap.md</code></a> §2）：<!-- -->
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Lifecycle</strong>：<code>hnsx up|down|restart|status|doctor|logs|reset</code> —— 一键拉起 / 停 / 诊断本地栈</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Discovery</strong>：<code>hnsx examples</code>、<code>hnsx try &lt;name&gt;</code> —— 一键跑示例 Domain</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Resource</strong>：<code>hnsx domain|session|trace|eval {list,show,trigger,...}</code> —— 资源命令（资源导向命名）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Governance</strong>：<code>hnsx governance {policy,secret,approval,audit,auth} ...</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Surface</strong>：<code>hnsx</code>（默认启动 TUI）、<code>hnsx console</code>（启 GUI）、<code>hnsx update</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Power</strong>：<code>hnsx power {format,diff,replay,debug-bundle}</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Local</strong>：<code>hnsx validate</code>、<code>hnsx run</code></li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">配置三层</strong>：<code>--flag</code> &gt; <code>HNSX_*</code> env &gt; <code>~/.config/hnsx/*.yaml</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Output 三态</strong>：human（默认表格）/ json / quiet，CI 友好</li>
+</ul>
+<p class="my-4 leading-7">CLI 可以是独立产物，也可以作为 Go SDK 的封装。</p>
+<h3 id="52-服务go-实现拆分为-control-plane--runtime" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">5.2 服务：Go 实现，拆分为 Control Plane + Runtime<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#52-服务go-实现拆分为-control-plane--runtime">#</a></h3>
+<p class="my-4 leading-7">服务是后端 Daemon，不和 CLI 耦合：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Control Plane</strong>：Domain Registry、Scheduler、Secret/Policy Store、Telemetry Aggregation、Eval Runner、REST/gRPC API。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Runtime Worker</strong>：执行 Harness 的无状态 Worker，由 Scheduler 触发，向 Control Plane 上报 Telemetry。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">通信</strong>：Control Plane 与 Runtime Worker 之间用 gRPC + Protobuf；外部用 HTTP/REST + JSON；实时 Observation 用 SSE。</li>
+</ul>
+<p class="my-4 leading-7">服务可以：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">内嵌在 CLI 中做本地开发（<code>hnsx server</code> 启动轻量版 Control Plane）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">单独部署为团队级服务。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">水平扩展为 Worker Pool。</li>
+</ul>
+<h3 id="53-控制台react--typescript用成熟开源组件" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">5.3 控制台：React + TypeScript，用成熟开源组件<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#53-控制台react--typescript用成熟开源组件">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">框架</strong>：React 19 + TypeScript + Vite</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">UI 组件库</strong>：Shadcn/ui（基于 Radix UI + Tailwind CSS）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">表格/复杂列表</strong>：TanStack Table</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">表单</strong>：React Hook Form + Zod</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">状态/缓存</strong>：TanStack Query</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">路由</strong>：React Router</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">编辑器</strong>：<!-- -->
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">YAML/JSON/代码编辑：<strong class="font-semibold">Monaco Editor</strong>（VS Code 同款）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">不自己实现编辑器内核</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Trace/可观测性展示</strong>：<!-- -->
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">优先复用 OpenTelemetry 生态</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Trace 可视化可用现有组件或嵌入 Grafana Tempo / Jaeger UI</li>
+<li class="[&amp;:not(:first-child)]:mt-2">不自己实现复杂的 Trace 时序图</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">图表</strong>：Recharts 或 Tremor</li>
+</ul>
+<p class="my-4 leading-7">控制台不是低代码编辑器，而是：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">Domain / Harness 注册与版本管理</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Session 实时查看（SSE 接收流式 Observation）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Trace / Cost / Audit 查询</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Eval 结果与对比</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Human-in-the-loop 审批面板</li>
+</ul>
+<h3 id="54-协议protobuf-作为唯一真相源" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">5.4 协议：Protobuf 作为唯一真相源<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#54-协议protobuf-作为唯一真相源">#</a></h3>
+<p class="my-4 leading-7"><code>proto/</code> 目录保存 HnsX 的 API 协议定义：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>hnsx/v1/domain.proto</code>：DomainSpec、Harness 配置、版本管理</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>hnsx/v1/control_plane.proto</code>：Registry、Scheduler、Discovery、Telemetry、Eval</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>hnsx/v1/runtime.proto</code>：Trigger、Session 流式响应</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>hnsx/v1/observation.proto</code>：Observation、Trace、Metric 数据结构</li>
+</ul>
+<p class="my-4 leading-7">生成目标：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">Go：运行时、CLI、控制面</li>
+<li class="[&amp;:not(:first-child)]:mt-2">TypeScript：React Console、Node.js SDK</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Python：Python SDK</li>
+</ul>
+<p class="my-4 leading-7">传输层：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">CLI ↔ Control Plane</strong>：gRPC（内部、高效）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Console / SDK ↔ Control Plane</strong>：HTTP/REST + JSON（外部、通用）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">实时 Observation</strong>：SSE（Server-Sent Events）或 gRPC stream</li>
+</ul>
+<h3 id="55-可观测性基于-opentelemetry" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">5.5 可观测性：基于 OpenTelemetry<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#55-可观测性基于-opentelemetry">#</a></h3>
+<p class="my-4 leading-7">不自己造 Trace/Metric 协议和存储：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">协议</strong>：OpenTelemetry（OTLP）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">存储</strong>：<!-- -->
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">本地：PostgreSQL 或 jsonl</li>
+<li class="[&amp;:not(:first-child)]:mt-2">团队：PostgreSQL + Grafana Tempo / Jaeger</li>
+<li class="[&amp;:not(:first-child)]:mt-2">SaaS：OTLP Collector → 任意后端</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">展示</strong>：<!-- -->
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">Grafana 做大盘和 Trace 查询</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Console 里嵌入 Grafana 面板或调用 Tempo/Jaeger API</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">指标</strong>：Prometheus exporter 或 OTLP metrics</li>
+</ul>
+<h3 id="56-sandbox优先复用现有隔离技术" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">5.6 Sandbox：优先复用现有隔离技术<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#56-sandbox优先复用现有隔离技术">#</a></h3>
+<p class="my-4 leading-7">不自己实现操作系统级隔离：</p>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">后端</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">技术</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">场景</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>none</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">当前进程</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">本地信任环境</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>process</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Linux namespace + seccomp / landlock</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">轻量隔离</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>container</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Docker / Podman / containerd</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">标准容器隔离</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>microvm</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Firecracker / gVisor</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">强隔离、多租户</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>delegate</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">用户提供的远程 sandbox</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">企业已有隔离设施</td>
+</tr>
+</tbody>
+</table>
+<p class="my-4 leading-7">Runtime 通过统一接口调用不同后端，后端实现可以逐步增加。</p>
+<h3 id="57-sdk" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">5.7 SDK<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#57-sdk">#</a></h3>
+<p class="my-4 leading-7">SDK 是 Harness 的客户端和扩展入口：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Go SDK</strong>：与 CLI/Runtime 共享代码，适合 CI 和运维集成。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Python SDK</strong>：AI/ML 生态集成，Jupyter、自定义 Tool、Skill、Eval 开发。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Node.js SDK</strong>：TypeScript 优先的前后端集成，适合与 Claude Code / Codex 扩展联动。</li>
+</ul>
+<p class="my-4 leading-7">初期重点：</p>
+<ol class="list-decimal pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">Go SDK（与运行时同步）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Python SDK（用户最可能写 Skill / Tool / Eval）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Node.js SDK（生态补齐）</li>
+</ol>
+<h3 id="58-基础设施按阶段演进" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">5.8 基础设施：按阶段演进<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#58-基础设施按阶段演进">#</a></h3>
+<p class="my-4 leading-7">不一步建成 SaaS，而是随阶段演进：</p>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">阶段</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">存储</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">缓存</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">消息</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">可观测性</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">部署</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">本地 / 单体</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">PostgreSQL（轻量 Docker 版）</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">内存</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">无</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">jsonl / stdout 或 Tempo</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">单二进制、Docker Compose</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">小团队</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">PostgreSQL</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Redis（可选）</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">无 / 内存队列</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">OTLP → Tempo/Jaeger + Grafana</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Docker Compose</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">企业 / SaaS</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">PostgreSQL</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Redis</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Kafka / NATS（可选）</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">OTLP Collector + 对象存储</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Kubernetes / Helm</td>
+</tr>
+</tbody>
+</table>
+<p class="my-4 leading-7"><strong class="font-semibold">当前阶段只承诺：PostgreSQL + 单二进制 + Docker Compose + OpenTelemetry。</strong></p>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="6-部署形态" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">6. 部署形态<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#6-部署形态">#</a></h2>
+<p class="my-4 leading-7">HnsX 从第一版就按服务设计，本地只是开发模式。</p>
+<h3 id="61-本地开发" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">6.1 本地开发<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#61-本地开发">#</a></h3>
+<div class="language-text"><div class="rspress-code-content rspress-scrollbar"><div><pre class="code" style="background-color:inherit"><code class="language-text" style="white-space:pre"><span style="display:block;padding:0 1.25rem"><span>┌─────────┐     ┌────────────────────────────────┐
+</span></span><span style="display:block;padding:0 1.25rem">│ hnsx CLI │────▶│  Embedded Runtime + PostgreSQL │
+</span><span style="display:block;padding:0 1.25rem">└─────────┘     └────────────────────────────────┘</span></code></pre></div><div class="code-button-group_fb445"><button title="Toggle code wrap"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrapped_fb89b"><path fill="#22a041" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrap_ccd3d"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="code-copy-button_c5089" title="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 30 30" class="icon-copy_ef942"><path fill="currentColor" d="M28 10v18H10V10zm0-2H10a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 18H2V4a2 2 0 0 1 2-2h14v2H4Z"></path></svg><svg width="32" height="32" viewBox="0 0 30 30" class="icon-success_d5ec0"><path fill="#49cd37" d="m13 24-9-9 1.414-1.414L13 21.171 26.586 7.586 28 9z"></path></svg></button></div></div></div>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">CLI 内置轻量 Control Plane 和 Runtime，直接加载 Domain YAML。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">PostgreSQL 存 Trace / Metric / Audit。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">用于开发、调试、CI。</li>
+</ul>
+<h3 id="62-团队托管" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">6.2 团队托管<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#62-团队托管">#</a></h3>
+<div class="language-text"><div class="rspress-code-content rspress-scrollbar"><div><pre class="code" style="background-color:inherit"><code class="language-text" style="white-space:pre"><span style="display:block;padding:0 1.25rem"><span>┌─────────┐     ┌─────────────────┐     ┌───────────────┐
+</span></span><span style="display:block;padding:0 1.25rem">│ Console │────▶│  Control Plane  │────▶│ Runtime Worker│
+</span><span style="display:block;padding:0 1.25rem">│  / SDK  │     │  + PostgreSQL   │     │  (one or many)│
+</span><span style="display:block;padding:0 1.25rem">│  / CLI  │     │  + Tempo/Grafana│     │               │
+</span><span style="display:block;padding:0 1.25rem">└─────────┘     └─────────────────┘     └───────────────┘</span></code></pre></div><div class="code-button-group_fb445"><button title="Toggle code wrap"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrapped_fb89b"><path fill="#22a041" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrap_ccd3d"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="code-copy-button_c5089" title="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 30 30" class="icon-copy_ef942"><path fill="currentColor" d="M28 10v18H10V10zm0-2H10a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 18H2V4a2 2 0 0 1 2-2h14v2H4Z"></path></svg><svg width="32" height="32" viewBox="0 0 30 30" class="icon-success_d5ec0"><path fill="#49cd37" d="m13 24-9-9 1.414-1.414L13 21.171 26.586 7.586 28 9z"></path></svg></button></div></div></div>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">Control Plane 提供 Domain Registry、Scheduler、Telemetry Aggregation。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">多个 Runtime Worker 可被调度执行不同 Domain。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Trace 通过 OTLP 接入 Tempo，Grafana 做展示。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">适合团队内部署。</li>
+</ul>
+<h3 id="63-企业--saas" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">6.3 企业 / SaaS<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#63-企业--saas">#</a></h3>
+<div class="language-text"><div class="rspress-code-content rspress-scrollbar"><div><pre class="code" style="background-color:inherit"><code class="language-text" style="white-space:pre"><span style="display:block;padding:0 1.25rem"><span>┌─────────────┐     ┌──────────────────────┐     ┌─────────────────┐
+</span></span><span style="display:block;padding:0 1.25rem">│ Multi-tenant │────▶│   Control Plane      │────▶│ Runtime Pool    │
+</span><span style="display:block;padding:0 1.25rem">│   Console    │     │  + PostgreSQL + Redis│     │  (per-tenant    │
+</span><span style="display:block;padding:0 1.25rem">│   / SDK      │     │  + Secret / Policy   │     │   or shared)    │
+</span><span style="display:block;padding:0 1.25rem">│   / CLI      │     │  + OTLP Collector    │     │                 │
+</span><span style="display:block;padding:0 1.25rem">└─────────────┘     └──────────────────────┘     └─────────────────┘</span></code></pre></div><div class="code-button-group_fb445"><button title="Toggle code wrap"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrapped_fb89b"><path fill="#22a041" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrap_ccd3d"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="code-copy-button_c5089" title="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 30 30" class="icon-copy_ef942"><path fill="currentColor" d="M28 10v18H10V10zm0-2H10a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 18H2V4a2 2 0 0 1 2-2h14v2H4Z"></path></svg><svg width="32" height="32" viewBox="0 0 30 30" class="icon-success_d5ec0"><path fill="#49cd37" d="m13 24-9-9 1.414-1.414L13 21.171 26.586 7.586 28 9z"></path></svg></button></div></div></div>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">多租户隔离、配额、计费、审计。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">这是远期目标，当前架构预留接口但不提前实现。</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="7-关键数据流" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">7. 关键数据流<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#7-关键数据流">#</a></h2>
+<h3 id="71-trigger--session--observation" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">7.1 Trigger → Session → Observation<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#71-trigger--session--observation">#</a></h3>
+<div class="language-text"><div class="rspress-code-content rspress-scrollbar"><div><pre class="code" style="background-color:inherit"><code class="language-text" style="white-space:pre"><span style="display:block;padding:0 1.25rem"><span>用户 / SDK / Console / CLI
+</span></span><span style="display:block;padding:0 1.25rem">   │
+</span><span style="display:block;padding:0 1.25rem">   ▼
+</span><span style="display:block;padding:0 1.25rem">Control Plane（Registry 找到 Domain，Scheduler 选择 Runtime 实例）
+</span><span style="display:block;padding:0 1.25rem">   │
+</span><span style="display:block;padding:0 1.25rem">   ▼
+</span><span style="display:block;padding:0 1.25rem">Harness Runtime Worker
+</span><span style="display:block;padding:0 1.25rem">   │
+</span><span style="display:block;padding:0 1.25rem">   ├─► Loader 加载 DomainSpec
+</span><span style="display:block;padding:0 1.25rem">   ├─► Validator 校验 Harness
+</span><span style="display:block;padding:0 1.25rem">   ├─► HarnessRunner 创建 Session
+</span><span style="display:block;padding:0 1.25rem">   ├─► 按 Session.Mode 执行 Turn 序列
+</span><span style="display:block;padding:0 1.25rem">   │       │
+</span><span style="display:block;padding:0 1.25rem">   │       ▼
+</span><span style="display:block;padding:0 1.25rem">   │   Agent Integration Layer（Adapter / MCP）
+</span><span style="display:block;padding:0 1.25rem">   │       │
+</span><span style="display:block;padding:0 1.25rem">   │       ▼
+</span><span style="display:block;padding:0 1.25rem">   │   外部 Agent 调用（流式）
+</span><span style="display:block;padding:0 1.25rem">   │       │
+</span><span style="display:block;padding:0 1.25rem">   │       ▼
+</span><span style="display:block;padding:0 1.25rem">   │   输出经过 Sandbox / Policy 校验
+</span><span style="display:block;padding:0 1.25rem">   │       │
+</span><span style="display:block;padding:0 1.25rem">   │       ▼
+</span><span style="display:block;padding:0 1.25rem">   │   产生 Observation
+</span><span style="display:block;padding:0 1.25rem">   │
+</span><span style="display:block;padding:0 1.25rem">   ├─► Telemetry Sink 写入 Trace / Metric / Audit（OTLP / PostgreSQL）
+</span><span style="display:block;padding:0 1.25rem">   │
+</span><span style="display:block;padding:0 1.25rem">   └─► Console / CLI 实时展示 Observation</span></code></pre></div><div class="code-button-group_fb445"><button title="Toggle code wrap"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrapped_fb89b"><path fill="#22a041" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrap_ccd3d"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="code-copy-button_c5089" title="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 30 30" class="icon-copy_ef942"><path fill="currentColor" d="M28 10v18H10V10zm0-2H10a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 18H2V4a2 2 0 0 1 2-2h14v2H4Z"></path></svg><svg width="32" height="32" viewBox="0 0 30 30" class="icon-success_d5ec0"><path fill="#49cd37" d="m13 24-9-9 1.414-1.414L13 21.171 26.586 7.586 28 9z"></path></svg></button></div></div></div>
+<h3 id="72-agent-integration-layer-职责" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">7.2 Agent Integration Layer 职责<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#72-agent-integration-layer-职责">#</a></h3>
+<p class="my-4 leading-7">这是 Harness 与外部 Agent 之间的边界：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">把统一的 <code>TurnRequest</code> 翻译成 Agent 特定的调用格式。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">处理流式返回，把 chunk 转成统一的 <code>ObservationChunk</code>。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">处理认证、超时、重试、错误映射。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">采集 token 用量、成本、延迟，写入 Telemetry。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">对 Claude Code / Codex 这类本地 CLI Agent，Adapter 负责进程生命周期管理。</li>
+</ul>
+<p class="my-4 leading-7"><strong class="font-semibold">重要</strong>：Adapter 只是接入手段，HnsX 的核心价值在 Harness 层（约束、编排、评估、观测）。</p>
+<h3 id="73-eval-数据流" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">7.3 Eval 数据流<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#73-eval-数据流">#</a></h3>
+<div class="language-text"><div class="rspress-code-content rspress-scrollbar"><div><pre class="code" style="background-color:inherit"><code class="language-text" style="white-space:pre"><span style="display:block;padding:0 1.25rem"><span>Domain + EvalSet
+</span></span><span style="display:block;padding:0 1.25rem">   │
+</span><span style="display:block;padding:0 1.25rem">   ▼
+</span><span style="display:block;padding:0 1.25rem">Eval Runner（Control Plane 或 CLI）
+</span><span style="display:block;padding:0 1.25rem">   │
+</span><span style="display:block;padding:0 1.25rem">   ├─► 对每个 Case 触发 Harness Runtime
+</span><span style="display:block;padding:0 1.25rem">   ├─► 收集 Observation 与输出
+</span><span style="display:block;padding:0 1.25rem">   ├─► 用评分器（规则 / LLM-as-judge / 人工）打分
+</span><span style="display:block;padding:0 1.25rem">   │
+</span><span style="display:block;padding:0 1.25rem">   ▼
+</span><span style="display:block;padding:0 1.25rem">Eval Report（对比版本、追踪回归）</span></code></pre></div><div class="code-button-group_fb445"><button title="Toggle code wrap"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrapped_fb89b"><path fill="#22a041" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrap_ccd3d"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="code-copy-button_c5089" title="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 30 30" class="icon-copy_ef942"><path fill="currentColor" d="M28 10v18H10V10zm0-2H10a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 18H2V4a2 2 0 0 1 2-2h14v2H4Z"></path></svg><svg width="32" height="32" viewBox="0 0 30 30" class="icon-success_d5ec0"><path fill="#49cd37" d="m13 24-9-9 1.414-1.414L13 21.171 26.586 7.586 28 9z"></path></svg></button></div></div></div>
+<p class="my-4 leading-7">Eval 是 Harness 进化的核心闭环。</p>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="8-非功能性设计" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">8. 非功能性设计<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#8-非功能性设计">#</a></h2>
+<h3 id="81-可观测性" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">8.1 可观测性<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#81-可观测性">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">所有 Agent 调用必须产生 <code>Observation</code>。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">每个 Session 必须可追踪到 Domain、Agent、Model、Cost、Latency。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Telemetry 优先走 OpenTelemetry OTLP，本地 fallback 到 PostgreSQL / jsonl。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Console 不自研复杂 Trace UI，嵌入 Grafana / Tempo / Jaeger。</li>
+</ul>
+<h3 id="82-安全与隔离" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">8.2 安全与隔离<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#82-安全与隔离">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">Sandbox 是多后端设计：<code>none</code> / <code>process</code> / <code>container</code> / <code>microvm</code> / <code>delegate</code>。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">后端优先复用 Docker、Firecracker、gVisor、Linux namespace 等现有技术。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Policy 在编译期和运行时两层生效：预算超限、敏感操作、人工审批。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Secret 不落在 DomainSpec 明文里，由控制面统一注入。</li>
+</ul>
+<h3 id="83-可扩展性" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">8.3 可扩展性<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#83-可扩展性">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">Tool、Skill、MCP 都通过接口注册，不改动核心即可扩展。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Adapter 接口统一，新增 Agent 只需新增 Adapter。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Memory、Telemetry、Sandbox 后端可替换。</li>
+</ul>
+<h3 id="84-少造轮子的具体承诺" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">8.4 少造轮子的具体承诺<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#84-少造轮子的具体承诺">#</a></h3>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">领域</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">不自研</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">优先复用</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">前端 UI 组件</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">基础组件库</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Shadcn/ui、Radix UI、Tailwind</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">表格/复杂列表</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">高性能表格</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">TanStack Table</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">代码/YAML/JSON 编辑器</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">编辑器内核</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Monaco Editor</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Trace 可视化</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">时序图 / Trace UI</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Grafana Tempo / Jaeger</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">可观测性协议</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">私有协议</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">OpenTelemetry</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">图表</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">图表库</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Recharts / Tremor</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Sandbox 隔离</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">OS 级隔离</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Docker、Firecracker、gVisor</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">数据库 ORM</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">复杂 ORM</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">按需要选 sqlc / ent / raw SQL</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">工作流引擎</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">复杂 DAG 引擎</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">先实现简单 Session/Turn 状态机</td>
+</tr>
+</tbody>
+</table>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="9-当前阶段聚焦v1-phase-1-3" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">9. 当前阶段聚焦（V1 Phase 1-3）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#9-当前阶段聚焦v1-phase-1-3">#</a></h2>
+<ol class="list-decimal pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">CLI for AI Agent</strong>：Go 实现，<code>validate</code> / <code>run</code> / <code>eval</code> / <code>traces</code> 等命令，默认 <code>--json</code> 输出。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Go Runtime Worker</strong>：<code>DomainSpec</code> v2 模型、Loader/Validator、HarnessRunner、Session/Turn/Observation。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Noop Adapter</strong>：无网络环境下跑通完整 Harness 链路。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Control Plane 骨架</strong>：Domain Registry、Scheduler、Telemetry Aggregation，内嵌在 CLI 中可本地启动。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Proto 协议</strong>：完成 Domain / Runtime / Telemetry / Eval 协议定义并生成 Go/TS/Python 代码。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">React Console 骨架</strong>：Domain 列表、Monaco 编辑器、Session 触发、Trace 查询。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">PostgreSQL Telemetry</strong>：本地 Trace / Metric / Audit 存储，输出兼容 OTLP。</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><strong class="font-semibold">Eval 骨架</strong>：EvalSet 定义 + 基础评分器。</li>
+</ol>
+<p class="my-4 leading-7">不在这个阶段做的事：</p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">Kafka / ELK / Helm</li>
+<li class="[&amp;:not(:first-child)]:mt-2">多租户 SaaS</li>
+<li class="[&amp;:not(:first-child)]:mt-2">复杂 Workflow DAG 可视化编辑器</li>
+<li class="[&amp;:not(:first-child)]:mt-2">自研模型或训练平台</li>
+<li class="[&amp;:not(:first-child)]:mt-2">自己实现 Agent 底座</li>
+<li class="[&amp;:not(:first-child)]:mt-2">自研复杂组件（编辑器、Trace UI、表格）</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="10-口号" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">10. 口号<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#10-口号">#</a></h2>
+<blockquote class="border-l-2 border-solid border-divider pl-4 my-6 transition-colors duration-500 blockquote_f1063">
+<p class="my-4 leading-7"><strong class="font-semibold">Don&#x27;t build weaker agents. Harness stronger ones.</strong></p>
+</blockquote><!--/$--></div><div class="rspress-doc-footer"><footer class="mt-8"><div class="xs:flex pb-5 px-2 justify-end items-center"></div><div class="flex flex-col"></div><div class="flex flex-col sm:flex-row sm:justify-around gap-4 pt-6"><div class="prev_c92d1 flex flex-col"></div><div class="next_c11be flex flex-col"></div></div></footer></div></div></div></div></div></section></div>
+    <div id="search-container"></div>
+  </body>
+</html>

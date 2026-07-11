@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content="Rspress v1.47.1">
+    <meta property="og:title"content="HnsX — Harness as a Service"><meta property="og:description"content="HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI 等最强 Agent。"><meta property="og:type"content="website"><meta property="og:image"content="https://narcilee7.github.io/HnsX/og-image.png"><meta name="twitter:card"content="summary_large_image"><title data-rh="true">HnsX — Harness as a Service</title><meta data-rh="true" name="description" content="HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI 等最强 Agent。"/>
+  <script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const isDark = !saved || saved === 'auto' ? preferDark : saved === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script><link rel="icon" href="/HnsX/favicon.png"><script defer src="/HnsX/static/js/styles.ae5ec2d0.js"></script><script defer src="/HnsX/static/js/lib-react.0aff66c0.js"></script><script defer src="/HnsX/static/js/lib-router.0d65c259.js"></script><script defer src="/HnsX/static/js/641.c64fbc03.js"></script><script defer src="/HnsX/static/js/index.7e3760f1.js"></script><link href="/HnsX/static/css/styles.f27a1667.css" rel="stylesheet"></head>
+
+  <body >
+    <div id="root"><div class="navContainer_d18b1 rspress-nav px-6  sticky_ddfa7"><div class="container_e4235 flex justify-between items-center h-full"><div class="navBarTitle_c5f07"><a href="/HnsX/index" class="link_a7cea flex items-center w-full h-full text-base font-semibold transition-opacity duration-300 hover:opacity-60"><span>HnsX — Harness as a Service</span></a></div><div class="flex flex-1 justify-end items-center"><div class="leftNav_e6722"><div class="rspress-nav-menu menu h-14"><a href="/HnsX/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154 activeItem_a28b5 text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">首页</div></a><a href="/HnsX/blog/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">博客</div></a><a href="/HnsX/guide/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">指南</div></a><a href="/HnsX/design/vision" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">文档</div></a><a href="/HnsX/design/server-design/api-design" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">API</div></a></div></div><div class="rightNav_a2fea"><div class="flex sm:flex-1 items-center sm:pl-4 sm:pr-2"><div class="rspress-nav-search-button navSearchButton_df1fb"><button><svg width="18" height="18" viewBox="0 0 32 32"><path fill="var(--rp-c-gray)" d="m29 27.586-7.552-7.552a11.018 11.018 0 1 0-1.414 1.414L27.586 29ZM4 13a9 9 0 1 1 9 9 9.01 9.01 0 0 1-9-9"></path></svg><p class="searchWord_af2c1">Search</p><div style="opacity:0"><span></span><span>K</span></div></button></div><div class="mobileNavSearchButton_d85a9"><svg width="24" height="24" viewBox="0 0 32 32"><path fill="var(--rp-c-gray)" d="m29 27.586-7.552-7.552a11.018 11.018 0 1 0-1.414 1.414L27.586 29ZM4 13a9 9 0 1 1 9 9 9.01 9.01 0 0 1-9-9"></path></svg></div></div><div class="rspress-nav-menu menu h-14"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">GitHub</div></a></div><div class="flex-center flex-row"><div class="mx-2"><div class="md:mr-2 rspress-nav-appearance"><div class="p-1 border border-solid border-gray-300 text-gray-400  cursor-pointer rounded-md hover:border-gray-600 hover:text-gray-600 dark:hover:border-gray-200 dark:hover:text-gray-200 transition-all duration-300 w-7 h-7"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24" class="dark:hidden" width="18" height="18" fill="currentColor"><path d="M12 18c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6m0-10c-2.2 0-4 1.8-4 4s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4M12 4c-.6 0-1-.4-1-1V1c0-.6.4-1 1-1s1 .4 1 1v2c0 .6-.4 1-1 1M12 24c-.6 0-1-.4-1-1v-2c0-.6.4-1 1-1s1 .4 1 1v2c0 .6-.4 1-1 1M5.6 6.6c-.3 0-.5-.1-.7-.3L3.5 4.9c-.4-.4-.4-1 0-1.4s1-.4 1.4 0l1.4 1.4c.4.4.4 1 0 1.4-.1.2-.4.3-.7.3M19.8 20.8c-.3 0-.5-.1-.7-.3l-1.4-1.4c-.4-.4-.4-1 0-1.4s1-.4 1.4 0l1.4 1.4c.4.4.4 1 0 1.4-.2.2-.5.3-.7.3M3 13H1c-.6 0-1-.4-1-1s.4-1 1-1h2c.6 0 1 .4 1 1s-.4 1-1 1M23 13h-2c-.6 0-1-.4-1-1s.4-1 1-1h2c.6 0 1 .4 1 1s-.4 1-1 1M4.2 20.8c-.3 0-.5-.1-.7-.3-.4-.4-.4-1 0-1.4l1.4-1.4c.4-.4 1-.4 1.4 0s.4 1 0 1.4l-1.4 1.4c-.2.2-.4.3-.7.3M18.4 6.6c-.3 0-.5-.1-.7-.3-.4-.4-.4-1 0-1.4l1.4-1.4c.4-.4 1-.4 1.4 0s.4 1 0 1.4l-1.4 1.4c-.2.2-.5.3-.7.3"></path></svg><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24" class="hidden dark:block" width="18" height="18" fill="currentColor"><path d="M12.1 22h-.9c-5.5-.5-9.5-5.4-9-10.9.4-4.8 4.2-8.6 9-9 .4 0 .8.2 1 .5s.2.8-.1 1.1c-2 2.7-1.4 6.4 1.3 8.4 2.1 1.6 5 1.6 7.1 0 .3-.2.7-.3 1.1-.1.3.2.5.6.5 1-.2 2.7-1.5 5.1-3.6 6.8-1.9 1.4-4.1 2.2-6.4 2.2M9.3 4.4c-2.9 1-5 3.6-5.2 6.8-.4 4.4 2.8 8.3 7.2 8.7 2.1.2 4.2-.4 5.8-1.8 1.1-.9 1.9-2.1 2.4-3.4-2.5.9-5.3.5-7.5-1.1-2.8-2.2-3.9-5.9-2.7-9.2"></path></svg></div></div></div><div class="social-links menu-item_e90a6 flex-center relative"><div class="flex-center h-full gap-x-4 transition-colors duration-300 md:mr-2"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="social-links"><div class="social-links-icon_a4ad0"><div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a></div></div></div></div><div class="mobileNavMenu_e7045"><div class="navScreen_ec30c  rspress-nav-screen" id="navScreen"><div class="container_c935d"><div class="navMenu_b887b"><div class="navMenuItem_e7978 w-full"><a href="/HnsX/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154 activeItem_a28b5 text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">首页</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/blog/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">博客</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/guide/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">指南</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/design/vision" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">文档</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/design/server-design/api-design" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">API</div></a></div><div class="navMenuItem_e7978 w-full"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">GitHub</div></a></div></div><div class="flex-center flex-col gap-2"><div class="mt-2 navAppearance_bf893 flex justify-center"></div><div class="social-links menu-item_e90a6 flex-center relative"><div class="flex-center h-full gap-x-4 transition-colors duration-300 md:mr-2"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="social-links"><div class="social-links-icon_a4ad0"><div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a></div></div></div></div></div><button aria-label="mobile hamburger" class=" rspress-mobile-hamburger navHamburger_ac64c text-gray-500"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="currentColor"><circle cx="8" cy="16" r="2" fill="currentColor"></circle><circle cx="16" cy="16" r="2" fill="currentColor"></circle><circle cx="24" cy="16" r="2" fill="currentColor"></circle></svg></button></div></div></div></div><section><div class="docLayout_af141 pt-0"><div class="flex-1 relative min-w-0"><div class="rspress-sidebar-menu-container no-toc"><div class="rspress-sidebar-menu"></div></div><div class="content_ff766 rspress-doc-container flex"><div class="flex-1 overflow-x-auto"><div class="rspress-doc"><!--$--><h1 id="hnsx-端到端落地-roadmap" class="rspress-doc-title text-3xl mb-10 leading-10 tracking-tight title_fb7eb">HnsX 端到端落地 Roadmap<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#hnsx-端到端落地-roadmap">#</a></h1>
+<blockquote class="border-l-2 border-solid border-divider pl-4 my-6 transition-colors duration-500 blockquote_f1063">
+<p class="my-4 leading-7">日期：2026-07-10
+周期：迭代至 P0 全部清零；P1/P2 待 P0 e2e 串通后再排
+北极星：<a href="/HnsX/../../vision.md" class="link_a7cea  link_a9ef4 inline-link_f855c"><code>docs/vision.md</code></a> — Harness as a Service
+当前分支：<code>feat/connection_e2e</code>
+协议真相源：<a href="/HnsX/../../../proto/hnsx/v1" class="link_a7cea  link_a9ef4 inline-link_f855c"><code>proto/hnsx/v1/</code></a></p>
+</blockquote>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="0-工作方式" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">0. 工作方式<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#0-工作方式">#</a></h2>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">每个 T 票 = 一个独立分支 + 一个常规 commit。commit message 用 Conventional Commits，并在 commit body 引用本文件锚点（如 <code>Refs: docs/project_management/2026.07.10/end-to-end-product-roadmap.md#t1</code>）。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">每完成一个 T：在本文件<strong class="font-semibold">勾掉对应 <code>- [ ]</code></strong>（勾成 <code>- [x]</code>），该勾选与代码 commit <strong class="font-semibold">一起</strong>入库，让&quot;勾选即落库&quot;成为强约束。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">全栈纵切：每个 T 都同时改 server + console（如适用）+ 协议，<strong class="font-semibold">不留 server 改完再改 console 的中间态</strong>。</li>
+<li class="[&amp;:not(:first-child)]:mt-2">验收：每个 T 自带 <code>## 验收</code> 段，PR 模板强制对照勾选。</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="1-家底盘点这一轮开始时的实情" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">1. 家底盘点（这一轮开始时的实情）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#1-家底盘点这一轮开始时的实情">#</a></h2>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">层</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">当前</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">评级</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">文档</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">vision / tech_overview / tech_v1_1 / api-design / tablebase / know-how × 4 / service-architecture / go-refactor-plan / 4 份 PM（w9 / w10+ / go-service-arch-governance / v1_2_roadmap）齐</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">⭐⭐⭐ 完整</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">proto</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>domain.proto</code> / <code>control_plane.proto</code> / <code>runtime.proto</code>（deprecated）/ <code>observation.proto</code> / <code>worker.proto</code> 全有；Go + TS 已生成；<code>v1connect/</code> 已生成但零引用</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">⭐⭐⭐ 完整但漂移</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Go Control Plane</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">DDD 骨架齐：11 个 <code>internal/</code> bounded context + Postgres repo + service；sinks + executor + WorkerRegistry + SessionQueue 已实装</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">⭐⭐ 骨架完整</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Python Worker</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">adapters / tools / policy / approval / sandbox / skills / memory / harness / runner 全齐；W0–W16 全部 ✅；是全栈完成度最高的一块</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">⭐⭐⭐ 完整</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">Console</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">17 个 page + hooks × 7 + api client × 8 + mappers 全在</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">⭐⭐ 大部分齐</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">observability</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">7 chart + integration lib + tokens + playground 全在</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">⭐⭐⭐ 完整</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">SDK</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">node（完整）/ go（go.mod+README 无码）/ python（空目录）</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">⭐ 严重不平衡</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">部署</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>deployments/local/docker-compose.yml</code> 是否默认起 tempo+grafana+worker 待验</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">⭐ 待验</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">e2e 串联</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">customer-service / claude-triage / financial-analysis / skills-demo / mcp-demo 等 9 个 example domain 存在，但<strong class="font-semibold">没人跑过完整 trigger → server → worker → SSE → console</strong> 链路</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">0 — 这一轮要打通</td>
+</tr>
+</tbody>
+</table>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="2-gap-清单按兑现-vision-与联调阻塞度排序" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">2. Gap 清单（按兑现 vision 与联调阻塞度排序）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#2-gap-清单按兑现-vision-与联调阻塞度排序">#</a></h2>
+<h3 id="-p0--联调阻塞没法-demo-任何真实域" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">🔴 P0 — 联调阻塞，没法 demo 任何真实域<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#-p0--联调阻塞没法-demo-任何真实域">#</a></h3>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">#</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">位置</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">现状</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G1</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>pkg/api/auxiliary.go:24-152</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>ListTraces/GetTrace</code> 用 <code>trace_id == session_id</code> 把 session 列表伪装成 trace；<code>internal/trace/service</code> 真聚合已有，但被绕开</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G2</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>pkg/api/auxiliary.go:574-604</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>ListSecrets</code> 回空数组；<code>CreateSecret/UpdateSecret/DeleteSecret</code> 全部 <code>ADAPTER_NOT_IMPLEMENTED</code>；message 写 &quot;target: Phase 2&quot;</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G3</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>pkg/api/auxiliary.go:558-572</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>ListRuntimes</code> 写死 fake <code>local-control-plane/phase1</code>；worker 已能 Register + Heartbeat 但 Settings → Runtime 看不到</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G4</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>pkg/api/auxiliary.go:606-612</code> + <code>router.go</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>ListPolicies</code> 返空；<code>POST /policies</code> / <code>POST /domains/:id/policies</code> 路由表根本没绑</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G5</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>pkg/api/auxiliary.go:156-180</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>ListApprovals/ApproveApproval/RejectApproval</code> 全空数组 + stub；approval 表不存在</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G6</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>src/api/</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">缺 <code>evals.ts</code>（hooks <code>useEvals.ts</code> 在但 client 缺失）</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G7</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>mappers.ts:187/197/224</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">三处 traceId 拼装依赖旧 <code>trace_id == session_id</code> 语义</td>
+</tr>
+</tbody>
+</table>
+<h3 id="-p1--契约对齐不影响-demo但跨模块会漂" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">🟡 P1 — 契约对齐（不影响 demo，但跨模块会漂）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#-p1--契约对齐不影响-demo但跨模块会漂">#</a></h3>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">#</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">位置</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">现状</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G8</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>router.go</code> vs <code>api-design.md §3.4 / §6.1 / §12.3</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">缺 <code>PUT /domains/:id</code> / <code>GET /domains/:id/evals</code> / <code>POST /domains/:id/policies</code> 等路由</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G9</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>proto/Observation.{payload,metadata}</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">proto 是 string，Python 塞 dict；缺统一序列化约定</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G10</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>proto/MCPConfig</code>（Go）↔ Python <code>mcp_servers{name/transport/url/command}</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">字段名不一致；两端各写各的</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G11</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>WorkflowSession.step.prompt_ref</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Python runner 当前不支持 workflow mode，stub 起来不是真跑</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G12</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">proto</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">大量 message 标 deprecated（<code>RuntimeService</code>/<code>ScheduleSession</code> 等已迁移到 <code>worker.proto</code>，但 proto 文件仍保留 + client 误引用）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="-p2--兑现承诺--技术债" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">🟢 P2 — 兑现承诺 / 技术债<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#-p2--兑现承诺--技术债">#</a></h3>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">#</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">位置</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">现状</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G13</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>v1connect/</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">已生成、零引用；6 个 service 是 <code>Unimplemented</code>；CLI 实际走 HTTP 而非 gRPC</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G14</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>cmd/hnsx</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">远程命令（<code>domains/sessions/eval</code>）尚未实现</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G15</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>sdk/go</code> / <code>sdk/python</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">仅 README + 空目录，仅 node 完整</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G16</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>main.go</code></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>HNSX_OTEL_EXPORTER</code> 默认空 → Otel 默认不接 Tempo</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><strong class="font-semibold">G17</strong></td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">多租户</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>X-Tenant-ID</code> 中间件在，<code>auth_token → tenant</code> 映射未做，所有表已带 <code>tenant_id</code> 默认 <code>default</code></td>
+</tr>
+</tbody>
+</table>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="3-ticketsp0--立刻做p1--p0-跑完-e2e-后排p2--之后单独迭代" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">3. Tickets（P0 = 立刻做；P1 = P0 跑完 e2e 后排；P2 = 之后单独迭代）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#3-ticketsp0--立刻做p1--p0-跑完-e2e-后排p2--之后单独迭代">#</a></h2>
+<h3 id="p0--全栈纵切8-张票" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">P0 — 全栈纵切，8 张票<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#p0--全栈纵切8-张票">#</a></h3>
+<p class="my-4 leading-7">每张票 = 1 分支 + 1 commit + 1 勾选。</p>
+<h4 id="t1--trace-api-归位server--console" class="mt-8 leading-6 text-lg title_fb7eb">T1 — Trace API 归位（server + console）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#t1--trace-api-归位server--console">#</a></h4>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>pkg/api/auxiliary.go:24-152</code> 改调 <code>internal/trace/service.ListTraces/GetTrace</code>，删除 <code>trace_id == session_id</code> 假象</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>internal/trace/service</code> 暴露 <code>ListTraces(tenant, filter)</code> + <code>GetTrace(tenant, traceID)</code>；如缺失则补</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> handler 测试：trace_id 不存在返 404 <code>TRACE_NOT_FOUND</code>；列出分页正确</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">migration</strong> 视情况加 <code>observations(domain_id, created_at)</code> 复合索引 (<code>go/migrations/000005_trace_list_indexes.up.sql</code>)</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>src/api/mappers.ts</code> + <code>TracesPage</code> + <code>api/traces.ts</code> 同步切换 <code>TraceSummaryViewModel</code>；<code>mappers.ts:187/197/224</code> 的 traceId 字段在 wire 上仍是 <code>trace_id</code>，无需改动</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">验收</strong>：<code>GET /api/v1/traces?domain=x&amp;from=&amp;to=&amp;limit=</code> 返回真实聚合；<code>GET /api/v1/traces/:id</code> 返回 observations[]；console TracesPage <code>pnpm type-check</code> + <code>pnpm build</code> 全过</li>
+</ul>
+<p class="my-4 leading-7">Refs：<code>docs/server-design/go-refactor-plan.md §2 Track A</code></p>
+<h4 id="t2--secret-crud-闭-loopserver--console" class="mt-8 leading-6 text-lg title_fb7eb">T2 — Secret CRUD 闭 loop（server + console）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#t2--secret-crud-闭-loopserver--console">#</a></h4>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">crypto</strong> <code>internal/secret/crypto</code>：AES-256-GCM envelope，加 nonce 前缀，<code>HNSX_SECRET_KEY</code> &lt; 16 字符 fail-fast</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">application.go</strong> 启动时 <code>secretcrypto.New()</code> 装载 cipher，缺失则拒绝启动；log.Info 标记加密启用</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">model</strong> <code>internal/secret/model</code>：Secret 区分 <code>Value</code>（envelope）/ <code>PlainValue</code>（仅创建期）；新增 <code>ListItem</code> 不带 value</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">repository</strong> 增加 <code>List()</code>，InMemory 与 Postgres 双实现；entity 不动，靠 service 层加密</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">service</strong> <code>Save</code> 走 cipher.Encrypt → envelope + fingerprint；<code>List</code> 返 ListItem；<code>Delete</code> 幂等；<code>Resolve</code> 走 cipher.Decrypt</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">handler</strong> <code>auxiliary.go</code> ListSecrets 真接 service（含 nil service → 503 SECRETS_UNAVAILABLE）；Create/UpdateSecret 接受 plaintext value，返 201/200 + fingerprint（绝不含 value）；DeleteSecret 真接 service + 204</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">errors.go</strong> <code>SECRETS_UNAVAILABLE</code> → 503</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server tests</strong> <code>pkg/api/secrets_test.go</code> 4 条：CRUD 不回显 plaintext + Resolve 解码回 plaintext + 缺 value 返 400 + nil service 返 503</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> Secret 类型对齐 server 字段（name/description/kind/fingerprint/created_at/updated_at）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> SettingsPage.SecretsTab — Create 对话框含 kind dropdown + description；SecretTable 改 name/kind chip/fingerprint；hardcoded stub warning 替换为 try/catch 错误条</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">验收</strong>：<code>go test ./...</code> + <code>pnpm type-check</code> 全过</li>
+</ul>
+<p class="my-4 leading-7">Refs：<code>docs/server-design/go-refactor-plan.md §4 D1</code></p>
+<h4 id="t3--runtime-列表读真-workerregistryserver" class="mt-8 leading-6 text-lg title_fb7eb">T3 — Runtime 列表读真 worker.Registry（server）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#t3--runtime-列表读真-workerregistryserver">#</a></h4>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>auxiliary.go</code> 删硬编码 <code>local-control-plane/phase1</code>，改调 <code>WorkerService.List()</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> 映射 <code>worker.Snapshot → REST</code>：runtime_id / version / region / hostname / pid / capacity / capabilities / models / sandbox_runtimes / labels / last_heartbeat_at / age_seconds / status</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> status 在 healthy / degraded / offline 三档；&gt;60s 未心跳 → offline</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>WorkerService == nil</code>（gRPC 未启用）时返回空列表，由 UI 渲染 empty state；不再有 fake 数据</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>pkg/api/runtimes_test.go</code>：4 个 handler 测试覆盖空、单/多 worker、nil service、status 三档</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>src/api/settings.ts</code> <code>Runtime</code> 类型扩 capabilities/models/sandbox_runtimes/labels/age_seconds/healthy</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>SettingsPage.RuntimesTab</code> 列改：Runtime ID + version、Host + pid、Region、Capabilities chips、Status、Slots、Last heartbeat</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">验收</strong>：<code>pnpm type-check</code> + <code>go test ./...</code> 全过</li>
+</ul>
+<p class="my-4 leading-7">Refs：<code>docs/server-design/go-refactor-plan.md §4 D3</code></p>
+<h4 id="t4--policy-crud--domain-绑定server--console" class="mt-8 leading-6 text-lg title_fb7eb">T4 — Policy CRUD + Domain 绑定（server + console）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#t4--policy-crud--domain-绑定server--console">#</a></h4>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>internal/policy/model</code> 重排 — Policy 由 <code>DomainID</code> 改为 <code>ID + Name + BoundDomain</code>；新增 <code>ListItem</code>；新增 <code>Rules</code>(JSON-friendly) + <code>ErrInvalidPolicyID</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>internal/policy/repository</code> 接口换为 ByID/List/Delete/BindDomain/ByDomain；InMemory 维护 id→policy 与 domain→id 双向索引，1:1 不变；Postgres 用 <code>domain_uuid UUID NULL</code>（已无需迁移）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>internal/policy/entity.go</code> 把 <code>DomainUUID</code> 改成 <code>*string</code>，与 SQL NULL 一致</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>internal/policy/service</code> 加 <code>List/CreateOrUpdate/Delete/BindDomain</code>；<code>LoadDomainPolicy</code> 改用 ID == domainID（向后兼容）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>pkg/api/auxiliary.go</code> List/Create/Update/Delete + <code>BindPolicy</code> 五个 handler 接通；<code>SECRETS_UNAVAILABLE→503</code> 顺手加 <code>POLICY_UNAVAILABLE→503</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>router.go</code> 挂 <code>/policies</code>、<code>/policies/:id</code> 与 <code>POST /domains/:id/policies</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>pkg/api/policies_test.go</code> 6 个 handler 测试：List/CRUD/Bind/1:1 invariant/unknown policy→404/nil service→503</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>internal/policy/repository/repository_test.go</code> 重写 6 个测试覆盖 Save/ByID/ByDomain/BindDomain 1:1/Unbind/List/Delete</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>src/api/settings.ts</code> Policy 类型扩展 budget/permissions/guardrails/bound_domain；增 <code>createPolicy/updatePolicy/deletePolicy/bindPolicy</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>SettingsPage.PoliciesTab</code> 列展示 id/name/bound_domain chip + budget 摘要 + permission chip</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">验收</strong>：<code>go test ./...</code> + <code>pnpm type-check</code> 全过；包含 1:1 binding 不变量</li>
+</ul>
+<p class="my-4 leading-7">Refs：<code>docs/server-design/go-refactor-plan.md §4 D2</code></p>
+<h4 id="t5--approval-一次到位server--worker" class="mt-8 leading-6 text-lg title_fb7eb">T5 — Approval 一次到位（server + worker）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#t5--approval-一次到位server--worker">#</a></h4>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>internal/approval/{model,repository,service}</code> 新增；Status / RiskLevel const；ListItem / Approval 形状</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">migration</strong> <code>go/migrations/000007_approvals.up.sql</code> — approvals 表 + (tenant_id, approval_id) 唯一索引 + 状态 / domain + created_at 索引</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>internal/approval/repository</code> InMemory + Postgres 双实现；PendingForSession 防止同一 session 重叠 pending</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>internal/approval/service</code> 含 <code>Gate.Request(ctx, approval)</code> 同步阻塞 + Decision 转换；Approve/Reject wake 等待者</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>pkg/api/auxiliary.go</code> ListApprovals 默认 filter=pending；GetApproval；ApproveApproval 返 200/409 已解决/404；RejectApproval；写 immutable audit row (action=approval_decision)</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>pkg/api/errors.go</code> APPROVAL_NOT_FOUND → 404；APPROVAL_ALREADY_RESOLVED → 409；APPROVAL_UNAVAILABLE → 503</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>pkg/api/approvals_test.go</code> 6 个 handler 测试 + Gate 阻塞验证</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>pkg/session/executor.go</code> ApprovalGate 接口 + WithApprovalGate 钩子；policyAdapter 在 guardrail <code>action=human_approval</code> 时调用 gate.Request 同步挂起</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>internal/app/application.go</code> approvalServiceGateAdapter 把 ApprovalService 适配到 executor Gate 契约</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">server</strong> <code>application.go</code> 装载 ApprovalService + Postgres repo</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>src/api/approvals.ts</code> 对齐 server field 形状（id/session_id/domain_id/action/resource/risk_level/context/status/comment/reviewed_by/created_at/resolved_at）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>useApprovals.ts</code> refetchInterval=5s；useResolveApproval 接收 reviewed_by + comment</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>ApprovalsPage.tsx</code> 列展示 id/session/domain/action/risk_level/status/created/actions；detail dialog 用 risk_level + action + context 渲染</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">验收</strong>：<code>go test ./...</code> + <code>pnpm type-check</code> 全过；exec gate 阻塞到 operator 决策</li>
+</ul>
+<p class="my-4 leading-7">Refs：<code>docs/project_management/2026.07.10/python-worker-w10-plus.md §7</code></p>
+<blockquote class="border-l-2 border-solid border-divider pl-4 my-6 transition-colors duration-500 blockquote_f1063">
+<p class="my-4 leading-7">Note: Worker-side pause/resume (gRPC StreamChannel 推 CancelSession/ResumeSession) 走 W14 已建好的 <code>approval/bus.py</code> 路径；本票在 server 侧完整闭环，跨 worker 协调是后续 P1 显式票。</p>
+</blockquote>
+<h4 id="t6--console-补-evalsts-api-clientconsole" class="mt-8 leading-6 text-lg title_fb7eb">T6 — Console 补 evals.ts api client（console）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#t6--console-补-evalsts-api-clientconsole">#</a></h4>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> 新建 <code>src/api/evals.ts</code>：listEvalSets (flat, no domainId nesting) + getEvalSet (id only) + createEvalSet + runEval + getEvalRun — 全部对齐 server <code>/api/v1/evals/...</code> 路由</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>src/api/domains.ts</code> 删除重复的 eval 函数（之前嵌在 domains 里用了错的 URL）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>src/hooks/useEvals.ts</code> 重写为 setId-only 签名；useEvalSets 列表 + 客户端 domain filter；useCreateEvalSet / useRunEval / useEvalRun</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>EvalsPage</code> 重写：服务端返回的扁平列表 + domain filter 下拉 + View/Run 按钮 → 跳到 <code>/evals/:setId</code> + <code>/evals/:setId/runs/:runId</code>；Create 对话框含 set_id / domain / description</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>EvalSetPage</code> 重写：useEvalSet(setId) 单一参数；cases 列表 + Run 按钮</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>EvalRunPage</code> 重写：useEvalRun(setId, runId) 单一参数；Stats 行 + Cases 表；剥除 depends-on-list 的趋势图 / 基线选择器（依赖后续 T9 listEvalRuns 加）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>App.tsx</code> 路由 <code>/evals/:setId</code> + <code>/evals/:setId/runs/:runId</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">验收</strong>：<code>pnpm type-check</code> + <code>pnpm build</code> + <code>go test ./...</code> 全过</li>
+</ul>
+<p class="my-4 leading-7">Refs：<code>docs/server-design/api-design.md §6</code></p>
+<h4 id="t7--console-traceid-语义同步console与-t1-联动" class="mt-8 leading-6 text-lg title_fb7eb">T7 — Console traceId 语义同步（console，与 T1 联动）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#t7--console-traceid-语义同步console与-t1-联动">#</a></h4>
+<blockquote class="border-l-2 border-solid border-divider pl-4 my-6 transition-colors duration-500 blockquote_f1063">
+<p class="my-4 leading-7">阻塞 T1。</p>
+</blockquote>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>mappers.ts:187/197/224</code> 与新 trace_id 语义对齐</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">console</strong> <code>SessionDetailPage</code> <code>/traces/:id</code> Link、<code>TracesPage/TraceDetailPage</code> 渲染</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">验收</strong>：T1 改完后 console 不出现 stale <code>traceId</code>，全部走真 trace_id</li>
+</ul>
+<h4 id="t8--e2edocker-compose-跑通-customer-service-真实域infra--验证" class="mt-8 leading-6 text-lg title_fb7eb">T8 — e2e：docker compose 跑通 customer-service 真实域（infra + 验证）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#t8--e2edocker-compose-跑通-customer-service-真实域infra--验证">#</a></h4>
+<blockquote class="border-l-2 border-solid border-divider pl-4 my-6 transition-colors duration-500 blockquote_f1063">
+<p class="my-4 leading-7">阻塞 T1–T7。</p>
+</blockquote>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">deploy</strong> <code>deployments/local/docker-compose.yml</code> 默认起 server + postgres + worker + tempo + grafana，OTel exporter 默认 OTLP</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">e2e 脚本</strong> <code>scripts/e2e/customer-service.sh</code>：validate → POST domain → POST session → SSE consume → 落 trace → console 反查</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">验收</strong>：执行后输出 trace_id + obs 序列 + 一张 console 截图占位（mvp 不要图）</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h3 id="p1--契约对齐p0-e2e-跑通后启动" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">P1 — 契约对齐（P0 e2e 跑通后启动）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#p1--契约对齐p0-e2e-跑通后启动">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">T9</strong> 补齐 <code>api-design.md</code> 缺失路由（<code>PUT /domains/:id</code>、<code>/evals</code> 嵌套路径等）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">T10</strong> <code>Observation.{payload,metadata}</code> 序列化约定写进 proto / Python loader / TS mappers</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">T11</strong> <code>MCPConfig</code> ↔ Worker <code>mcp_servers</code> 字段映射 + 双向转换函数</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">T12</strong> <code>WorkflowSession.mode</code> Python runner 至少跑通一个 example（<code>workflow-demo</code>）</li>
+</ul>
+<h3 id="p2--兑现承诺独立迭代排期" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">P2 — 兑现承诺（独立迭代排期）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#p2--兑现承诺独立迭代排期">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">T13</strong> Connect-RPC 收敛（v1connect 上线 + 5 个 control_plane service 实装 + CLI 改走 Connect）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">T14</strong> <code>cmd/hnsx</code> 远程命令（<code>domains/sessions/eval</code> 通过 <code>internal/client</code>）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <strong class="font-semibold">T15</strong> <code>sdk/go</code> / <code>sdk/python</code> 真出包（Go 用 <code>internal/client</code> 封装；Python 用 <code>hnsx_worker/proto_client</code> 拆 SDK）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled="" checked=""/> <strong class="font-semibold">T16</strong> OTLP 默认开启 + Tempo + 5 张 Grafana dashboard JSON</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <strong class="font-semibold">T17</strong> 多租户 <code>auth_token → tenant</code> + 行级 RLS 预留</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="4-跨-track-跟随项不在单独-t-票里但要做到" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">4. 跨 Track 跟随项（不在单独 T 票里但要做到）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#4-跨-track-跟随项不在单独-t-票里但要做到">#</a></h2>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->每个 T 必跑 <code>cd hnsx-server &amp;&amp; go build ./... &amp;&amp; go test ./...</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->动 proto 的跑 <code>make proto</code> 后再动</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->动 Console 的到 <code>hnsx-console</code> 跑 <code>pnpm install --force &amp;&amp; pnpm type-check</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->动 worker 的跑 <code>make worker-test</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->每个 T 的 PR 末尾带：「🤖 Generated with [Claude Code]」+ 引用本文件锚点</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="5-风险与守则" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">5. 风险与守则<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#5-风险与守则">#</a></h2>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">风险</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">守则</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Server 改完忘同步 console，T8 e2e 必现 stale</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">全栈纵切强约束：单 T 不允许 server 一侧先 merge</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Trace 索引 / CTE 写复杂，首页 P95 退步</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">复用 <code>traceSvc.Aggregate</code> + (session_id, created_at) 已有索引；新加索引必须 EXPALIN 过</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Approval 一次到位风险高（gRPC 下行 + 会话挂起状态机）</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">先在 <code>customer-service</code> 跑通单域，再扩到通用</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Secret 加密 key 走 env，本地开发易忘</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>internal/config</code> 启动 fail-fast：未设 <code>HNSX_SECRET_KEY</code> → 拒绝起来</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Worker 与 Server 时间漂导致 SSE 顺序错乱</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">所有 obs/ts 用 server-time（worker 上报时带 <code>client_ts_ms</code>，server 校准后写入）</td>
+</tr>
+</tbody>
+</table>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="6-收尾协议" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">6. 收尾协议<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#6-收尾协议">#</a></h2>
+<p class="my-4 leading-7">每个 T 落地完成后：</p>
+<ol class="list-decimal pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">在本文件勾掉 <code>- [ ]</code>（commit 携带此变化）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">commit message：<code>feat(server|console|infra|worker): &lt;t-id&gt; &lt;短描述&gt;\n\nRefs: docs/project_management/2026.07.10/end-to-end-product-roadmap.md#&lt;t-id&gt;</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2">推到远端，开 PR</li>
+<li class="[&amp;:not(:first-child)]:mt-2">不直接合 main —— 等 review</li>
+</ol>
+<p class="my-4 leading-7">P0 全部勾完后，启动 P1 排期，<strong class="font-semibold">清零即更新本文件 §0 周期字段 + 进度条</strong>。</p>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<p class="my-4 leading-7"><em>owner：HnsX squad · last_updated：2026-07-10</em>
+<em>Co-Authored-By: Claude Opus 4.8 <a href="mailto:noreply@anthropic.com" class="link_a7cea  link_a9ef4 inline-link_f855c" target="_blank" rel="noopener noreferrer">noreply@anthropic.com</a></em></p><!--/$--></div><div class="rspress-doc-footer"><footer class="mt-8"><div class="xs:flex pb-5 px-2 justify-end items-center"></div><div class="flex flex-col"></div><div class="flex flex-col sm:flex-row sm:justify-around gap-4 pt-6"><div class="prev_c92d1 flex flex-col"></div><div class="next_c11be flex flex-col"></div></div></footer></div></div></div></div></div></section></div>
+    <div id="search-container"></div>
+  </body>
+</html>

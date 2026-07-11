@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content="Rspress v1.47.1">
+    <meta property="og:title"content="HnsX — Harness as a Service"><meta property="og:description"content="HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI 等最强 Agent。"><meta property="og:type"content="website"><meta property="og:image"content="https://narcilee7.github.io/HnsX/og-image.png"><meta name="twitter:card"content="summary_large_image"><title data-rh="true">HnsX — Harness as a Service</title><meta data-rh="true" name="description" content="HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI 等最强 Agent。"/>
+  <script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const isDark = !saved || saved === 'auto' ? preferDark : saved === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script><link rel="icon" href="/HnsX/favicon.png"><script defer src="/HnsX/static/js/styles.ae5ec2d0.js"></script><script defer src="/HnsX/static/js/lib-react.0aff66c0.js"></script><script defer src="/HnsX/static/js/lib-router.0d65c259.js"></script><script defer src="/HnsX/static/js/641.c64fbc03.js"></script><script defer src="/HnsX/static/js/index.7e3760f1.js"></script><link href="/HnsX/static/css/styles.f27a1667.css" rel="stylesheet"></head>
+
+  <body >
+    <div id="root"><div class="navContainer_d18b1 rspress-nav px-6  sticky_ddfa7"><div class="container_e4235 flex justify-between items-center h-full"><div class="navBarTitle_c5f07"><a href="/HnsX/index" class="link_a7cea flex items-center w-full h-full text-base font-semibold transition-opacity duration-300 hover:opacity-60"><span>HnsX — Harness as a Service</span></a></div><div class="flex flex-1 justify-end items-center"><div class="leftNav_e6722"><div class="rspress-nav-menu menu h-14"><a href="/HnsX/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154 activeItem_a28b5 text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">首页</div></a><a href="/HnsX/blog/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">博客</div></a><a href="/HnsX/guide/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">指南</div></a><a href="/HnsX/design/vision" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">文档</div></a><a href="/HnsX/design/server-design/api-design" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">API</div></a></div></div><div class="rightNav_a2fea"><div class="flex sm:flex-1 items-center sm:pl-4 sm:pr-2"><div class="rspress-nav-search-button navSearchButton_df1fb"><button><svg width="18" height="18" viewBox="0 0 32 32"><path fill="var(--rp-c-gray)" d="m29 27.586-7.552-7.552a11.018 11.018 0 1 0-1.414 1.414L27.586 29ZM4 13a9 9 0 1 1 9 9 9.01 9.01 0 0 1-9-9"></path></svg><p class="searchWord_af2c1">Search</p><div style="opacity:0"><span></span><span>K</span></div></button></div><div class="mobileNavSearchButton_d85a9"><svg width="24" height="24" viewBox="0 0 32 32"><path fill="var(--rp-c-gray)" d="m29 27.586-7.552-7.552a11.018 11.018 0 1 0-1.414 1.414L27.586 29ZM4 13a9 9 0 1 1 9 9 9.01 9.01 0 0 1-9-9"></path></svg></div></div><div class="rspress-nav-menu menu h-14"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">GitHub</div></a></div><div class="flex-center flex-row"><div class="mx-2"><div class="md:mr-2 rspress-nav-appearance"><div class="p-1 border border-solid border-gray-300 text-gray-400  cursor-pointer rounded-md hover:border-gray-600 hover:text-gray-600 dark:hover:border-gray-200 dark:hover:text-gray-200 transition-all duration-300 w-7 h-7"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24" class="dark:hidden" width="18" height="18" fill="currentColor"><path d="M12 18c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6m0-10c-2.2 0-4 1.8-4 4s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4M12 4c-.6 0-1-.4-1-1V1c0-.6.4-1 1-1s1 .4 1 1v2c0 .6-.4 1-1 1M12 24c-.6 0-1-.4-1-1v-2c0-.6.4-1 1-1s1 .4 1 1v2c0 .6-.4 1-1 1M5.6 6.6c-.3 0-.5-.1-.7-.3L3.5 4.9c-.4-.4-.4-1 0-1.4s1-.4 1.4 0l1.4 1.4c.4.4.4 1 0 1.4-.1.2-.4.3-.7.3M19.8 20.8c-.3 0-.5-.1-.7-.3l-1.4-1.4c-.4-.4-.4-1 0-1.4s1-.4 1.4 0l1.4 1.4c.4.4.4 1 0 1.4-.2.2-.5.3-.7.3M3 13H1c-.6 0-1-.4-1-1s.4-1 1-1h2c.6 0 1 .4 1 1s-.4 1-1 1M23 13h-2c-.6 0-1-.4-1-1s.4-1 1-1h2c.6 0 1 .4 1 1s-.4 1-1 1M4.2 20.8c-.3 0-.5-.1-.7-.3-.4-.4-.4-1 0-1.4l1.4-1.4c.4-.4 1-.4 1.4 0s.4 1 0 1.4l-1.4 1.4c-.2.2-.4.3-.7.3M18.4 6.6c-.3 0-.5-.1-.7-.3-.4-.4-.4-1 0-1.4l1.4-1.4c.4-.4 1-.4 1.4 0s.4 1 0 1.4l-1.4 1.4c-.2.2-.5.3-.7.3"></path></svg><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24" class="hidden dark:block" width="18" height="18" fill="currentColor"><path d="M12.1 22h-.9c-5.5-.5-9.5-5.4-9-10.9.4-4.8 4.2-8.6 9-9 .4 0 .8.2 1 .5s.2.8-.1 1.1c-2 2.7-1.4 6.4 1.3 8.4 2.1 1.6 5 1.6 7.1 0 .3-.2.7-.3 1.1-.1.3.2.5.6.5 1-.2 2.7-1.5 5.1-3.6 6.8-1.9 1.4-4.1 2.2-6.4 2.2M9.3 4.4c-2.9 1-5 3.6-5.2 6.8-.4 4.4 2.8 8.3 7.2 8.7 2.1.2 4.2-.4 5.8-1.8 1.1-.9 1.9-2.1 2.4-3.4-2.5.9-5.3.5-7.5-1.1-2.8-2.2-3.9-5.9-2.7-9.2"></path></svg></div></div></div><div class="social-links menu-item_e90a6 flex-center relative"><div class="flex-center h-full gap-x-4 transition-colors duration-300 md:mr-2"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="social-links"><div class="social-links-icon_a4ad0"><div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a></div></div></div></div><div class="mobileNavMenu_e7045"><div class="navScreen_ec30c  rspress-nav-screen" id="navScreen"><div class="container_c935d"><div class="navMenu_b887b"><div class="navMenuItem_e7978 w-full"><a href="/HnsX/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154 activeItem_a28b5 text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">首页</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/blog/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">博客</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/guide/index" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">指南</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/design/vision" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">文档</div></a></div><div class="navMenuItem_e7978 w-full"><a href="/HnsX/design/server-design/api-design" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">API</div></a></div><div class="navMenuItem_e7978 w-full"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="link_a7cea "><div class="rspress-nav-menu-item singleItem_c1154  text-sm font-medium mx-1.5 px-3 py-2 flex items-center break-keep">GitHub</div></a></div></div><div class="flex-center flex-col gap-2"><div class="mt-2 navAppearance_bf893 flex justify-center"></div><div class="social-links menu-item_e90a6 flex-center relative"><div class="flex-center h-full gap-x-4 transition-colors duration-300 md:mr-2"><a href="https://github.com/narcilee7/HnsX" target="_blank" rel="noopener noreferrer" class="social-links"><div class="social-links-icon_a4ad0"><div><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a></div></div></div></div></div><button aria-label="mobile hamburger" class=" rspress-mobile-hamburger navHamburger_ac64c text-gray-500"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="currentColor"><circle cx="8" cy="16" r="2" fill="currentColor"></circle><circle cx="16" cy="16" r="2" fill="currentColor"></circle><circle cx="24" cy="16" r="2" fill="currentColor"></circle></svg></button></div></div></div></div><section><div class="docLayout_af141 pt-0"><div class="flex-1 relative min-w-0"><div class="rspress-sidebar-menu-container no-toc"><div class="rspress-sidebar-menu"></div></div><div class="content_ff766 rspress-doc-container flex"><div class="flex-1 overflow-x-auto"><div class="rspress-doc"><!--$--><h1 id="python-worker-roadmap" class="rspress-doc-title text-3xl mb-10 leading-10 tracking-tight title_fb7eb">Python Worker Roadmap<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#python-worker-roadmap">#</a></h1>
+<blockquote class="border-l-2 border-solid border-divider pl-4 my-6 transition-colors duration-500 blockquote_f1063">
+<p class="my-4 leading-7">周期：2026.07.09 起（独立 Python 侧跟踪）<br/>
+<!-- -->北极星：让 <code>hnsx-worker</code> 从当前骨架演进为<strong class="font-semibold">真实 SOTA Agent 接入、可治理、可观测、可评测</strong>的 Python 能力执行平面。<br/>
+<!-- -->架构基线：<code>docs/server-design/service-architecture.md</code> §2 &quot;Runtime Worker（Python）&quot;<br/>
+<!-- -->协同基线：<code>docs/project_management/2026.07.09/v1_2_roadmap.md</code>（Go 控制面为主线）</p>
+</blockquote>
+<blockquote class="border-l-2 border-solid border-divider pl-4 my-6 transition-colors duration-500 blockquote_f1063">
+<p class="my-4 leading-7"><strong class="font-semibold">本文只跟踪 Python 侧</strong>。Go 控制面 / Console / Eval / Postgres / mTLS 等由对应文档负责。Python ↔ Go 的契约（proto / observation）若变化，先在 proto 仓库同步后再回到本文。</p>
+</blockquote>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="总览" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">总览<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#总览">#</a></h2>
+<table class="block border-collapse text-base my-5 overflow-x-auto leading-7 border-gray-light-3 dark:border-divider">
+<thead>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">里程碑</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">主题</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">预计周期</th>
+<th class="border border-solid px-4 py-2 text-text-1 text-base font-semibold border-gray-light-3 dark:border-divider">主要交付</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">W0</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">骨架 + 契约</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">✅ done</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">proto + worker parent + subprocess + noop/echo</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">W1</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">真实 Agent 接入</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">✅ done</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Anthropic / OpenAI / Ollama，streaming + tool use，多 turn 骨架</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">W2</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">proto_client 抽象</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">✅ done</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">runtime 与 wire format 完全解耦</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">W3</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Tool Registry</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">1 周</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>tools/registry.py</code> + <code>tools/{http,sql,python}.py</code> + Policy 拦截</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">W4</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">CLI Agent 接入</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">1 周</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Claude Code / Codex adapter，Policy + Sandbox 边界观测</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">W5</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">多 Agent 编排</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">1-2 周</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>harness/{loader,runner,transition}.py</code>，supervisor mode</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">W6</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Policy + Sandbox + Store</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">1-2 周</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider"><code>policy/engine.py</code> + <code>sandbox/backend.py</code> + <code>store/backend.py</code> + Secret</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">W7</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">性能与韧性</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">1 周</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">预 fork pool、优雅 drain、Domain invalidation 完整处理</td>
+</tr>
+<tr class="border border-solid transition-colors duration-500 even:bg-soft border-gray-light-3 dark:border-divider">
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">W8</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Eval 接入</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">1 周</td>
+<td class="border border-solid px-4 py-2 border-gray-light-3 dark:border-divider">Python scorer：exact / contains / jmespath / structured_match / llm-judge</td>
+</tr>
+</tbody>
+</table>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="w0骨架--契约done" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">W0：骨架 + 契约（done）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#w0骨架--契约done">#</a></h2>
+<h3 id="交付" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">交付<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#交付">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>proto/hnsx/v1/worker.proto</code> + <code>observation.proto</code> + Go / Python 双端 stub</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Worker parent process：<code>worker_service.py</code>（Register / Heartbeat / PullSession / StreamChannel）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Session runtime subprocess：<code>session_runtime.py</code>（stdin JSON / stdout JSONL / SIGTERM）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Adapter registry：<code>adapters/{base,noop,echo}.py</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>pyproject.toml</code> + venv + <code>make proto-py</code> / <code>make worker-test</code> / <code>make worker-install</code></li>
+</ul>
+<h3 id="验收" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>hnsx-worker check-proto</code> 通过</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>make worker-test</code> 通过</li>
+<li class="[&amp;:not(:first-child)]:mt-2">端到端：Go server → Python worker → subprocess noop session → SSE observation</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="w1真实-agent-接入done" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">W1：真实 Agent 接入（done）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#w1真实-agent-接入done">#</a></h2>
+<h3 id="交付-1" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">交付<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#交付-1">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>adapters/anthropic.py</code>：<code>invoke</code> + <code>invoke_stream</code> + 完整 tool use 解析 + cost 记录</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>adapters/openai.py</code>：<code>invoke</code> + <code>invoke_stream</code> + tool use 解析 + cost 记录</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>adapters/ollama.py</code>：<code>invoke</code>（无 streaming / 无 tool use）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>adapters/base.py</code>：<code>StreamChunk</code> / <code>ToolCall</code> / <code>Cost</code> 类型</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>session_executor.py</code>：单 turn 流式输出（<code>agent_text_delta</code> / <code>agent_tool_call</code> / <code>agent_cost</code>）+ 多 turn loop（max_turns + stub tool result）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>_build_messages(input)</code> 适配器内部约定：executor 通过 <code>input[&quot;_messages&quot;]</code> 注入多 turn history</li>
+<li class="[&amp;:not(:first-child)]:mt-2">单元测试：<code>tests/test_real_adapters.py</code>（mock httpx）、<code>tests/test_openai_streaming.py</code>、<code>tests/test_executor_streaming.py</code></li>
+</ul>
+<h3 id="验收-1" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收-1">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">Anthropic / OpenAI 单元测试全过（mock httpx）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">多 turn 跑满 <code>max_turns</code> 后正确 <code>truncated</code> 终止</li>
+<li class="[&amp;:not(:first-child)]:mt-2">流式 chunks 全部 emit 为 observation（无双漏）</li>
+</ul>
+<h3 id="已知缺口推到-w3--w6" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">已知缺口（推到 W3 / W6）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#已知缺口推到-w3--w6">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>_stub_tool_result</code> 是 placeholder；M3 接 <code>ToolRegistry</code> 时替换</li>
+<li class="[&amp;:not(:first-child)]:mt-2">多 turn 的 tool call 结果不实际执行工具，只是 echo</li>
+<li class="[&amp;:not(:first-child)]:mt-2">没有 budget / denied tools / human approval 拦截</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="w2proto_client-抽象done" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">W2：proto_client 抽象（done）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#w2proto_client-抽象done">#</a></h2>
+<h3 id="交付-2" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">交付<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#交付-2">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>proto_client/__init__.py</code> + <code>messages.py</code>（23 个 dataclass）+ <code>client.py</code>（<code>ControlPlaneClient</code>）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>worker_service.py</code> / <code>config.py</code> 重构：完全去除 <code>worker_pb2</code> / <code>observation_pb2</code> import</li>
+<li class="[&amp;:not(:first-child)]:mt-2">新测试 <code>tests/test_proto_client.py</code>（8 个，直接测 <code>ControlPlaneClient</code>）</li>
+</ul>
+<h3 id="验收-2" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收-2">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>grep -rn &quot;_pb2&quot; hnsx_worker/</code> 在 <code>proto_client/</code> 之外无命中（<code>__main__.py</code> 的 <code>check-proto</code> CLI 例外）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">44 个测试全过</li>
+</ul>
+<h3 id="收益" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">收益<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#收益">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">未来加 mTLS、observation 字段变化、proto 字段调整，只改 <code>proto_client/</code> 一处</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Mock server 测试继续直接用 proto（那是 server-side mock，本来就在模拟 wire）</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="w3tool-registry" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">W3：Tool Registry<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#w3tool-registry">#</a></h2>
+<h3 id="目标" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">目标<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#目标">#</a></h3>
+<p class="my-4 leading-7">让 API Agent 通过 tool calling 调用外部能力，同时所有调用都过 Policy 拦截与审计。</p>
+<h3 id="任务" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">任务<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#任务">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>tools/registry.py</code></strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->定义 <code>Tool</code> / <code>ToolRegistry</code> 抽象（按 name / capability 查找）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->调用前走 <code>policy.engine.check(tool_call, ctx)</code> 拦截</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->调用后 emit <code>tool_call</code> / <code>tool_result</code> / <code>policy_check</code> / <code>policy_violation</code> observation</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>tools/http.py</code></strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->GET / POST / PUT / DELETE 实现（基于 httpx）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->支持 <code>{secret.XXX}</code> 占位符注入（header / query / body）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->支持 timeout / retry / status code 白名单</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>tools/sql.py</code></strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->基于 SQLAlchemy 2.x 或 raw SQL（asyncpg）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->默认只读模式（<code>SELECT</code> only），写操作需 policy 显式 allow</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>tools/python.py</code></strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->在 sandbox 内执行一段 Python 代码</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->stdout / stderr / return value 捕获为 observation</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold">executor 改造</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>_run_multi_turn</code> 把 <code>_stub_tool_result</code> 换成 <code>_tool_registry.call(name, input)</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->tool call 错误（policy violation / execution error）正确 emit 并终止 turn</li>
+</ul>
+</li>
+</ul>
+<h3 id="验收-3" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收-3">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">一个 example domain 跑通 <code>tool_call</code> → 真 HTTP 调用 → <code>tool_result</code> → 下一轮 LLM 推理</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Denied tool 被 Policy 拦截，session emit <code>policy_violation</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2">Secret 注入不泄漏到 observation payload（仅记 <code>name</code>，不记 <code>value</code>）</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="w4cli-agent-接入claude-code--codex" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">W4：CLI Agent 接入（Claude Code / Codex）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#w4cli-agent-接入claude-code--codex">#</a></h2>
+<h3 id="目标-1" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">目标<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#目标-1">#</a></h3>
+<p class="my-4 leading-7">把 Claude Code / Codex CLI 当 Adapter 接入；Tool 层对它们只做<strong class="font-semibold">约束与审计</strong>，不复刻 shell / file / edit 能力。</p>
+<h3 id="任务-1" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">任务<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#任务-1">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>adapters/claude_code.py</code></strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->用 <code>subprocess</code> 起 <code>claude</code> CLI（或 stdin/stdout JSON 协议）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->解析 stdout 的事件，转成 <code>StreamChunk</code>（text / tool_use）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>claude.api_key_env</code> / <code>claude.timeout_seconds</code> / <code>claude.workdir</code></li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>adapters/codex.py</code></strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->同上，针对 <code>codex</code> CLI</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>tools/</code> 的 CLI Agent 适配</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->对 shell / file_write / file_delete / edit 操作，<strong class="font-semibold">Policy 拦截</strong>（不允许默认通过）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->任何被允许的操作 emit <code>tool_call</code> observation（name + input + 触发策略）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->与 W3 共享 Tool Registry，但走&quot;只读声明&quot;路径</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>adapters/registry.py</code></strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->适配器 lazy import：<code>claudecode</code> / <code>codex</code> 需要本地 CLI 安装</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->测试用 <code>pytest.fixture</code> 注册 fake CLI adapter</li>
+</ul>
+</li>
+</ul>
+<h3 id="验收-4" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收-4">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">一个 example domain 用 <code>claudecode</code> adapter 跑通（用 fake CLI 输出验证 observation 流）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Policy denied 的操作正确被拦截、emit <code>policy_violation</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2">CLI Agent 不在 <code>_stub_tool_result</code> 路径下走 Tool Registry（它们自带工具）</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="w5多-agent-编排supervisor--hierarchical--autonomous" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">W5：多 Agent 编排（Supervisor / Hierarchical / Autonomous）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#w5多-agent-编排supervisor--hierarchical--autonomous">#</a></h2>
+<h3 id="目标-2" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">目标<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#目标-2">#</a></h3>
+<p class="my-4 leading-7">实现 <code>session.mode: supervisor</code> 的真编排：supervisor agent 产生 routing decision，Harness 做 transition。</p>
+<h3 id="任务-2" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">任务<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#任务-2">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>harness/loader.py</code></strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->加载并引用校验 DomainSpec（agent / prompt / tool / skill 引用关系）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->提前报错：缺引用 / 循环引用 / 必填字段缺失</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>harness/transition.py</code></strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->实现 JMESPath 表达式求值（用 <code>jmespath</code> 库）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->支持 <code>$.observations[-1].output.intent == &#x27;billing&#x27;</code> 等 transition</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->返回 <code>to: str</code> / <code>reason: str</code> / <code>fallback: bool</code></li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>harness/runner.py</code></strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->实现 supervisor loop：supervisor agent 产生 <code>routing_decision</code> observation</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->根据 transition 切换 specialist agent</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->specialist 完成后根据 exit 条件结束或返回 supervisor</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->emit <code>supervisor_decision</code> / <code>specialist_start</code> / <code>specialist_end</code> observation</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>session_executor.py</code> 改造</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>supervisor</code> / <code>hierarchical</code> / <code>autonomous</code> mode 不再 <code>NotImplementedError</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->把控制权交给 <code>harness.runner.run(...)</code></li>
+</ul>
+</li>
+</ul>
+<h3 id="验收-5" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收-5">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><code>claude-triage</code> example domain 跑通：用户问题 → triage agent 路由 → billing/technical specialist 回答</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>routing_decision</code> observation 包含 <code>to</code> / <code>reason</code> / <code>confidence</code> 字段</li>
+<li class="[&amp;:not(:first-child)]:mt-2">路由错误（所有 transition 不命中）时 session 标记 <code>failed</code> 并给出原因</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="w6policy--sandbox--store--secret" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">W6：Policy + Sandbox + Store + Secret<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#w6policy--sandbox--store--secret">#</a></h2>
+<h3 id="目标-3" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">目标<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#目标-3">#</a></h3>
+<p class="my-4 leading-7">让运行时约束真正生效，并统一存储抽象。</p>
+<h3 id="任务-3" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">任务<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#任务-3">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>policy/engine.py</code></strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>budget</code> 检查：累计 cost / max_cost_usd</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>allowed_tools</code> / <code>denied_tools</code> 检查</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>human_approval</code> 触发：暂停 session，等待审批</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->每次检查 emit <code>policy_check</code> / <code>policy_violation</code> observation</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>sandbox/backend.py</code> + 子类</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->定义 <code>SandboxBackend</code> 抽象</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>none</code> / <code>process</code>（Linux namespace + seccomp，可选）/ <code>container</code>（Docker / Podman）</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>store/backend.py</code> + 子类</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->定义 <code>StoreBackend</code> 抽象</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>in_memory</code>（默认）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>postgres</code>（跨 turn 长期 context）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>redis</code>（ephemeral，跨 turn 短期）</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold">Secret 注入</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->Control Plane 解析 <code>{secret.XXX}</code> 占位符，注入 <code>SessionRequest.secrets</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->session_runtime.py 通过环境变量接收 secrets</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->audit log 记录 secret <strong class="font-semibold">访问</strong>（不记录值）</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>session_executor.py</code> 集成</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->turn 开头调 <code>policy.check_budget(...)</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->tool_call 调 <code>policy.check_tool(...)</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->store 跨 turn 保持 messages / state</li>
+</ul>
+</li>
+</ul>
+<h3 id="验收-6" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收-6">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">超预算 session 被自动 pause / failed</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Denied tool 调用被 policy 拦截</li>
+<li class="[&amp;:not(:first-child)]:mt-2">human_approval 触发后 session 进入 <code>paused</code>，人工审批后继续</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Container sandbox 能限制 tool 执行环境（用 <code>python:3.11-slim</code> 跑 <code>tools.python</code>）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Store 跨 turn 保持 context（重启 subprocess 后可恢复）</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="w7性能与韧性" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">W7：性能与韧性<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#w7性能与韧性">#</a></h2>
+<h3 id="目标-4" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">目标<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#目标-4">#</a></h3>
+<p class="my-4 leading-7">解决 V1.1 已知瓶颈 + 完善 drain / invalidation 处理。</p>
+<h3 id="任务-4" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">任务<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#任务-4">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold">预 fork pool</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->启动时预热 N 个 <code>session_runtime</code> 子进程</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>_on_session</code> 从 pool 取，不用每次 fork（~100ms → ~5ms）</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold">优雅 drain</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->收到 <code>drain</code> 命令后停止 pull 新 session</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->等待当前 session 跑完（或到 deadline）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->退出 <code>pull_loop</code> 并 close gRPC channel</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold">Domain invalidation</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->收到 <code>invalidate(domain_id, version)</code> 后从本地 cache 移除</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->不影响正在跑的 session</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold">Session-level timeout</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>SessionAssignment.session_timeout_seconds</code> 实际生效（subprocess 内 schedule kill）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->超时 emit <code>session_end{state: failed, reason: timeout}</code></li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold">可重入错误处理</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->gRPC channel transient errors 不重启 worker（backoff reconnect）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->subprocess crash 后正确 emit <code>session_end{state: failed}</code> 而不是 worker crash</li>
+</ul>
+</li>
+</ul>
+<h3 id="验收-7" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收-7">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">100 sessions 并发跑（4 worker slot），平均启动延迟 &lt; 20ms（pool 命中）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Drain 后不接新 session；所有进行中 session 在 deadline 内完成</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Channel 断 5 秒后自动重连，期间 observation 在 <code>_obs_queue</code> 排队</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="w8eval-接入" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">W8：Eval 接入<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#w8eval-接入">#</a></h2>
+<h3 id="目标-5" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">目标<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#目标-5">#</a></h3>
+<p class="my-4 leading-7">支持 Eval 平台化的 Python 侧 scorer。</p>
+<h3 id="任务-5" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">任务<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#任务-5">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>eval/scorers.py</code></strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>exact</code> / <code>contains</code> / <code>regex</code> / <code>jmespath</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>structured_match</code>（按 JSON schema 比对）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <code>llm_judge</code>（用低成本 model 调用 judge prompt）</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->每种 scorer emit <code>eval_score{case_id, scorer, score, details}</code> observation</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold"><code>session_executor.py</code> 集成</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->检测 <code>config.get(&quot;eval_case&quot;)</code> 存在时，session_end 后自动跑 scorer</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->把结果通过 <code>SessionFinalResult.result[&quot;eval_scores&quot;]</code> 写回</li>
+</ul>
+</li>
+<li class="[&amp;:not(:first-child)]:mt-2">
+<p class="my-4 leading-7"><input type="checkbox" disabled=""/> <strong class="font-semibold">EvalSet 触发</strong></p>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->Go 端 <code>RunEval</code> 把 EvalCase 注入 <code>SessionRequest.eval_case</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2"><input type="checkbox" disabled=""/> <!-- -->Python 端读完自动跑并回写</li>
+</ul>
+</li>
+</ul>
+<h3 id="验收-8" class="mt-10 mb-2 leading-7 text-xl title_fb7eb">验收<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#验收-8">#</a></h3>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">一个 example domain 配 EvalSet（10 个 case）跑通：每个 case 的 score 出现在 <code>EvalRun</code> 报告</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>llm_judge</code> 用 <code>claude-haiku-4-5</code> judge，能区分 &quot;good&quot; / &quot;ok&quot; / &quot;bad&quot; 三档</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Baseline 对比支持（Go 侧 <code>EvalRun.baseline_run_id</code>）</li>
+</ul>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="跨里程碑依赖" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">跨里程碑依赖<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#跨里程碑依赖">#</a></h2>
+<div class="language-text"><div class="rspress-code-content rspress-scrollbar"><div><pre class="code" style="background-color:inherit"><code class="language-text" style="white-space:pre"><span style="display:block;padding:0 1.25rem"><span>W3 (Tool) ──▶ W4 (CLI Agent) ──▶ W5 (Orchestration) ──▶ W6 (Policy/Sandbox/Store)
+</span></span><span style="display:block;padding:0 1.25rem">  │                                    │                          │
+</span><span style="display:block;padding:0 1.25rem">  ▼                                    ▼                          ▼
+</span><span style="display:block;padding:0 1.25rem">W7 (Performance) ◀──────────────── W8 (Eval) ◀──────────────────┘</span></code></pre></div><div class="code-button-group_fb445"><button title="Toggle code wrap"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrapped_fb89b"><path fill="#22a041" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="icon-wrap_ccd3d"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="code-copy-button_c5089" title="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 30 30" class="icon-copy_ef942"><path fill="currentColor" d="M28 10v18H10V10zm0-2H10a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 18H2V4a2 2 0 0 1 2-2h14v2H4Z"></path></svg><svg width="32" height="32" viewBox="0 0 30 30" class="icon-success_d5ec0"><path fill="#49cd37" d="m13 24-9-9 1.414-1.414L13 21.171 26.586 7.586 28 9z"></path></svg></button></div></div></div>
+<p class="my-4 leading-7">W3 → W5 必须串行（W5 依赖 W3 的 Tool Registry 走 supervisor 路由）。
+W6 可以和 W4/W5 并行（独立子模块）。
+W7 / W8 不依赖前面的具体实现，只依赖 <code>session_runtime</code> 的稳定。</p>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="本周20260709已完成" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">本周（2026.07.09）已完成<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#本周20260709已完成">#</a></h2>
+<ol class="list-decimal pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">✅ <strong class="font-semibold">W1 收尾</strong>：OpenAI streaming + tool use + executor 多 turn loop</li>
+<li class="[&amp;:not(:first-child)]:mt-2">✅ <strong class="font-semibold">W2 完成</strong>：proto_client 抽离，runtime 完全无 <code>*_pb2</code> import</li>
+<li class="[&amp;:not(:first-child)]:mt-2">✅ <strong class="font-semibold">44 个测试全过</strong>：<code>make worker-test</code></li>
+</ol>
+<h2 id="下周w3-启动" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">下周（W3 启动）<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#下周w3-启动">#</a></h2>
+<ol class="list-decimal pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">启动 <code>tools/registry.py</code> + <code>tools/http.py</code> 骨架</li>
+<li class="[&amp;:not(:first-child)]:mt-2"><code>_run_multi_turn</code> 把 <code>_stub_tool_result</code> 换成 <code>ToolRegistry.call(...)</code></li>
+<li class="[&amp;:not(:first-child)]:mt-2">一个 example domain（<code>tools-demo</code>）跑通单 tool 调用</li>
+</ol>
+<hr class="my-12 border-t border-solid border-divider-light"/>
+<h2 id="不在这轮做的事" class="mt-12 mb-6 pt-8 text-2xl tracking-tight border-t-[1px] border-divider-light title_fb7eb">不在这轮做的事<a class="link_a7cea header-anchor link_a9ef4 inline-link_f855c" aria-hidden="true" href="#不在这轮做的事">#</a></h2>
+<ul class="list-disc pl-5 my-4 leading-7">
+<li class="[&amp;:not(:first-child)]:mt-2">多租户隔离（auth token 透传在 W2 已经预留，租户隔离逻辑放到更后期）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Python worker 自身的 dashboard / metrics endpoint（由 Go telemetry / OTLP 统一处理）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">Python worker 的分布式调度（保持单进程 + 多 subprocess 形态，水平扩展交给 Go scheduler）</li>
+<li class="[&amp;:not(:first-child)]:mt-2">把现有 <code>pkg/session/</code> / <code>pkg/runtime/</code> 的 Go 代码迁到 Python（架构明确说 Go 留在调度面）</li>
+</ul><!--/$--></div><div class="rspress-doc-footer"><footer class="mt-8"><div class="xs:flex pb-5 px-2 justify-end items-center"></div><div class="flex flex-col"></div><div class="flex flex-col sm:flex-row sm:justify-around gap-4 pt-6"><div class="prev_c92d1 flex flex-col"></div><div class="next_c11be flex flex-col"></div></div></footer></div></div></div></div></div></section></div>
+    <div id="search-container"></div>
+  </body>
+</html>
