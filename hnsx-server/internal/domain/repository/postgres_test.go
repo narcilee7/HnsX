@@ -4,16 +4,19 @@ import (
 	"testing"
 
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/internal/testutil"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
+
+var pgTestTenant = tenant.DefaultID
 
 func TestPostgresRepository_RegisterAndGet(t *testing.T) {
 	database := testutil.OpenTestDB(t)
 	defer database.Close()
 
 	repo := NewPostgresRepository(database)
-	_ = repo.Delete("test-domain")
+	_ = repo.Delete(pgTestTenant, "test-domain")
 
 	spec := &spec.DomainSpec{
 		ID:          "test-domain",
@@ -27,7 +30,7 @@ func TestPostgresRepository_RegisterAndGet(t *testing.T) {
 		},
 	}
 
-	if err := repo.Save(&model.RegisteredDomain{
+	if err := repo.Save(pgTestTenant, &model.RegisteredDomain{
 		ID:          spec.ID,
 		Version:     spec.Version,
 		Description: spec.Description,
@@ -36,7 +39,7 @@ func TestPostgresRepository_RegisterAndGet(t *testing.T) {
 		t.Fatalf("save: %v", err)
 	}
 
-	got, err := repo.ByID("test-domain")
+	got, err := repo.ByID(pgTestTenant, "test-domain")
 	if err != nil {
 		t.Fatalf("by id: %v", err)
 	}
@@ -47,7 +50,7 @@ func TestPostgresRepository_RegisterAndGet(t *testing.T) {
 		t.Fatal("spec not round-tripped")
 	}
 
-	exists, err := repo.Exists("test-domain")
+	exists, err := repo.Exists(pgTestTenant, "test-domain")
 	if err != nil {
 		t.Fatalf("exists: %v", err)
 	}
@@ -55,7 +58,7 @@ func TestPostgresRepository_RegisterAndGet(t *testing.T) {
 		t.Fatal("expected domain to exist")
 	}
 
-	list, err := repo.All()
+	list, err := repo.All(pgTestTenant)
 	if err != nil {
 		t.Fatalf("all: %v", err)
 	}
@@ -70,10 +73,10 @@ func TestPostgresRepository_RegisterAndGet(t *testing.T) {
 		t.Fatal("domain not in list")
 	}
 
-	if err := repo.Delete("test-domain"); err != nil {
+	if err := repo.Delete(pgTestTenant, "test-domain"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if _, err := repo.ByID("test-domain"); err != model.ErrDomainNotFound {
+	if _, err := repo.ByID(pgTestTenant, "test-domain"); err != model.ErrDomainNotFound {
 		t.Fatalf("expected ErrDomainNotFound, got %v", err)
 	}
 }

@@ -66,7 +66,7 @@ func (c *SessionCommands) Start(ctx context.Context, tenantID tenant.ID, domain 
 		return nil, errors.New("nil domain")
 	}
 
-	sess, err := c.sessionSvc.Create(sessionservice.CreateParams{
+	sess, err := c.sessionSvc.Create(tenantID, sessionservice.CreateParams{
 		SessionID:     runtime.NewSessionID(domain.ID),
 		DomainID:      domain.ID,
 		DomainVersion: domain.Version,
@@ -90,7 +90,7 @@ func (c *SessionCommands) Rerun(ctx context.Context, tenantID tenant.ID, prevID 
 	if c.sessionSvc == nil {
 		return nil, errors.New("nil session service")
 	}
-	prev, err := c.sessionSvc.Get(prevID)
+	prev, err := c.sessionSvc.Get(tenantID, prevID)
 	if err != nil {
 		if errors.Is(err, sessionmodel.ErrSessionNotFound) {
 			return nil, ErrSessionNotFound
@@ -98,13 +98,13 @@ func (c *SessionCommands) Rerun(ctx context.Context, tenantID tenant.ID, prevID 
 		return nil, err
 	}
 
-	dm, err := c.domainSvc.Get(prev.DomainID)
+	dm, err := c.domainSvc.Get(tenantID, prev.DomainID)
 	if err != nil {
 		return nil, fmt.Errorf("lookup domain for rerun: %w", err)
 	}
 	domain := app.DomainFromModel(dm)
 
-	sess, err := c.sessionSvc.Rerun(prev)
+	sess, err := c.sessionSvc.Rerun(tenantID, prev)
 	if err != nil {
 		return nil, err
 	}
@@ -174,20 +174,20 @@ func (c *SessionCommands) buildWorkerRequest(sess *app.RegisteredSession, domain
 
 // runLocal executes the session in-process via the executor.
 func (c *SessionCommands) runLocal(ctx context.Context, tenantID tenant.ID, sess *app.RegisteredSession, domain *app.RegisteredDomain, bc *broadcaster.Broadcaster, trigger map[string]any) {
-	_, _ = c.sessionSvc.MarkRunning(sess.ID)
+	_, _ = c.sessionSvc.MarkRunning(tenantID, sess.ID)
 	executor := c.executor.WithBroadcaster(bc)
 
 	execCtx := runtime.WithSessionID(ctx, sess.ID)
 
 	result, err := executor.Execute(execCtx, domain.Spec, trigger)
 	if result != nil {
-		_, _ = c.sessionSvc.MarkCompleted(sess.ID, result)
+		_, _ = c.sessionSvc.MarkCompleted(tenantID, sess.ID, result)
 	}
 	if err != nil {
-		_, _ = c.sessionSvc.MarkFailed(sess.ID)
+		_, _ = c.sessionSvc.MarkFailed(tenantID, sess.ID)
 	}
 
-	stateSess, _ := c.sessionSvc.Get(sess.ID)
+	stateSess, _ := c.sessionSvc.Get(tenantID, sess.ID)
 	payload := map[string]any{"state": string(stateSess.State)}
 	if result != nil {
 		payload["result"] = result
@@ -210,7 +210,7 @@ func (c *SessionCommands) Trigger(ctx context.Context, tenantID tenant.ID, domai
 		return nil, errors.New("nil domain")
 	}
 
-	sess, err := c.sessionSvc.Create(sessionservice.CreateParams{
+	sess, err := c.sessionSvc.Create(tenantID, sessionservice.CreateParams{
 		SessionID:     newID(domain.ID),
 		DomainID:      domain.ID,
 		DomainVersion: domain.Version,
@@ -228,7 +228,7 @@ func (c *SessionCommands) Cancel(ctx context.Context, tenantID tenant.ID, id str
 	if c.sessionSvc == nil {
 		return nil, errors.New("nil session service")
 	}
-	sess, err := c.sessionSvc.Cancel(id)
+	sess, err := c.sessionSvc.Cancel(tenantID, id)
 	if err != nil {
 		if errors.Is(err, sessionmodel.ErrSessionNotFound) {
 			return nil, ErrSessionNotFound
@@ -246,7 +246,7 @@ func (c *SessionCommands) MarkRunning(ctx context.Context, tenantID tenant.ID, i
 	if c.sessionSvc == nil {
 		return nil, errors.New("nil session service")
 	}
-	sess, err := c.sessionSvc.MarkRunning(id)
+	sess, err := c.sessionSvc.MarkRunning(tenantID, id)
 	if err != nil {
 		if errors.Is(err, sessionmodel.ErrSessionNotFound) {
 			return nil, ErrSessionNotFound
@@ -264,7 +264,7 @@ func (c *SessionCommands) MarkCompleted(ctx context.Context, tenantID tenant.ID,
 	if c.sessionSvc == nil {
 		return nil, errors.New("nil session service")
 	}
-	sess, err := c.sessionSvc.MarkCompleted(id, result)
+	sess, err := c.sessionSvc.MarkCompleted(tenantID, id, result)
 	if err != nil {
 		if errors.Is(err, sessionmodel.ErrSessionNotFound) {
 			return nil, ErrSessionNotFound
@@ -279,7 +279,7 @@ func (c *SessionCommands) MarkFailed(ctx context.Context, tenantID tenant.ID, id
 	if c.sessionSvc == nil {
 		return nil, errors.New("nil session service")
 	}
-	sess, err := c.sessionSvc.MarkFailed(id)
+	sess, err := c.sessionSvc.MarkFailed(tenantID, id)
 	if err != nil {
 		if errors.Is(err, sessionmodel.ErrSessionNotFound) {
 			return nil, ErrSessionNotFound

@@ -9,11 +9,10 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
-
-const domainDefaultTenantUUID = "00000000-0000-0000-0000-000000000000"
 
 // PostgresRepository persists RegisteredDomain aggregates to Postgres using GORM.
 type PostgresRepository struct {
@@ -29,7 +28,7 @@ func NewPostgresRepository(database *db.DB) *PostgresRepository {
 }
 
 // Save implements Repository.
-func (r *PostgresRepository) Save(d *model.RegisteredDomain) error {
+func (r *PostgresRepository) Save(tenantID tenant.ID, d *model.RegisteredDomain) error {
 	if r.db == nil {
 		return errors.New("domain/postgres: no database configured")
 	}
@@ -43,14 +42,18 @@ func (r *PostgresRepository) Save(d *model.RegisteredDomain) error {
 	}
 
 	now := time.Now().UTC()
+	tid := string(tenantID)
+	if tid == "" {
+		tid = string(tenant.DefaultID)
+	}
 
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var rec DomainRecord
-		err := tx.Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, d.ID).
+		err := tx.Where("tenant_id = ? AND domain_id = ?", tid, d.ID).
 			Take(&rec).Error
 		isNew := errors.Is(err, gorm.ErrRecordNotFound)
 
-		rec.TenantID = domainDefaultTenantUUID
+		rec.TenantID = tid
 		rec.DomainID = d.ID
 		rec.CurrentVersion = d.Version
 		rec.Description = d.Description
@@ -65,7 +68,7 @@ func (r *PostgresRepository) Save(d *model.RegisteredDomain) error {
 		}
 
 		version := DomainVersionRecord{
-			TenantID:    domainDefaultTenantUUID,
+			TenantID:    tid,
 			DomainUUID:  rec.ID,
 			Version:     d.Version,
 			YAMLBody:    string(specJSON),
@@ -78,13 +81,18 @@ func (r *PostgresRepository) Save(d *model.RegisteredDomain) error {
 }
 
 // ByID implements Repository.
-func (r *PostgresRepository) ByID(id string) (*model.RegisteredDomain, error) {
+func (r *PostgresRepository) ByID(tenantID tenant.ID, id string) (*model.RegisteredDomain, error) {
 	if r.db == nil {
 		return nil, model.ErrDomainNotFound
 	}
 
+	tid := string(tenantID)
+	if tid == "" {
+		tid = string(tenant.DefaultID)
+	}
+
 	var rec DomainRecord
-	if err := r.db.Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, id).
+	if err := r.db.Where("tenant_id = ? AND domain_id = ?", tid, id).
 		Take(&rec).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, model.ErrDomainNotFound
@@ -92,23 +100,28 @@ func (r *PostgresRepository) ByID(id string) (*model.RegisteredDomain, error) {
 		return nil, err
 	}
 
-	return r.toModel(rec)
+	return r.toModel(tid, rec)
 }
 
 // All implements Repository.
-func (r *PostgresRepository) All() ([]*model.RegisteredDomain, error) {
+func (r *PostgresRepository) All(tenantID tenant.ID) ([]*model.RegisteredDomain, error) {
 	if r.db == nil {
 		return nil, nil
 	}
 
+	tid := string(tenantID)
+	if tid == "" {
+		tid = string(tenant.DefaultID)
+	}
+
 	var records []DomainRecord
-	if err := r.db.Where("tenant_id = ?", domainDefaultTenantUUID).Find(&records).Error; err != nil {
+	if err := r.db.Where("tenant_id = ?", tid).Find(&records).Error; err != nil {
 		return nil, err
 	}
 
 	out := make([]*model.RegisteredDomain, 0, len(records))
 	for _, rec := range records {
-		d, err := r.toModel(rec)
+		d, err := r.toModel(tid, rec)
 		if err != nil {
 			return nil, err
 		}
@@ -118,14 +131,19 @@ func (r *PostgresRepository) All() ([]*model.RegisteredDomain, error) {
 }
 
 // Delete implements Repository.
-func (r *PostgresRepository) Delete(id string) error {
+func (r *PostgresRepository) Delete(tenantID tenant.ID, id string) error {
 	if r.db == nil {
 		return nil
 	}
 
+	tid := string(tenantID)
+	if tid == "" {
+		tid = string(tenant.DefaultID)
+	}
+
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var rec DomainRecord
-		if err := tx.Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, id).
+		if err := tx.Where("tenant_id = ? AND domain_id = ?", tid, id).
 			Take(&rec).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil
@@ -133,37 +151,47 @@ func (r *PostgresRepository) Delete(id string) error {
 			return err
 		}
 
-		if err := tx.Where("tenant_id = ? AND domain_uuid = ?", domainDefaultTenantUUID, rec.ID).
+		if err := tx.Where("tenant_id = ? AND domain_uuid = ?", tid, rec.ID).
 			Delete(&DomainVersionRecord{}).Error; err != nil {
 			return err
 		}
 
-		return tx.Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, id).
+		return tx.Where("tenant_id = ? AND domain_id = ?", tid, id).
 			Delete(&DomainRecord{}).Error
 	})
 }
 
 // Exists implements Repository.
-func (r *PostgresRepository) Exists(id string) (bool, error) {
+func (r *PostgresRepository) Exists(tenantID tenant.ID, id string) (bool, error) {
 	if r.db == nil {
 		return false, nil
 	}
 
+	tid := string(tenantID)
+	if tid == "" {
+		tid = string(tenant.DefaultID)
+	}
+
 	var count int64
 	err := r.db.Model(&DomainRecord{}).
-		Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, id).
+		Where("tenant_id = ? AND domain_id = ?", tid, id).
 		Count(&count).Error
 	return count > 0, err
 }
 
 // ListVersions implements Repository.
-func (r *PostgresRepository) ListVersions(id string) ([]VersionRecord, error) {
+func (r *PostgresRepository) ListVersions(tenantID tenant.ID, id string) ([]VersionRecord, error) {
 	if r.db == nil {
 		return nil, model.ErrDomainNotFound
 	}
 
+	tid := string(tenantID)
+	if tid == "" {
+		tid = string(tenant.DefaultID)
+	}
+
 	var rec DomainRecord
-	if err := r.db.Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, id).
+	if err := r.db.Where("tenant_id = ? AND domain_id = ?", tid, id).
 		Take(&rec).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, model.ErrDomainNotFound
@@ -172,7 +200,7 @@ func (r *PostgresRepository) ListVersions(id string) ([]VersionRecord, error) {
 	}
 
 	var rows []DomainVersionRecord
-	if err := r.db.Where("tenant_id = ? AND domain_uuid = ?", domainDefaultTenantUUID, rec.ID).
+	if err := r.db.Where("tenant_id = ? AND domain_uuid = ?", tid, rec.ID).
 		Order("created_at DESC").
 		Find(&rows).Error; err != nil {
 		return nil, err
@@ -194,13 +222,18 @@ func (r *PostgresRepository) ListVersions(id string) ([]VersionRecord, error) {
 }
 
 // GetVersion implements Repository.
-func (r *PostgresRepository) GetVersion(id, version string) (*spec.DomainSpec, error) {
+func (r *PostgresRepository) GetVersion(tenantID tenant.ID, id, version string) (*spec.DomainSpec, error) {
 	if r.db == nil {
 		return nil, model.ErrDomainNotFound
 	}
 
+	tid := string(tenantID)
+	if tid == "" {
+		tid = string(tenant.DefaultID)
+	}
+
 	var rec DomainRecord
-	if err := r.db.Where("tenant_id = ? AND domain_id = ?", domainDefaultTenantUUID, id).
+	if err := r.db.Where("tenant_id = ? AND domain_id = ?", tid, id).
 		Take(&rec).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, model.ErrDomainNotFound
@@ -209,7 +242,7 @@ func (r *PostgresRepository) GetVersion(id, version string) (*spec.DomainSpec, e
 	}
 
 	var v DomainVersionRecord
-	if err := r.db.Where("tenant_id = ? AND domain_uuid = ? AND version = ?", domainDefaultTenantUUID, rec.ID, version).
+	if err := r.db.Where("tenant_id = ? AND domain_uuid = ? AND version = ?", tid, rec.ID, version).
 		Take(&v).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, model.ErrDomainNotFound
@@ -224,9 +257,9 @@ func (r *PostgresRepository) GetVersion(id, version string) (*spec.DomainSpec, e
 	return &s, nil
 }
 
-func (r *PostgresRepository) toModel(rec DomainRecord) (*model.RegisteredDomain, error) {
+func (r *PostgresRepository) toModel(tid string, rec DomainRecord) (*model.RegisteredDomain, error) {
 	var version DomainVersionRecord
-	if err := r.db.Where("tenant_id = ? AND domain_uuid = ?", domainDefaultTenantUUID, rec.ID).
+	if err := r.db.Where("tenant_id = ? AND domain_uuid = ?", tid, rec.ID).
 		Order("created_at DESC").
 		Take(&version).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

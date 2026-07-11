@@ -10,6 +10,7 @@ import "sort"
 //   - model:<model>              e.g. model:claude-haiku-4-5
 //   - adapter:<kind>             e.g. adapter:echo
 //   - sandbox:<policy>           e.g. sandbox:none
+//   - orchestration:<mode>       e.g. orchestration:supervisor
 //
 // Tool capabilities are intentionally omitted until workers advertise the
 // tool sets they support; the Python runtime currently ships with built-in
@@ -34,6 +35,10 @@ func DeriveCapabilities(s *DomainSpec) []string {
 
 	if s.Harness.Sandbox.Policy != "" {
 		caps["sandbox:"+s.Harness.Sandbox.Policy] = struct{}{}
+	}
+
+	if s.Harness.Session.Mode != "" {
+		caps["orchestration:"+string(s.Harness.Session.Mode)] = struct{}{}
 	}
 
 	// Tool capabilities intentionally omitted — see doc comment above.
