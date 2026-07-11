@@ -185,7 +185,7 @@ func newDomainDeleteCmd(cfg *Config) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			resp, err := httpDo(req)
+			resp, err := doAuthorized(cfg, req)
 			if err != nil {
 				return err
 			}

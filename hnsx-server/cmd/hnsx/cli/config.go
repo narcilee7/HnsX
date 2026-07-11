@@ -27,6 +27,7 @@ type fileConfig struct {
 	ServerURL   string `yaml:"server_url,omitempty"`
 	ComposeFile string `yaml:"compose_file,omitempty"`
 	NoTui       bool   `yaml:"no_tui,omitempty"`
+	Token       string `yaml:"token,omitempty"`
 }
 
 // Config holds CLI-level configuration. Server-level config (DB URL, ports,
@@ -46,6 +47,8 @@ type Config struct {
 	NoTui bool
 	// ConfigFile is the user-level config file path.
 	ConfigFile string
+	// Token is the bearer token used to authenticate to hnsx-server.
+	Token string
 }
 
 // Default returns a Config populated from (in order of precedence):
@@ -128,6 +131,9 @@ func mergeFileConfig(dst *Config, src fileConfig) {
 	}
 	if src.NoTui {
 		dst.NoTui = true
+	}
+	if src.Token != "" {
+		dst.Token = src.Token
 	}
 }
 
@@ -227,6 +233,8 @@ func (c *Config) Get(key string) (string, error) {
 		return fmt.Sprintf("%t", c.NoTui), nil
 	case "config_file":
 		return c.ConfigFile, nil
+	case "token":
+		return c.Token, nil
 	default:
 		return "", fmt.Errorf("unknown config key %q", key)
 	}
@@ -249,6 +257,8 @@ func (c *Config) Set(key, value string) error {
 		c.ComposeFile = value
 	case "no_tui":
 		c.NoTui = parseBool(value)
+	case "token":
+		c.Token = value
 	default:
 		return fmt.Errorf("unknown config key %q", key)
 	}
@@ -269,6 +279,7 @@ func (c *Config) SaveToFile() error {
 		ServerURL:   c.ServerURL,
 		ComposeFile: c.ComposeFile,
 		NoTui:       c.NoTui,
+		Token:       c.Token,
 	}
 	data, err := yaml.Marshal(fc)
 	if err != nil {
@@ -291,5 +302,17 @@ func (c *Config) ToMap() map[string]string {
 		"compose_file": c.ComposeFile,
 		"no_tui":       fmt.Sprintf("%t", c.NoTui),
 		"config_file":  c.ConfigFile,
+		"token":        maskToken(c.Token),
 	}
+}
+
+// maskToken returns a masked token for display, or "-" when empty.
+func maskToken(token string) string {
+	if token == "" {
+		return "-"
+	}
+	if len(token) <= 8 {
+		return "***"
+	}
+	return token[:4] + "..." + token[len(token)-4:]
 }

@@ -78,7 +78,7 @@ func (s *ConnectServer) RegisterDomain(ctx context.Context, req *connect.Request
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid domain spec: %w", err))
 	}
-	d, err := s.App.DomainService.Register(ds)
+	d, err := s.App.DomainService.Register(tenant.FromContext(ctx), ds)
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
@@ -92,7 +92,7 @@ func (s *ConnectServer) UnregisterDomain(ctx context.Context, req *connect.Reque
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("domain service unavailable"))
 	}
 	ref := req.Msg.GetDomain()
-	if err := s.App.DomainService.Delete(ref.GetId()); err != nil {
+	if err := s.App.DomainService.Delete(tenant.FromContext(ctx), ref.GetId()); err != nil {
 		return nil, mapDomainError(err)
 	}
 	return connect.NewResponse(&pb.UnregisterDomainResponse{}), nil
@@ -102,7 +102,7 @@ func (s *ConnectServer) GetDomain(ctx context.Context, req *connect.Request[pb.G
 	if s.App == nil || s.App.DomainService == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("domain service unavailable"))
 	}
-	d, err := s.App.DomainService.Get(req.Msg.GetDomain().GetId())
+	d, err := s.App.DomainService.Get(tenant.FromContext(ctx), req.Msg.GetDomain().GetId())
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
@@ -117,7 +117,7 @@ func (s *ConnectServer) ListDomains(ctx context.Context, req *connect.Request[pb
 	if s.App == nil || s.App.DomainService == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("domain service unavailable"))
 	}
-	items, err := s.App.DomainService.List()
+	items, err := s.App.DomainService.List(tenant.FromContext(ctx))
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
@@ -142,7 +142,7 @@ func (s *ConnectServer) GetSession(ctx context.Context, req *connect.Request[pb.
 	if s.App == nil || s.App.SessionService == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("session service unavailable"))
 	}
-	sess, err := s.App.SessionService.Get(req.Msg.GetSessionId())
+	sess, err := s.App.SessionService.Get(tenant.FromContext(ctx), req.Msg.GetSessionId())
 	if err != nil {
 		return nil, mapSessionError(err)
 	}
@@ -153,12 +153,13 @@ func (s *ConnectServer) ListSessions(ctx context.Context, req *connect.Request[p
 	if s.App == nil || s.App.SessionService == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("session service unavailable"))
 	}
+	tid := tenant.FromContext(ctx)
 	var items []*sessionmodel.Session
 	var err error
 	if req.Msg.GetDomainId() != "" {
-		items, err = s.App.SessionService.ListByDomain(req.Msg.GetDomainId())
+		items, err = s.App.SessionService.ListByDomain(tid, req.Msg.GetDomainId())
 	} else {
-		items, err = s.App.SessionService.List()
+		items, err = s.App.SessionService.List(tid)
 	}
 	if err != nil {
 		return nil, mapSessionError(err)
@@ -284,10 +285,11 @@ func (s *ConnectServer) QueryInvocationMetrics(ctx context.Context, req *connect
 	if s.App == nil || s.App.TraceService == nil {
 		return connect.NewResponse(&pb.QueryInvocationMetricsResponse{DomainId: req.Msg.GetDomainId()}), nil
 	}
+	tid := tenant.FromContext(ctx)
 	domainID := req.Msg.GetDomainId()
 	var sessionIDs []string
 	if domainID != "" && s.App.SessionService != nil {
-		sessions, err := s.App.SessionService.ListByDomain(domainID)
+		sessions, err := s.App.SessionService.ListByDomain(tid, domainID)
 		if err == nil {
 			for _, sess := range sessions {
 				sessionIDs = append(sessionIDs, sess.ID)
@@ -322,6 +324,7 @@ func (s *ConnectServer) RunEval(ctx context.Context, req *connect.Request[pb.Run
 	if s.App.Executor == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("eval runner requires the local executor"))
 	}
+	tid := tenant.FromContext(ctx)
 	set, err := s.App.EvalService.GetSet(req.Msg.GetSetId())
 	if err != nil {
 		if errors.Is(err, evalmodel.ErrEvalSetNotFound) {
@@ -333,7 +336,7 @@ func (s *ConnectServer) RunEval(ctx context.Context, req *connect.Request[pb.Run
 	if domainID == "" {
 		domainID = set.DomainID
 	}
-	domain, err := s.App.DomainService.Get(domainID)
+	domain, err := s.App.DomainService.Get(tid, domainID)
 	if err != nil {
 		return nil, mapDomainError(err)
 	}

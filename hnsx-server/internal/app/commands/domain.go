@@ -45,7 +45,7 @@ func (c *DomainCommands) Register(ctx context.Context, tenantID tenant.ID, r io.
 		return nil, err
 	}
 
-	d, err := c.domainSvc.Register(s)
+	d, err := c.domainSvc.Register(tenantID, s)
 	if err != nil {
 		if errors.Is(err, domainmodel.ErrDomainExists) {
 			return nil, NewDomainExistsError(s.ID)
@@ -73,7 +73,7 @@ func (c *DomainCommands) Update(ctx context.Context, tenantID tenant.ID, id stri
 		return nil, ErrIDMismatch
 	}
 
-	d, err := c.domainSvc.Update(id, s)
+	d, err := c.domainSvc.Update(tenantID, id, s)
 	if err != nil {
 		if errors.Is(err, domainmodel.ErrDomainNotFound) {
 			return nil, ErrDomainNotFound
@@ -88,7 +88,7 @@ func (c *DomainCommands) Delete(ctx context.Context, tenantID tenant.ID, id stri
 	if c.domainSvc == nil {
 		return errors.New("nil domain service")
 	}
-	if err := c.domainSvc.Delete(id); err != nil {
+	if err := c.domainSvc.Delete(tenantID, id); err != nil {
 		if errors.Is(err, domainmodel.ErrDomainNotFound) {
 			return ErrDomainNotFound
 		}

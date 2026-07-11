@@ -55,7 +55,7 @@ func (q *Queries) ListDomains(tenantID tenant.ID) []DomainListItem {
 	if q.domainSvc == nil {
 		return nil
 	}
-	items, err := q.domainSvc.List()
+	items, err := q.domainSvc.List(tenantID)
 	if err != nil {
 		return nil
 	}
@@ -78,7 +78,7 @@ func (q *Queries) GetDomain(tenantID tenant.ID, id string) (*DomainListItem, *ap
 	if q.domainSvc == nil {
 		return nil, nil, false
 	}
-	d, err := q.domainSvc.Get(id)
+	d, err := q.domainSvc.Get(tenantID, id)
 	if err != nil {
 		return nil, nil, false
 	}
@@ -115,10 +115,10 @@ func (q *Queries) ListDomainVersions(tenantID tenant.ID, id string) ([]DomainVer
 	if q.domainSvc == nil {
 		return nil, false
 	}
-	if _, err := q.domainSvc.Get(id); err != nil {
+	if _, err := q.domainSvc.Get(tenantID, id); err != nil {
 		return nil, false
 	}
-	records, err := q.domainSvc.ListVersions(id)
+	records, err := q.domainSvc.ListVersions(tenantID, id)
 	if err != nil {
 		return nil, false
 	}
@@ -138,10 +138,10 @@ func (q *Queries) GetDomainVersion(tenantID tenant.ID, id, version string) (*app
 	if q.domainSvc == nil {
 		return nil, false
 	}
-	if _, err := q.domainSvc.Get(id); err != nil {
+	if _, err := q.domainSvc.Get(tenantID, id); err != nil {
 		return nil, false
 	}
-	records, err := q.domainSvc.ListVersions(id)
+	records, err := q.domainSvc.ListVersions(tenantID, id)
 	if err != nil {
 		return nil, false
 	}
@@ -167,7 +167,7 @@ func (q *Queries) GetDomainSchema(tenantID tenant.ID, id string) (*DomainSchemaV
 	if q.domainSvc == nil {
 		return nil, false
 	}
-	d, err := q.domainSvc.Get(id)
+	d, err := q.domainSvc.Get(tenantID, id)
 	if err != nil {
 		return nil, false
 	}
@@ -186,7 +186,7 @@ func (q *Queries) ListSessions(tenantID tenant.ID) []SessionListItem {
 	if q.sessionSvc == nil {
 		return nil
 	}
-	items, err := q.sessionSvc.List()
+	items, err := q.sessionSvc.List(tenantID)
 	if err != nil {
 		return nil
 	}
@@ -210,7 +210,7 @@ func (q *Queries) GetSession(tenantID tenant.ID, id string) (*app.RegisteredSess
 	if q.sessionSvc == nil {
 		return nil, false
 	}
-	s, err := q.sessionSvc.Get(id)
+	s, err := q.sessionSvc.Get(tenantID, id)
 	if err != nil {
 		return nil, false
 	}
@@ -222,7 +222,7 @@ func (q *Queries) GetSessionTrace(tenantID tenant.ID, id string) (*SessionTrace,
 	if q.sessionSvc == nil {
 		return nil, false
 	}
-	if _, err := q.sessionSvc.Get(id); err != nil {
+	if _, err := q.sessionSvc.Get(tenantID, id); err != nil {
 		return nil, false
 	}
 	return &SessionTrace{

@@ -6,8 +6,11 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
 	"github.com/hnsx-io/hnsx/server/internal/domain/repository"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
+
+var testTenant = tenant.DefaultID
 
 func minimalSpec(id, version string) *spec.DomainSpec {
 	return &spec.DomainSpec{
@@ -33,7 +36,7 @@ func TestService_RegisterAndGet(t *testing.T) {
 	spec := minimalSpec("test-domain", "1.0.0")
 	spec.Description = "test"
 
-	d, err := svc.Register(spec)
+	d, err := svc.Register(testTenant, spec)
 	if err != nil {
 		t.Fatalf("register: %v", err)
 	}
@@ -44,7 +47,7 @@ func TestService_RegisterAndGet(t *testing.T) {
 		t.Fatal("missing timestamps")
 	}
 
-	got, err := svc.Get("test-domain")
+	got, err := svc.Get(testTenant, "test-domain")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -58,10 +61,10 @@ func TestService_RegisterDuplicate(t *testing.T) {
 	svc := NewService(repo)
 
 	spec := minimalSpec("dup-domain", "1.0.0")
-	if _, err := svc.Register(spec); err != nil {
+	if _, err := svc.Register(testTenant, spec); err != nil {
 		t.Fatalf("first register: %v", err)
 	}
-	if _, err := svc.Register(spec); err != model.ErrDomainExists {
+	if _, err := svc.Register(testTenant, spec); err != model.ErrDomainExists {
 		t.Fatalf("expected ErrDomainExists, got %v", err)
 	}
 }
@@ -72,12 +75,12 @@ func TestService_Update(t *testing.T) {
 
 	before := time.Now().UTC().Add(-time.Second)
 	spec := minimalSpec("update-domain", "1.0.0")
-	if _, err := svc.Register(spec); err != nil {
+	if _, err := svc.Register(testTenant, spec); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 
 	updated := minimalSpec("update-domain", "1.1.0")
-	d, err := svc.Update("update-domain", updated)
+	d, err := svc.Update(testTenant, "update-domain", updated)
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -95,12 +98,12 @@ func TestService_ListAndDelete(t *testing.T) {
 
 	for _, id := range []string{"a", "b", "c"} {
 		spec := minimalSpec(id, "1.0.0")
-		if _, err := svc.Register(spec); err != nil {
+		if _, err := svc.Register(testTenant, spec); err != nil {
 			t.Fatalf("register %s: %v", id, err)
 		}
 	}
 
-	list, err := svc.List()
+	list, err := svc.List(testTenant)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -108,10 +111,10 @@ func TestService_ListAndDelete(t *testing.T) {
 		t.Fatalf("len(list) = %d", len(list))
 	}
 
-	if err := svc.Delete("b"); err != nil {
+	if err := svc.Delete(testTenant, "b"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if _, err := svc.Get("b"); err != model.ErrDomainNotFound {
+	if _, err := svc.Get(testTenant, "b"); err != model.ErrDomainNotFound {
 		t.Fatalf("expected ErrDomainNotFound, got %v", err)
 	}
 }

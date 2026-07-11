@@ -295,12 +295,12 @@ Refs：`sdk/go/client.go`、`sdk/go/README.md`、`go.work`
 
 ### C4 — 认证 → 租户映射与 RBAC
 
-- [ ] **server** auth middleware：从 `Authorization` header 解析 token/jwt，映射到 tenant_id
-- [ ] **server** 无 token 时返回 401；token 映射失败返回 403
-- [ ] **server** 所有 repo 查询增加 `tenant_id` 过滤（或启用 Postgres RLS）
-- [ ] **server** 新增 RBAC 角色：platform_admin / harness_designer / operator / auditor
-- [ ] **console** 新增 `/login` 页与 auth status 组件
-- [ ] **cli** `hnsx auth login/status/logout` 命令组
+- [x] **server** auth middleware：从 `Authorization` header 解析 token/jwt，映射到 tenant_id
+- [x] **server** 无 token 时返回 401；token 映射失败返回 403
+- [x] **server** 所有 repo 查询增加 `tenant_id` 过滤（或启用 Postgres RLS）
+- [x] **server** 新增 RBAC 角色：platform_admin / harness_designer / operator / auditor
+- [x] **console** 新增 `/login` 页与 auth status 组件
+- [x] **cli** `hnsx auth login/status/logout` 命令组
 
 #### 验收
 

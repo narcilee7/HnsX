@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { useAuthStore } from '@/stores/authStore'
 
 export const API_BASE = '/api/v1'
 
@@ -33,11 +34,13 @@ async function parseError(response: Response): Promise<ApiError> {
 
 export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const url = `${API_BASE}${path}`
+  const token = useAuthStore.getState().token
   const init: RequestInit = {
     method,
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   }
   if (body !== undefined) {
@@ -62,11 +65,13 @@ export function get<T>(path: string) {
 
 export async function requestText<T>(method: string, path: string, body: string, contentType: string): Promise<T> {
   const url = `${API_BASE}${path}`
+  const token = useAuthStore.getState().token
   const init: RequestInit = {
     method,
     headers: {
       'Content-Type': contentType,
       Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body,
   }
@@ -85,7 +90,8 @@ export async function requestText<T>(method: string, path: string, body: string,
 
 export async function getText(path: string): Promise<string> {
   const url = `${API_BASE}${path}`
-  const response = await fetch(url, { headers: { Accept: 'application/yaml' } })
+  const token = useAuthStore.getState().token
+  const response = await fetch(url, { headers: { Accept: 'application/yaml', ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
   if (!response.ok) {
     const error = await parseError(response)
     toast.error(error.message)

@@ -228,6 +228,7 @@ func getJSON(cfg *Config, path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	withAuth(cfg, req)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -238,4 +239,17 @@ func getJSON(cfg *Config, path string) ([]byte, error) {
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}
 	return body, nil
+}
+
+// withAuth attaches the configured bearer token to an outgoing request.
+func withAuth(cfg *Config, req *http.Request) {
+	if cfg.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+cfg.Token)
+	}
+}
+
+// doAuthorized sends an HTTP request with the configured auth token.
+func doAuthorized(cfg *Config, req *http.Request) (*http.Response, error) {
+	withAuth(cfg, req)
+	return http.DefaultClient.Do(req)
 }

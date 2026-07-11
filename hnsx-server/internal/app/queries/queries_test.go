@@ -31,10 +31,10 @@ func TestQueries_ListDomainVersions(t *testing.T) {
 	svc := service.NewService(repo)
 	q := NewQueries(svc, nil)
 
-	if _, err := svc.Register(queryMinimalSpec("q-domain", "1.0.0")); err != nil {
+	if _, err := svc.Register(tenant.DefaultID, queryMinimalSpec("q-domain", "1.0.0")); err != nil {
 		t.Fatalf("register v1: %v", err)
 	}
-	if _, err := svc.Update("q-domain", queryMinimalSpec("q-domain", "1.1.0")); err != nil {
+	if _, err := svc.Update(tenant.DefaultID, "q-domain", queryMinimalSpec("q-domain", "1.1.0")); err != nil {
 		t.Fatalf("update v2: %v", err)
 	}
 
@@ -67,7 +67,7 @@ func TestQueries_GetDomainSchema(t *testing.T) {
 		},
 	}
 	spec.Harness.Session.OutputSchema = "{}"
-	if _, err := svc.Register(spec); err != nil {
+	if _, err := svc.Register(tenant.DefaultID, spec); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 
@@ -95,10 +95,10 @@ func TestQueries_GetDomainVersion(t *testing.T) {
 	svc := service.NewService(repo)
 	q := NewQueries(svc, nil)
 
-	if _, err := svc.Register(queryMinimalSpec("q-domain", "1.0.0")); err != nil {
+	if _, err := svc.Register(tenant.DefaultID, queryMinimalSpec("q-domain", "1.0.0")); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	if _, err := svc.Update("q-domain", queryMinimalSpec("q-domain", "2.0.0")); err != nil {
+	if _, err := svc.Update(tenant.DefaultID, "q-domain", queryMinimalSpec("q-domain", "2.0.0")); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 

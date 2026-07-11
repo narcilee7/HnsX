@@ -134,3 +134,49 @@ func TestSessionEvents(t *testing.T) {
 		t.Fatalf("unexpected events: %v", names)
 	}
 }
+
+func TestAuthHeaderOnConnect(t *testing.T) {
+	token := "test-bearer-token"
+	var gotAuth string
+	_, h := v1connect.NewDomainRegistryServiceHandler(
+		&fakeDomainServer{},
+		connect.WithInterceptors(),
+	)
+	mux := http.NewServeMux()
+	mux.Handle("/hnsx.v1.DomainRegistryService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		h.ServeHTTP(w, r)
+	}))
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := NewWithBaseURL(srv.URL)
+	c.AuthToken = token
+	_, err := c.GetDomain("cs")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotAuth != "Bearer "+token {
+		t.Fatalf("expected Authorization %q, got %q", "Bearer "+token, gotAuth)
+	}
+}
+
+func TestAuthHeaderOnREST(t *testing.T) {
+	token := "test-bearer-token"
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "foo", "state": "cancelled"})
+	}))
+	defer srv.Close()
+
+	c := NewWithBaseURL(srv.URL)
+	c.AuthToken = token
+	_, err := c.CancelSession("foo")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotAuth != "Bearer "+token {
+		t.Fatalf("expected Authorization %q, got %q", "Bearer "+token, gotAuth)
+	}
+}
