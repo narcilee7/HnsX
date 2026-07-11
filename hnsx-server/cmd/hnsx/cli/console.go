@@ -13,8 +13,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-
-	"github.com/hnsx-io/hnsx/server/pkg/version"
 )
 
 // newConsoleCmd starts the HnsX Web Console (hnsx-console/) and opens the
@@ -189,25 +187,5 @@ implementation lands in a follow-up.`,
 	return cmd
 }
 
-// newUpdateCmd is a self-update placeholder. v0.5 ships a no-op that prints
-// the install hint; the real GitHub Releases check lands in v0.8.
-func newUpdateCmd(cfg *Config) *cobra.Command {
-	var check bool
-	cmd := &cobra.Command{
-		Use:   "update",
-		Short: "Update hnsx to the latest version",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			out := NewOutput(cfg.Output)
-			out.Line("hnsx %s", version.String())
-			out.Line("self-update is a placeholder in v0.5; use your package manager or:")
-			out.Line("  brew upgrade hnsx          (macOS, when available)")
-			out.Line("  curl -sSL hnsx.dev/install.sh | sh   (Linux, when available)")
-			if check {
-				out.Line("(check-only flag honoured; real release check lands in v0.8)")
-			}
-			return nil
-		},
-	}
-	cmd.Flags().BoolVar(&check, "check", false, "only check for updates, do not install")
-	return cmd
-}
+// newUpdateCmd was a placeholder; the real implementation lives in
+// update.go (v0.8). The constructor is registered by root.go.
