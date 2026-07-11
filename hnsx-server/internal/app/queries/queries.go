@@ -99,6 +99,16 @@ type DomainVersionItem struct {
 	CreatedAt time.Time
 }
 
+// DomainSchemaView exposes the input/output schema of a domain for workspace UI.
+type DomainSchemaView struct {
+	ID            string
+	Version       string
+	Mode          string
+	Agent         string
+	TriggerSchema any
+	OutputSchema  string
+}
+
 // ListDomainVersions returns every stored version for a domain, newest first.
 // The bool reports whether the domain exists.
 func (q *Queries) ListDomainVersions(tenantID tenant.ID, id string) ([]DomainVersionItem, bool) {
@@ -149,6 +159,26 @@ func (q *Queries) GetDomainVersion(tenantID tenant.ID, id, version string) (*app
 		}
 	}
 	return nil, false
+}
+
+// GetDomainSchema returns the workspace schema view for a domain.
+// The bool reports whether the domain exists.
+func (q *Queries) GetDomainSchema(tenantID tenant.ID, id string) (*DomainSchemaView, bool) {
+	if q.domainSvc == nil {
+		return nil, false
+	}
+	d, err := q.domainSvc.Get(id)
+	if err != nil {
+		return nil, false
+	}
+	return &DomainSchemaView{
+		ID:            d.ID,
+		Version:       d.Version,
+		Mode:          string(d.Spec.Harness.Session.Mode),
+		Agent:         d.Spec.Harness.Session.Agent,
+		TriggerSchema: d.Spec.Harness.Session.TriggerSchema,
+		OutputSchema:  d.Spec.Harness.Session.OutputSchema,
+	}, true
 }
 
 // ListSessions returns every registered session as a list item.

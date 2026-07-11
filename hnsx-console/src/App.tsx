@@ -5,6 +5,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import DomainsPage from "@/pages/DomainsPage";
 import DomainDetailPage from "@/pages/DomainDetailPage";
 import DomainRunPage from "@/pages/DomainRunPage";
+import DomainWorkspacePage from "@/pages/DomainWorkspacePage";
 import SessionsPage from "@/pages/SessionsPage";
 import SessionDetailPage from "@/pages/SessionDetailPage";
 import TracesPage from "@/pages/TracesPage";
@@ -26,6 +27,7 @@ function App() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/domains" element={<DomainsPage />} />
+          <Route path="/domains/:id/workspace" element={<DomainWorkspacePage />} />
           <Route path="/domains/:id" element={<DomainDetailPage />} />
           <Route path="/domains/:id/run" element={<DomainRunPage />} />
           <Route path="/sessions" element={<SessionsPage />} />

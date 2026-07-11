@@ -54,6 +54,42 @@ func TestQueries_ListDomainVersions(t *testing.T) {
 	}
 }
 
+func TestQueries_GetDomainSchema(t *testing.T) {
+	repo := repository.NewInMemoryRepository()
+	svc := service.NewService(repo)
+	q := NewQueries(svc, nil)
+
+	spec := queryMinimalSpec("schema-domain", "1.0.0")
+	spec.Harness.Session.TriggerSchema = map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"question": map[string]any{"type": "string"},
+		},
+	}
+	spec.Harness.Session.OutputSchema = "{}"
+	if _, err := svc.Register(spec); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	schema, ok := q.GetDomainSchema(tenant.DefaultID, "schema-domain")
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if schema.ID != "schema-domain" {
+		t.Fatalf("id = %q", schema.ID)
+	}
+	if schema.Mode != string(spec.Harness.Session.Mode) {
+		t.Fatalf("mode = %q", schema.Mode)
+	}
+	if schema.TriggerSchema == nil {
+		t.Fatal("expected trigger schema")
+	}
+
+	if _, ok := q.GetDomainSchema(tenant.DefaultID, "missing"); ok {
+		t.Fatal("expected not ok for missing domain")
+	}
+}
+
 func TestQueries_GetDomainVersion(t *testing.T) {
 	repo := repository.NewInMemoryRepository()
 	svc := service.NewService(repo)

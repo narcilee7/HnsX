@@ -3,6 +3,7 @@ import {
   listDomains,
   getDomain,
   getDomainYaml,
+  getDomainSchema,
   createDomain,
   createDomainYaml,
   updateDomain,
@@ -116,6 +117,14 @@ export function useDomainYaml(id: string | undefined) {
   return useQuery({
     queryKey: [...domainKeys.detail(id || ''), 'yaml'] as const,
     queryFn: () => getDomainYaml(id!),
+    enabled: !!id,
+  })
+}
+
+export function useDomainSchema(id: string | undefined) {
+  return useQuery({
+    queryKey: [...domainKeys.detail(id || ''), 'schema'] as const,
+    queryFn: () => getDomainSchema(id!),
     enabled: !!id,
   })
 }
