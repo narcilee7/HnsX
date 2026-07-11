@@ -52,15 +52,11 @@ bold "[2/7] ensuring local Postgres"
 if [ -n "${HNSX_DATABASE_URL:-}" ]; then
   ok "using HNSX_DATABASE_URL"
 else
-  cd "$DEPLOY_DIR" && docker compose up -d postgres
+  cd "$DEPLOY_DIR" && docker compose up -d --wait postgres
   cd "$ROOT"
-  for i in $(seq 1 60); do
-    if docker compose -f "$DEPLOY_DIR/docker-compose.yaml" exec -T postgres pg_isready -U hnsx >/dev/null 2>&1; then break; fi
-    sleep 1
-  done
   if ! docker compose -f "$DEPLOY_DIR/docker-compose.yaml" exec -T postgres pg_isready -U hnsx >/dev/null 2>&1; then
     echo "postgres logs:"
-    docker compose -f "$DEPLOY_DIR/docker-compose.yaml" logs postgres || true
+    docker compose -f "$DEPLOY_DIR/docker-compose.yaml" logs --no-log-prefix postgres || true
     fail "postgres failed to become ready"
   fi
   ok "postgres ready"
