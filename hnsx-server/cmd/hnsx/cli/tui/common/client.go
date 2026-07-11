@@ -187,6 +187,22 @@ func (c *Client) ListDomains() ([]client.DomainListItem, error) {
 	return c.Client.ListDomains()
 }
 
+// Health returns true if the server root endpoint responds with a 2xx/3xx status.
+func (c *Client) Health() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/health", nil)
+	if err != nil {
+		return false
+	}
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode/100 == 2 || resp.StatusCode/100 == 3
+}
+
 // GetDomain delegates to the underlying client.
 func (c *Client) GetDomain(id string) (*client.Domain, error) {
 	return c.Client.GetDomain(id)
