@@ -103,6 +103,7 @@ class PlanAndSolveAgent(Agent):
             agent_cfg=self.agent_cfg,
             config=session_cfg,
             memory=memory,
+            approval_stop_event=stop_event,
         )
 
         goal_text = str(trigger.get("content") or json.dumps(trigger, ensure=str))

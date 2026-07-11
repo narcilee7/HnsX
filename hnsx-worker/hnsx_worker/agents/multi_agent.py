@@ -94,6 +94,7 @@ class MultiAgentRunner(Agent):
             config=session_cfg,
             memory=memory,
             extra_tools=[delegate_tool],
+            approval_stop_event=stop_event,
         )
 
         cost_totals: dict[str, Any] = {

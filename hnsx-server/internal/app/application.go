@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -127,7 +128,7 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 	log.Info("secret store: encryption enabled", zap.String("alg", "AES-256-GCM"))
 	secretSvc := secretservice.NewService(secretRepo, secretCipher)
 	storeSvc := storeservice.NewService(store)
-	approvalSvc := approvalservice.NewService(approvalRepo, nil)
+	approvalSvc := approvalservice.NewService(approvalRepo, approvalStateBroadcaster{state: appState})
 
 	// Sinks.
 	sinks := []runtime.Sink{
@@ -240,6 +241,69 @@ func (g approvalServiceGateAdapter) Request(ctx context.Context, req pkgexecutor
 		return false, comment, err
 	}
 	return decision == approvalservice.DecisionApproved, comment, nil
+}
+
+// approvalStateBroadcaster publishes approval lifecycle events as session
+// observations so SSE consumers (Console) see them in real time.
+type approvalStateBroadcaster struct {
+	state *State
+}
+
+func (b approvalStateBroadcaster) PublishApproval(event string, a *approvalmodel.Approval) {
+	if b.state == nil || a == nil {
+		return
+	}
+	now := time.Now()
+	base := runtime.Observation{
+		SessionID: a.SessionID,
+		DomainID:  a.DomainID,
+		Timestamp: now,
+	}
+	switch event {
+	case "approval_required":
+		b.state.PublishObservation(a.SessionID, runtime.Observation{
+			Kind:      "approval_required",
+			SessionID: a.SessionID,
+			DomainID:  a.DomainID,
+			Timestamp: now,
+			Payload: map[string]any{
+				"id":          a.ID,
+				"action":      a.Action,
+				"resource":    a.Resource,
+				"risk_level":  a.RiskLevel,
+				"context":     a.Context,
+				"requested_by": a.RequestedBy,
+			},
+		})
+		b.state.PublishObservation(a.SessionID, runtime.Observation{
+			Kind:      "state",
+			SessionID: a.SessionID,
+			DomainID:  a.DomainID,
+			Timestamp: now,
+			Payload:   map[string]any{"state": "paused"},
+		})
+	case "approval_resolved":
+		b.state.PublishObservation(a.SessionID, runtime.Observation{
+			Kind:      "approval_resolved",
+			SessionID: a.SessionID,
+			DomainID:  a.DomainID,
+			Timestamp: now,
+			Payload: map[string]any{
+				"id":          a.ID,
+				"status":      a.Status,
+				"reviewed_by": a.ReviewedBy,
+				"comment":     a.Comment,
+			},
+		})
+		b.state.PublishObservation(a.SessionID, runtime.Observation{
+			Kind:      "state",
+			SessionID: a.SessionID,
+			DomainID:  a.DomainID,
+			Timestamp: now,
+			Payload:   map[string]any{"state": "running"},
+		})
+	}
+	_ = base
 }
 
 func (r *auditRecorder) Record(ctx context.Context, entry pkgexecutor.AuditEntry) error {

@@ -26,7 +26,7 @@ import signal
 import sys
 import threading
 import time
-from typing import Any
+from typing import Any, Callable
 
 from hnsx_worker.logging import (
     correlation_id_var,
@@ -34,6 +34,26 @@ from hnsx_worker.logging import (
     trace_id_var,
 )
 from hnsx_worker.session_executor import _Stopped, execute_session
+
+
+def _build_approval_bus(emit_fn: Callable[[dict[str, Any]], None]) -> Any | None:
+    """Create a server-backed approval bus when the worker knows the server URL.
+
+    Priority:
+      1. ``HNSX_SERVER_HTTP_URL`` — explicit HTTP base URL.
+      2. ``HNSX_SERVER`` — gRPC address; derive host and assume HTTP port 50051.
+    """
+    from hnsx_worker.approval import ServerApprovalBus
+
+    base_url = os.environ.get("HNSX_SERVER_HTTP_URL")
+    if not base_url:
+        grpc_addr = os.environ.get("HNSX_SERVER")
+        if grpc_addr:
+            host = grpc_addr.rsplit(":", 1)[0]
+            base_url = f"http://{host}:50051"
+    if not base_url:
+        return None
+    return ServerApprovalBus(base_url=base_url, emit=emit_fn)
 
 
 def emit(obs: dict[str, Any]) -> None:
@@ -165,7 +185,15 @@ def main() -> int:
             timer.start()
 
         start = time.monotonic()
-        result = execute_session(spec, trigger, config, stop_event=stop_event, emit=emit)
+        approval_bus = _build_approval_bus(emit)
+        result = execute_session(
+            spec,
+            trigger,
+            config,
+            stop_event=stop_event,
+            emit=emit,
+            approval_bus=approval_bus,
+        )
         end_payload: dict[str, Any] = {}
         if isinstance(result, dict):
             result["duration_ms"] = int((time.monotonic() - start) * 1000)
