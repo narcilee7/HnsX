@@ -93,6 +93,64 @@ func (q *Queries) GetDomain(tenantID tenant.ID, id string) (*DomainListItem, *ap
 	return item, app.DomainFromModel(d), true
 }
 
+// DomainVersionItem is the public view returned by ListDomainVersions.
+type DomainVersionItem struct {
+	Version   string
+	CreatedAt time.Time
+}
+
+// ListDomainVersions returns every stored version for a domain, newest first.
+// The bool reports whether the domain exists.
+func (q *Queries) ListDomainVersions(tenantID tenant.ID, id string) ([]DomainVersionItem, bool) {
+	if q.domainSvc == nil {
+		return nil, false
+	}
+	if _, err := q.domainSvc.Get(id); err != nil {
+		return nil, false
+	}
+	records, err := q.domainSvc.ListVersions(id)
+	if err != nil {
+		return nil, false
+	}
+	out := make([]DomainVersionItem, len(records))
+	for i, r := range records {
+		out[i] = DomainVersionItem{
+			Version:   r.Version,
+			CreatedAt: r.CreatedAt,
+		}
+	}
+	return out, true
+}
+
+// GetDomainVersion returns the runtime view of a specific domain version.
+// The bool reports whether the version exists.
+func (q *Queries) GetDomainVersion(tenantID tenant.ID, id, version string) (*app.RegisteredDomain, bool) {
+	if q.domainSvc == nil {
+		return nil, false
+	}
+	if _, err := q.domainSvc.Get(id); err != nil {
+		return nil, false
+	}
+	records, err := q.domainSvc.ListVersions(id)
+	if err != nil {
+		return nil, false
+	}
+	for _, r := range records {
+		if r.Version == version {
+			return &app.RegisteredDomain{
+				ID:          id,
+				Version:     r.Version,
+				Description: r.Spec.Description,
+				Spec:        r.Spec,
+				Harness:     r.Spec.Harness,
+				CreatedAt:   FormatTimeValue(r.CreatedAt),
+				UpdatedAt:   FormatTimeValue(r.CreatedAt),
+			}, true
+		}
+	}
+	return nil, false
+}
+
 // ListSessions returns every registered session as a list item.
 func (q *Queries) ListSessions(tenantID tenant.ID) []SessionListItem {
 	if q.sessionSvc == nil {

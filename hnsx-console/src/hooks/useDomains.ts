@@ -2,10 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   listDomains,
   getDomain,
+  getDomainYaml,
   createDomain,
+  createDomainYaml,
   updateDomain,
+  updateDomainYaml,
   deleteDomain,
   validateDomain,
+  validateDomainYaml,
   listDomainVersions,
   getDomainVersion,
 } from '@/api/domains'
@@ -60,10 +64,31 @@ export function useCreateDomain() {
   })
 }
 
+export function useCreateDomainYaml() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (yaml: string) => createDomainYaml(yaml),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: domainKeys.lists() })
+    },
+  })
+}
+
 export function useUpdateDomain(id: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (spec: DomainSpec) => updateDomain(id, spec),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: domainKeys.detail(id) })
+      queryClient.invalidateQueries({ queryKey: domainKeys.lists() })
+    },
+  })
+}
+
+export function useUpdateDomainYaml(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (yaml: string) => updateDomainYaml(id, yaml),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: domainKeys.detail(id) })
       queryClient.invalidateQueries({ queryKey: domainKeys.lists() })
@@ -83,6 +108,20 @@ export function useDeleteDomain() {
 
 export function useValidateDomain(id: string) {
   return useMutation({
-    mutationFn: (harness: unknown) => validateDomain(id, harness),
+    mutationFn: (spec: DomainSpec) => validateDomain(id, spec),
+  })
+}
+
+export function useDomainYaml(id: string | undefined) {
+  return useQuery({
+    queryKey: [...domainKeys.detail(id || ''), 'yaml'] as const,
+    queryFn: () => getDomainYaml(id!),
+    enabled: !!id,
+  })
+}
+
+export function useValidateDomainYaml(id: string) {
+  return useMutation({
+    mutationFn: (yaml: string) => validateDomainYaml(id, yaml),
   })
 }

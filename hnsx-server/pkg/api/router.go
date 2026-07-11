@@ -47,9 +47,11 @@ func newRouter(s *Server) *gin.Engine {
 			d := domains.Group("/:id")
 			{
 				d.GET("", s.GetDomain)
+				d.GET("/yaml", s.GetDomainYAML)
 				d.PUT("", s.UpdateDomain)
 				d.DELETE("", s.DeleteDomain)
 				d.GET("/versions", s.ListDomainVersions)
+				d.GET("/versions/:version", s.GetDomainVersion)
 				d.POST("/validate", s.ValidateDomain)
 				d.POST("/run", s.TriggerDomain)
 				d.POST("/policies", s.BindPolicy)
