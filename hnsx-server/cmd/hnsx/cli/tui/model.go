@@ -46,6 +46,7 @@ type Model struct {
 	// command mode state
 	commandMode   bool
 	commandInput  textinput.Model
+	commandList   components.CommandList
 	commandResult string
 	commandErr    error
 }
@@ -65,6 +66,7 @@ func NewModel(serverURL string) Model {
 		help:      components.NewHelp(th.Help),
 		serverOK:  true, // optimistic until first health check
 		commandInput: ti,
+		commandList:  components.NewCommandList(th),
 		tabs: []tea.Model{
 			tabs.NewSessionsTab(serverURL),
 			tabs.NewTracesTab(serverURL),
@@ -110,15 +112,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "esc":
 				m.commandMode = false
 				m.commandInput.SetValue("")
+				m.commandInput.Blur()
 				m.commandResult = ""
 				m.commandErr = nil
 				return m, nil
 			case "enter":
-				return m.dispatchCommand(m.commandInput.Value())
+				return m.acceptCommand()
+			case "up":
+				m.commandList.MoveUp()
+				return m, nil
+			case "down":
+				m.commandList.MoveDown()
+				return m, nil
 			}
 		}
 		var cmd tea.Cmd
 		m.commandInput, cmd = m.commandInput.Update(msg)
+		m.commandList.SetInput(m.commandInput.Value())
 		return m, cmd
 	}
 
@@ -138,7 +148,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case msg.String() == "/":
 			m.commandMode = true
+			m.commandInput.SetValue("/")
 			m.commandInput.Focus()
+			m.commandList.SetInput("/")
 			return m, textinput.Blink
 		}
 
@@ -199,8 +211,17 @@ func (m Model) View() string {
 	footer := m.theme.Footer.Render(m.renderFooter())
 	footerHeight := lipgloss.Height(footer)
 
-	// Body height accounts for header + tab bar + footer.
-	bodyHeight := m.height - headerHeight - tabBarHeight - footerHeight
+	// Command palette appears above the footer while selecting a command.
+	paletteHeight := 0
+	var palette string
+	if m.commandMode {
+		m.commandList.SetWidth(m.width)
+		palette = m.commandList.View()
+		paletteHeight = lipgloss.Height(palette)
+	}
+
+	// Body height accounts for header + tab bar + footer + optional palette.
+	bodyHeight := m.height - headerHeight - tabBarHeight - footerHeight - paletteHeight
 	if bodyHeight < 0 {
 		bodyHeight = 0
 	}
@@ -212,7 +233,7 @@ func (m Model) View() string {
 	body := active.View()
 
 	// Stack vertically.
-	content := lipgloss.JoinVertical(lipgloss.Left, header, tabBar, body, footer)
+	content := lipgloss.JoinVertical(lipgloss.Left, header, tabBar, body, palette, footer)
 
 	if m.helpOpen {
 		helpLines := m.helpLines()
@@ -383,9 +404,28 @@ func parseCommand(input string) command {
 	return c
 }
 
+// acceptCommand either selects a command from the palette or executes the current input.
+func (m Model) acceptCommand() (tea.Model, tea.Cmd) {
+	// If the palette is visible, accept the selected command and fill the input.
+	if m.commandList.Visible() {
+		if cmd, ok := m.commandList.Selected(); ok {
+			if cmd.NoArgs {
+				m.commandInput.SetValue("/" + cmd.Name)
+				return m.dispatchCommand(m.commandInput.Value())
+			}
+			m.commandInput.SetValue("/" + cmd.Name + " ")
+			m.commandList.SetInput(m.commandInput.Value())
+			return m, textinput.Blink
+		}
+	}
+	return m.dispatchCommand(m.commandInput.Value())
+}
+
 // dispatchCommand executes a parsed command and returns the updated model + cmd.
 func (m Model) dispatchCommand(input string) (tea.Model, tea.Cmd) {
+	m.commandMode = false
 	m.commandInput.SetValue("")
+	m.commandInput.Blur()
 	m.commandResult = ""
 	m.commandErr = nil
 
