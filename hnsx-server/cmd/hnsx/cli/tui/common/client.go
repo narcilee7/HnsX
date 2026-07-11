@@ -182,6 +182,100 @@ func (c *Client) RunEval(setID string) (*client.EvalRun, error) {
 	return c.Client.RunEval(setID)
 }
 
+// ListDomains delegates to the underlying client.
+func (c *Client) ListDomains() ([]client.DomainListItem, error) {
+	return c.Client.ListDomains()
+}
+
+// GetDomain delegates to the underlying client.
+func (c *Client) GetDomain(id string) (*client.Domain, error) {
+	return c.Client.GetDomain(id)
+}
+
+// TriggerSession delegates to the underlying client.
+func (c *Client) TriggerSession(domainID string, trigger map[string]any) (*client.Session, error) {
+	return c.Client.TriggerSession(domainID, trigger)
+}
+
+// AuditItem is a single audit log entry.
+type AuditItem struct {
+	Timestamp string `json:"timestamp"`
+	Action    string `json:"action"`
+	Actor     string `json:"actor"`
+	Resource  string `json:"resource"`
+	Decision  string `json:"decision"`
+	Reason    string `json:"reason"`
+}
+
+// ListAudit fetches audit log entries from the REST API.
+func (c *Client) ListAudit() ([]AuditItem, error) {
+	body, err := c.get("/api/v1/audit")
+	if err != nil {
+		return nil, err
+	}
+	items, err := parseListEnvelope(body)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]AuditItem, 0, len(items))
+	for _, it := range items {
+		out = append(out, AuditItem{
+			Timestamp: stringOr(it["timestamp"], ""),
+			Action:    stringOr(it["action"], ""),
+			Actor:     stringOr(it["actor"], ""),
+			Resource:  stringOr(it["resource"], ""),
+			Decision:  stringOr(it["decision"], ""),
+			Reason:    stringOr(it["reason"], ""),
+		})
+	}
+	return out, nil
+}
+
+// DashboardSummary aggregates lightweight metrics from sessions and traces.
+type DashboardSummary struct {
+	PendingApprovals int
+	RunningSessions  int
+	TotalSessions24h int
+	Cost24h          float64
+	FailureRate      float64
+}
+
+// DashboardSummary fetches sessions and traces and derives dashboard cards.
+func (c *Client) DashboardSummary() (*DashboardSummary, error) {
+	sessions, err := c.ListSessions()
+	if err != nil {
+		return nil, err
+	}
+	traces, err := c.ListTraces()
+	if err != nil {
+		return nil, err
+	}
+
+	summary := &DashboardSummary{}
+	cutoff := time.Now().Add(-24 * time.Hour)
+	var failed int
+	for _, s := range sessions {
+		if s.State == "running" {
+			summary.RunningSessions++
+		}
+		if t, err := time.Parse(time.RFC3339, s.StartedAt); err == nil && t.After(cutoff) {
+			summary.TotalSessions24h++
+			if s.State == "failed" {
+				failed++
+			}
+		}
+	}
+	for _, tr := range traces {
+		if t, err := time.Parse(time.RFC3339, tr.StartedAt); err == nil && t.After(cutoff) {
+			summary.Cost24h += tr.Cost
+		}
+	}
+	if summary.TotalSessions24h > 0 {
+		summary.FailureRate = float64(failed) / float64(summary.TotalSessions24h)
+	}
+	return summary, nil
+}
+
 func (c *Client) postNoBody(path string) error {
 	return c.postJSON(path, nil)
 }

@@ -53,10 +53,9 @@ func NewModel(serverURL string) Model {
 			tabs.NewTracesTab(serverURL),
 			tabs.NewApprovalsTab(serverURL),
 			tabs.NewEvalTab(serverURL),
-			// Placeholder tabs for later phases.
-			newPlaceholderTab("Audit"),
-			newPlaceholderTab("Domains"),
-			newPlaceholderTab("Dashboard"),
+			tabs.NewAuditTab(serverURL),
+			tabs.NewDomainsTab(serverURL),
+			tabs.NewDashboardTab(serverURL),
 		},
 	}
 }
