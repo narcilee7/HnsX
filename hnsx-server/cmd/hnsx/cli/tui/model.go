@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/hnsx-io/hnsx/server/cmd/hnsx/cli/tui/common"
 	"github.com/hnsx-io/hnsx/server/cmd/hnsx/cli/tui/components"
 	"github.com/hnsx-io/hnsx/server/cmd/hnsx/cli/tui/tabs"
 )
@@ -28,7 +29,7 @@ type Model struct {
 	serverURL string
 	width     int
 	height    int
-	theme     Theme
+	theme     common.Theme
 	keys      KeyMap
 	statusBar StatusBar
 	help      components.Help
@@ -40,7 +41,7 @@ type Model struct {
 
 // NewModel creates the root TUI model.
 func NewModel(serverURL string) Model {
-	th := NewTheme()
+	th := common.NewTheme()
 	return Model{
 		serverURL: serverURL,
 		theme:     th,
@@ -48,9 +49,9 @@ func NewModel(serverURL string) Model {
 		statusBar: NewStatusBar(th),
 		help:      components.NewHelp(th.Help),
 		tabs: []tea.Model{
-			tabs.NewSessionsTab(),
-			// Placeholder tabs for Phase T-1; replaced with real implementations in later phases.
-			newPlaceholderTab("Traces"),
+			tabs.NewSessionsTab(serverURL),
+			tabs.NewTracesTab(serverURL),
+			// Placeholder tabs for later phases.
 			newPlaceholderTab("Approvals"),
 			newPlaceholderTab("Eval"),
 			newPlaceholderTab("Audit"),

@@ -5,17 +5,19 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/hnsx-io/hnsx/server/cmd/hnsx/cli/tui/common"
 )
 
 // StatusBar renders the top bar: title, server URL, health, version, clock.
 type StatusBar struct {
-	Theme   Theme
+	Theme   common.Theme
 	Version string
 }
 
 // NewStatusBar creates a status bar. Version may be empty until injected at
 // build time.
-func NewStatusBar(t Theme) StatusBar {
+func NewStatusBar(t common.Theme) StatusBar {
 	return StatusBar{Theme: t}
 }
 
