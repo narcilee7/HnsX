@@ -22,11 +22,11 @@ declare module 'react-sparklines' {
   }
   export const SparklinesLine: (props: SparklinesLineProps) => ReactElement
 
-  export interface SparklinesAreaProps {
+  export interface SparklinesCurveProps {
     style?: CSSProperties
     color?: string
   }
-  export const SparklinesArea: (props: SparklinesAreaProps) => ReactElement
+  export const SparklinesCurve: (props: SparklinesCurveProps) => ReactElement
 
   export interface SparklinesSpotsProps {
     size?: number
