@@ -30,6 +30,7 @@ func TestApprovalsTab_Init(t *testing.T) {
 func TestApprovalsTab_RejectPrompt(t *testing.T) {
 	tab := NewApprovalsTab("http://127.0.0.1:1")
 	tab.approvals = []common.ApprovalItem{{ID: "a1", SessionID: "s1", Risk: "high"}}
+	tab.filtered = tab.approvals
 	tab = updateApprovalsTab(tab, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	if !tab.rejecting {
 		t.Fatal("expected rejecting prompt after 'x'")
