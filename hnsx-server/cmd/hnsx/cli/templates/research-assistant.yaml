@@ -1,0 +1,42 @@
+id: {{domain_id}}
+version: 0.1.0
+description: |
+  ReAct research assistant for {{company_name}}.
+
+harness:
+  agents:
+    researcher:
+      id: researcher
+      provider: anthropic
+      model: claude-sonnet-4
+      adapter:
+        kind: anthropic
+        timeout_seconds: 120
+      system_prompt: research-prompt
+      tool_refs:
+        - fetch_url
+  prompts:
+    research-prompt:
+      type: system
+      template: |
+        You are a research assistant for {{company_name}}.
+        Use the fetch_url tool to gather information, then synthesize a concise answer.
+        Explain your reasoning step by step.
+  tools:
+    fetch_url:
+      kind: http
+      name: fetch_url
+      description: Fetch a URL and return the response body.
+      config:
+        base_url: https://example.com
+  session:
+    mode: multi-turn
+    agent: researcher
+  policy:
+    budget:
+      max_cost_usd: 1.0
+      max_turns: 10
+    permissions:
+      allow_network: true
+      allow_file_write: false
+      allow_shell: false
