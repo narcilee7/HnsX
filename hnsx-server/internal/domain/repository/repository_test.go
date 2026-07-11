@@ -5,8 +5,11 @@ import (
 	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
+
+var testTenant = tenant.DefaultID
 
 func minimalSpec(id, version string) *spec.DomainSpec {
 	return &spec.DomainSpec{
@@ -31,15 +34,15 @@ func TestInMemoryRepository_ListVersions(t *testing.T) {
 	spec1 := minimalSpec("domain-a", "1.0.0")
 	spec2 := minimalSpec("domain-a", "1.1.0")
 
-	if err := repo.Save(&model.RegisteredDomain{ID: "domain-a", Version: "1.0.0", Spec: spec1}); err != nil {
+	if err := repo.Save(testTenant, &model.RegisteredDomain{ID: "domain-a", Version: "1.0.0", Spec: spec1}); err != nil {
 		t.Fatalf("save v1: %v", err)
 	}
 	time.Sleep(10 * time.Millisecond)
-	if err := repo.Save(&model.RegisteredDomain{ID: "domain-a", Version: "1.1.0", Spec: spec2}); err != nil {
+	if err := repo.Save(testTenant, &model.RegisteredDomain{ID: "domain-a", Version: "1.1.0", Spec: spec2}); err != nil {
 		t.Fatalf("save v2: %v", err)
 	}
 
-	versions, err := repo.ListVersions("domain-a")
+	versions, err := repo.ListVersions(testTenant, "domain-a")
 	if err != nil {
 		t.Fatalf("list versions: %v", err)
 	}
@@ -53,7 +56,7 @@ func TestInMemoryRepository_ListVersions(t *testing.T) {
 		t.Fatalf("expected older version second, got %q", versions[1].Version)
 	}
 
-	if _, err := repo.ListVersions("missing"); err != model.ErrDomainNotFound {
+	if _, err := repo.ListVersions(testTenant, "missing"); err != model.ErrDomainNotFound {
 		t.Fatalf("expected ErrDomainNotFound, got %v", err)
 	}
 }
@@ -64,14 +67,14 @@ func TestInMemoryRepository_GetVersion(t *testing.T) {
 	spec1 := minimalSpec("domain-b", "1.0.0")
 	spec2 := minimalSpec("domain-b", "2.0.0")
 
-	if err := repo.Save(&model.RegisteredDomain{ID: "domain-b", Version: "1.0.0", Spec: spec1}); err != nil {
+	if err := repo.Save(testTenant, &model.RegisteredDomain{ID: "domain-b", Version: "1.0.0", Spec: spec1}); err != nil {
 		t.Fatalf("save v1: %v", err)
 	}
-	if err := repo.Save(&model.RegisteredDomain{ID: "domain-b", Version: "2.0.0", Spec: spec2}); err != nil {
+	if err := repo.Save(testTenant, &model.RegisteredDomain{ID: "domain-b", Version: "2.0.0", Spec: spec2}); err != nil {
 		t.Fatalf("save v2: %v", err)
 	}
 
-	got, err := repo.GetVersion("domain-b", "1.0.0")
+	got, err := repo.GetVersion(testTenant, "domain-b", "1.0.0")
 	if err != nil {
 		t.Fatalf("get version: %v", err)
 	}
@@ -79,10 +82,10 @@ func TestInMemoryRepository_GetVersion(t *testing.T) {
 		t.Fatalf("version = %q", got.Version)
 	}
 
-	if _, err := repo.GetVersion("domain-b", "9.9.9"); err != model.ErrDomainNotFound {
+	if _, err := repo.GetVersion(testTenant, "domain-b", "9.9.9"); err != model.ErrDomainNotFound {
 		t.Fatalf("expected ErrDomainNotFound, got %v", err)
 	}
-	if _, err := repo.GetVersion("missing", "1.0.0"); err != model.ErrDomainNotFound {
+	if _, err := repo.GetVersion(testTenant, "missing", "1.0.0"); err != model.ErrDomainNotFound {
 		t.Fatalf("expected ErrDomainNotFound, got %v", err)
 	}
 }

@@ -220,7 +220,7 @@ func (s *Server) RegisterBootstrapDomain(tenantID tenant.ID, v *spec.DomainSpec)
 	if v == nil {
 		return
 	}
-	if _, err := s.App.DomainService.Register(v); err != nil {
+	if _, err := s.App.DomainService.Register(tenantID, v); err != nil {
 		return
 	}
 	_ = s.LoadDomainPolicy(tenant.NewContext(context.Background(), tenantID), v.ID)

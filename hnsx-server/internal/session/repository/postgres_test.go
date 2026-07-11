@@ -7,10 +7,13 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
 	domainrepo "github.com/hnsx-io/hnsx/server/internal/domain/repository"
 	internalsession "github.com/hnsx-io/hnsx/server/internal/session/model"
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/internal/testutil"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/spec"
 )
+
+var testTenant = tenant.DefaultID
 
 func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 	database := testutil.OpenTestDB(t)
@@ -18,7 +21,7 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 
 	// Ensure a domain exists so the FK constraint is satisfied.
 	domainRepo := domainrepo.NewPostgresRepository(database)
-	_ = domainRepo.Delete("session-test-domain")
+	_ = domainRepo.Delete(testTenant, "session-test-domain")
 	ds := &spec.DomainSpec{
 		ID:      "session-test-domain",
 		Version: "1.0.0",
@@ -29,7 +32,7 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 			Session: spec.SessionSpec{Mode: spec.Single, Agent: "agent"},
 		},
 	}
-	if err := domainRepo.Save(&model.RegisteredDomain{
+	if err := domainRepo.Save(testTenant, &model.RegisteredDomain{
 		ID:      ds.ID,
 		Version: ds.Version,
 		Spec:    ds,
@@ -38,7 +41,7 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 	}
 
 	repo := NewPostgresRepository(database)
-	_ = repo.Delete("s-test-1")
+	_ = repo.Delete(testTenant, "s-test-1")
 
 	sess := &internalsession.Session{
 		ID:            "s-test-1",
@@ -49,11 +52,11 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 		Trigger:       map[string]any{"q": "hello"},
 		StartedAt:     time.Now().UTC(),
 	}
-	if err := repo.Save(sess); err != nil {
+	if err := repo.Save(testTenant, sess); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 
-	got, err := repo.ByID("s-test-1")
+	got, err := repo.ByID(testTenant, "s-test-1")
 	if err != nil {
 		t.Fatalf("by id: %v", err)
 	}
@@ -72,11 +75,11 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 	sess.Result = &runtime.Result{Mode: spec.Single}
 	completed := time.Now().UTC()
 	sess.CompletedAt = &completed
-	if err := repo.Save(sess); err != nil {
+	if err := repo.Save(testTenant, sess); err != nil {
 		t.Fatalf("save update: %v", err)
 	}
 
-	got, err = repo.ByID("s-test-1")
+	got, err = repo.ByID(testTenant, "s-test-1")
 	if err != nil {
 		t.Fatalf("by id after update: %v", err)
 	}
@@ -87,7 +90,7 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 		t.Fatal("result not round-tripped")
 	}
 
-	byDomain, err := repo.ByDomain("session-test-domain")
+	byDomain, err := repo.ByDomain(testTenant, "session-test-domain")
 	if err != nil {
 		t.Fatalf("by domain: %v", err)
 	}
@@ -95,7 +98,7 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 		t.Fatalf("by domain len = %d", len(byDomain))
 	}
 
-	list, err := repo.All()
+	list, err := repo.All(testTenant)
 	if err != nil {
 		t.Fatalf("all: %v", err)
 	}
@@ -110,6 +113,6 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 		t.Fatal("session not in list")
 	}
 
-	_ = repo.Delete("s-test-1")
-	_ = domainRepo.Delete("session-test-domain")
+	_ = repo.Delete(testTenant, "s-test-1")
+	_ = domainRepo.Delete(testTenant, "session-test-domain")
 }

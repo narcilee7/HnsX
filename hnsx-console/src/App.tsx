@@ -20,12 +20,15 @@ import SettingsPage from "@/pages/SettingsPage";
 import PlaygroundPage from "@/pages/PlaygroundPage";
 import GalleryPage from "@/pages/GalleryPage";
 
+import LoginPage from '@/pages/LoginPage'
+
 function App() {
   return (
     <>
       <ToastProvider />
       <AppShell>
         <Routes>
+          <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<DashboardPage />} />
           <Route path="/domains" element={<DomainsPage />} />
           <Route path="/domains/:id/workspace" element={<DomainWorkspacePage />} />

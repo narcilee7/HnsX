@@ -172,6 +172,7 @@ func TestConfigSaveToFile(t *testing.T) {
 		ServerURL:   "http://save.example",
 		ComposeFile: "/save/compose.yaml",
 		NoTui:       true,
+		Token:       "secret-token",
 	}
 	if err := cfg.SaveToFile(); err != nil {
 		t.Fatalf("save: %v", err)
@@ -182,6 +183,21 @@ func TestConfigSaveToFile(t *testing.T) {
 	}
 	if loaded.Output != "json" || !loaded.Verbose || loaded.ServerURL != "http://save.example" {
 		t.Fatalf("saved values mismatch: %+v", loaded)
+	}
+	if loaded.Token != "secret-token" {
+		t.Fatalf("token not saved: %q", loaded.Token)
+	}
+}
+
+func TestMaskToken(t *testing.T) {
+	if got := maskToken(""); got != "-" {
+		t.Fatalf("empty token mask = %q", got)
+	}
+	if got := maskToken("short"); got != "***" {
+		t.Fatalf("short token mask = %q", got)
+	}
+	if got := maskToken("abcdefghij"); got != "abcd...ghij" {
+		t.Fatalf("long token mask = %q", got)
 	}
 }
 
