@@ -18,6 +18,7 @@ import AuditPage from "@/pages/AuditPage";
 import ApprovalsPage from "@/pages/ApprovalsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import PlaygroundPage from "@/pages/PlaygroundPage";
+import GalleryPage from "@/pages/GalleryPage";
 
 function App() {
   return (
@@ -42,6 +43,7 @@ function App() {
           <Route path="/approvals" element={<ApprovalsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/playground" element={<PlaygroundPage />} />
+          <Route path="/gallery" element={<GalleryPage />} />
         </Routes>
       </AppShell>
     </>

@@ -19,6 +19,11 @@ func NewOutput(mode string) *Output {
 	return &Output{mode: mode, w: os.Stdout}
 }
 
+// NewOutputWriter creates an Output bound to an arbitrary writer.
+func NewOutputWriter(mode string, w io.Writer) *Output {
+	return &Output{mode: mode, w: w}
+}
+
 // Mode returns the active output mode.
 func (o *Output) Mode() string { return o.mode }
 
@@ -36,6 +41,57 @@ func (o *Output) Print(v any) {
 		return
 	}
 	fmt.Fprintln(o.w, string(b))
+}
+
+// KV prints a key-value card in human mode, a JSON object in json mode,
+// and suppresses output in quiet mode. Pairs are rendered in order.
+func (o *Output) KV(pairs [][2]string) {
+	if o.mode == "quiet" {
+		return
+	}
+	if o.mode == "json" {
+		m := make(map[string]string, len(pairs))
+		for _, p := range pairs {
+			m[p[0]] = p[1]
+		}
+		o.Print(m)
+		return
+	}
+	maxKey := 0
+	for _, p := range pairs {
+		if len(p[0]) > maxKey {
+			maxKey = len(p[0])
+		}
+	}
+	for _, p := range pairs {
+		fmt.Fprintf(o.w, "  %-*s  %s\n", maxKey, p[0], p[1])
+	}
+}
+
+// Card renders a titled key-value card for human mode. Falls back to Print
+// for json mode and is suppressed in quiet mode.
+func (o *Output) Card(title string, pairs [][2]string) {
+	if o.mode == "quiet" {
+		return
+	}
+	if o.mode == "json" {
+		m := make(map[string]string, len(pairs))
+		for _, p := range pairs {
+			m[p[0]] = p[1]
+		}
+		o.Print(map[string]any{"title": title, "data": m})
+		return
+	}
+	fmt.Fprintln(o.w, title)
+	o.KV(pairs)
+}
+
+// Section prints a titled section separator in human mode.
+func (o *Output) Section(title string) {
+	if o.mode != "human" {
+		return
+	}
+	fmt.Fprintf(o.w, "\n%s\n%s\n", title, strings.Repeat("─", len(title)))
 }
 
 // Line writes a single human-readable line (suppressed in quiet mode).
