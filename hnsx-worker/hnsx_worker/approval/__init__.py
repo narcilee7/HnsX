@@ -34,6 +34,8 @@ from .protocol import (
     ApprovalState,
 )
 
+from .server_bus import ServerApprovalBus
+
 __all__ = [
     "ApprovalBus",
     "ApprovalDecision",
@@ -42,5 +44,6 @@ __all__ = [
     "ApprovalState",
     "InMemoryApprovalBus",
     "PendingRequest",
+    "ServerApprovalBus",
     "request_approval",
 ]

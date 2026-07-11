@@ -17,6 +17,7 @@ import {
   AgentFlowDiagram,
 } from '@hnsx/observability'
 import { useSession, useSessionEvents } from '@/hooks/useSessions'
+import { useResolveApproval, useApprovals } from '@/hooks/useApprovals'
 import {
   ObservationTimeline,
   useObservationFilters,
@@ -39,6 +40,10 @@ export default function SessionDetailPage() {
   const [agentFilter, setAgentFilter] = useState('')
   const [kindFilter, setKindFilter] = useState('')
 
+  const { data: pendingApprovals } = useApprovals({ session: id, status: 'pending', limit: 1 })
+  const resolve = useResolveApproval()
+  const pendingApprovalId = pendingApprovals?.items[0]?.id
+
   const { agents, kinds } = useObservationFilters(observations)
 
   const stats = useMemo(() => summarize(observations), [observations])
@@ -56,6 +61,8 @@ export default function SessionDetailPage() {
     return <ErrorState description={error?.message || 'Session not found'} onRetry={refetch} />
   }
 
+  const isPaused = (state || session.state) === 'paused'
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -66,12 +73,20 @@ export default function SessionDetailPage() {
         ]}
       >
         <div className="flex items-center gap-2">
-          {(state || session.state) === 'paused' && (
+          {isPaused && pendingApprovalId && (
             <>
-              <button className={cn(buttonVariants({ variant: 'default' }))}>
+              <button
+                className={cn(buttonVariants({ variant: 'default' }))}
+                onClick={() => resolve.mutate({ id: pendingApprovalId, decision: 'approve' })}
+                disabled={resolve.isPending}
+              >
                 <Check className="mr-2 h-4 w-4" /> Approve
               </button>
-              <button className={cn(buttonVariants({ variant: 'outline' }))}>
+              <button
+                className={cn(buttonVariants({ variant: 'outline' }))}
+                onClick={() => resolve.mutate({ id: pendingApprovalId, decision: 'reject' })}
+                disabled={resolve.isPending}
+              >
                 <X className="mr-2 h-4 w-4" /> Reject
               </button>
             </>
