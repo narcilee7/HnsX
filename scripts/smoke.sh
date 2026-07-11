@@ -31,6 +31,13 @@ need() {
 
 need curl
 
+# Smoke tests require Docker (and docker compose) to spin up a local Postgres.
+# Skip gracefully when Docker is unavailable (e.g. GitHub Actions macOS runners).
+if ! command -v docker >/dev/null 2>&1; then
+  bold "docker not available; skipping smoke test"
+  exit 0
+fi
+
 # 1. Build binaries if missing.
 if [[ ! -x "$BIN_DIR/hnsx-server" || ! -x "$BIN_DIR/hnsx" ]]; then
   bold "[1/7] building binaries"
@@ -45,15 +52,15 @@ bold "[2/7] ensuring local Postgres"
 if [ -n "${HNSX_DATABASE_URL:-}" ]; then
   ok "using HNSX_DATABASE_URL"
 else
-  cd "$DEPLOY_DIR" && docker compose up -d postgres
+  cd "$DEPLOY_DIR" && docker compose up -d --wait postgres
   cd "$ROOT"
-  for i in $(seq 1 30); do
-    if docker compose -f "$DEPLOY_DIR/docker-compose.yaml" exec -T postgres pg_isready -U hnsx >/dev/null 2>&1; then break; fi
-    sleep 1
-  done
-  docker compose -f "$DEPLOY_DIR/docker-compose.yaml" exec -T postgres pg_isready -U hnsx >/dev/null || fail "postgres failed to become ready"
+  if ! docker compose -f "$DEPLOY_DIR/docker-compose.yaml" exec -T postgres pg_isready -U hnsx >/dev/null 2>&1; then
+    echo "postgres logs:"
+    docker compose -f "$DEPLOY_DIR/docker-compose.yaml" logs --no-log-prefix postgres || true
+    fail "postgres failed to become ready"
+  fi
   ok "postgres ready"
-  export HNSX_DATABASE_URL="postgres://hnsx:hnsx@127.0.0.1:5432/hnsx?sslmode=disable"
+  export HNSX_DATABASE_URL="postgres://hnsx:hnsx@127.0.0.1:5433/hnsx?sslmode=disable"
 fi
 
 export HNSX_MIGRATIONS_DIR="$ROOT/go/migrations"
@@ -86,8 +93,13 @@ bold "[4/7] booting server on $ADDR (log $LOG)"
 # Generate a deterministic-but-non-default key when the caller did not supply one.
 : "${HNSX_SECRET_KEY:=hnsx-smoke-test-key-do-not-use-in-prod-2026}"
 export HNSX_SECRET_KEY
+# Smoke tests exercise admin/designer endpoints (secrets, policies); give the
+# default identity sufficient privileges in "none" auth mode.
+: "${HNSX_AUTH_DEFAULT_ROLE:=platform_admin}"
+export HNSX_AUTH_DEFAULT_ROLE
 HNSX_HTTP_ADDR="$ADDR" HNSX_GRPC_ADDR="" \
   HNSX_DATABASE_URL="$HNSX_DATABASE_URL" HNSX_SECRET_KEY="$HNSX_SECRET_KEY" \
+  HNSX_AUTH_DEFAULT_ROLE="$HNSX_AUTH_DEFAULT_ROLE" \
   "$BIN_DIR/hnsx-server" server --seed-from "$ROOT/example-domains" >"$LOG" 2>&1 &
 SERVER_PID=$!
 trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT

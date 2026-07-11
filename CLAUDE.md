@@ -16,7 +16,7 @@
 
 **核心价值**：让企业把最好的 Agent 装进安全、可控、可评估的框架里工作。
 
-完整愿景见 [`docs/vision.md`](docs/vision.md)，技术总览见 [`docs/tech_overview.md`](docs/tech_overview.md)，控制台设计见 [`docs/web-console-design/整体设计.md`](docs/web-console-design/整体设计.md)。
+完整愿景见 [`docs/vision.md`](docs/vision.md)，技术总览见 [`docs/tech_overview.md`](docs/tech_overview.md)，控制台设计见 [`docs/web-console-design/整体设计.md`](docs/web-console-design/整体设计.md)，官网源码见 [`website/`](website/)。
 
 ---
 
@@ -25,6 +25,7 @@
 ```text
 HnsX/
 ├── docs/                  # 设计文档（vision、tech、api、know-how）
+├── website/               # Rspress 官网与文档站（GitHub Pages）
 ├── proto/                 # Protobuf — API 单一真相源
 ├── hnsx-server/           # Go 控制面：Domain / Session / Policy / Secret / Eval / Telemetry
 ├── hnsx-worker/           # Python 运行时：执行 Harness 的 Worker
@@ -211,6 +212,7 @@ open http://127.0.0.1:3002
 
 | 文件 | 何时读 |
 |---|---|
+| `website/docs/index.md`、[`website/rspress.config.ts`](website/rspress.config.ts) | 改官网 / 文档站时 |
 | `docs/vision.md` | 拿不准产品方向时 |
 | `docs/tech_overview.md` | 想了解架构与阶段规划时 |
 | `docs/server-design/api-design.md` | 改 API 或加 endpoint 前 |

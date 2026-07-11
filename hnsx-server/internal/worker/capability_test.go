@@ -17,13 +17,13 @@ func TestCapabilitiesFromInfo(t *testing.T) {
 	}
 	got := CapabilitiesFromInfo(info)
 	want := map[string]bool{
-		"provider:anthropic":    true,
-		"provider:openai":       true,
-		"adapter:anthropic":     true,
-		"adapter:openai":        true,
+		"provider:anthropic":     true,
+		"provider:openai":        true,
+		"adapter:anthropic":      true,
+		"adapter:openai":         true,
 		"model:claude-haiku-4-5": true,
-		"sandbox:process":       true,
-		"label:zone:a":          true,
+		"sandbox:process":        true,
+		"label:zone:a":           true,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d capabilities, want %d: %v", len(got), len(want), got)

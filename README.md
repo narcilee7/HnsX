@@ -6,6 +6,8 @@ curl -sSL hnsx.dev/install.sh | sh && hnsx try customer-service
 
 > **Don't build weaker agents. Harness stronger ones.**
 
+官网（GitHub Pages）：[https://narcilee7.github.io/HnsX/](https://narcilee7.github.io/HnsX/)
+
 HnsX 让企业安全、可控、可评估地驾驭 Claude Code、Codex、OpenAI、Anthropic、Ollama 等最强 Agent。它不是又一个 Agent 底座，而是一层**声明式 Harness**：把领域知识、约束策略、执行沙箱、观测审计、评估体系整合在一起，让 Agent 在明确边界内为企业工作。
 
 ---
@@ -44,6 +46,23 @@ HnsX 不自己造 Agent，而是把最好的 Agent 接入企业场景，用 YAML
 - **代码评审**：用 Harness 约束 Review Agent 的检查范围、输出格式、成本上限。
 - **金融分析**：让 Agent 读取财报、调用工具、生成报告，同时审计每一步并控制预算。
 - **内部运维**：把 SRE 知识沉淀为 Skill 和 Rule，让 Agent 在受限沙箱内执行诊断脚本。
+
+---
+
+## 官网与文档
+
+- **官网**：https://narcilee7.github.io/HnsX/（由 `website/` 下的 Rspress 站点构建，自动部署到 GitHub Pages）
+- **指南**：快速开始、安装、Domain 入门、CLI 速查
+- **博客**：为什么需要 Harness、API 一览、愿景落地
+- **设计文档**：愿景、技术总览、API 设计、know-how 四篇
+
+本地预览文档站：
+
+```bash
+cd website
+pnpm install
+pnpm dev      # http://localhost:3000/
+```
 
 ---
 
@@ -153,6 +172,7 @@ hnsx console                         # 启 Vite + 自动开浏览器
 
 | 文档 | 内容 |
 |---|---|
+| [官网](https://narcilee7.github.io/HnsX/) | Landing Page、指南、博客、设计文档索引 |
 | [`docs/vision.md`](docs/vision.md) | 项目愿景与产品方向 |
 | [`docs/tech_overview.md`](docs/tech_overview.md) | 技术总览、架构与阶段规划 |
 | [`docs/cli-roadmap.md`](docs/cli-roadmap.md) | CLI 产品化路线图（v0.3 → v1.0） |

@@ -19,11 +19,11 @@ type Client struct {
 	http    *http.Client
 	headers map[string]string
 
-	Domains    *DomainClient
-	Sessions   *SessionClient
-	Traces     *TraceClient
-	Approvals  *ApprovalClient
-	Evals      *EvalClient
+	Domains   *DomainClient
+	Sessions  *SessionClient
+	Traces    *TraceClient
+	Approvals *ApprovalClient
+	Evals     *EvalClient
 }
 
 // NewClient creates a Client for the given server base URL.
@@ -94,8 +94,8 @@ func decodeResponse(resp *http.Response) ([]byte, error) {
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var env struct {
-			Code    string `json:"code"`
-			Message string `json:"message"`
+			Code    string         `json:"code"`
+			Message string         `json:"message"`
 			Details map[string]any `json:"details"`
 		}
 		if err := json.Unmarshal(data, &env); err == nil && env.Code != "" {

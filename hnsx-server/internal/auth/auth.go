@@ -16,11 +16,11 @@ type Role string
 
 // Well-known roles.
 const (
-	RolePlatformAdmin  Role = "platform_admin"
+	RolePlatformAdmin   Role = "platform_admin"
 	RoleHarnessDesigner Role = "harness_designer"
-	RoleOperator       Role = "operator"
-	RoleAuditor        Role = "auditor"
-	RoleNone           Role = "none"
+	RoleOperator        Role = "operator"
+	RoleAuditor         Role = "auditor"
+	RoleNone            Role = "none"
 )
 
 // Identity is the authenticated caller identity.

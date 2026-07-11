@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "rspress dev",
     "build": "rspress build",
-    "preview": "rspress preview"
+    "preview": "rspress preview",
+    "lint": "echo 'no lint'",
+    "test": "echo 'no tests'",
+    "type-check": "echo 'no type-check'"
   },
   "dependencies": {
     "rspress": "^1.47.1"

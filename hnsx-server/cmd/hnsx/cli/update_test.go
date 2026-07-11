@@ -22,11 +22,11 @@ func TestMatchAssetName(t *testing.T) {
 		name, want string
 		ok         bool
 	}{
-		"hnsx_0.8.0_darwin_arm64":     {"hnsx_0.8.0_darwin_arm64.tar.gz", "hnsx_darwin_arm64", true},
-		"hnsx_0.8.0_linux_amd64.tar":  {"hnsx_0.8.0_linux_amd64.tar.gz", "hnsx_linux_amd64", true},
-		"wrong-prefix":                {"other_0.8.0_darwin_arm64.tar.gz", "hnsx_darwin_arm64", false},
-		"too-short":                   {"hnsx_darwin", "hnsx_darwin_arm64", false},
-		"empty":                       {"", "hnsx_darwin_arm64", false},
+		"hnsx_0.8.0_darwin_arm64":    {"hnsx_0.8.0_darwin_arm64.tar.gz", "hnsx_darwin_arm64", true},
+		"hnsx_0.8.0_linux_amd64.tar": {"hnsx_0.8.0_linux_amd64.tar.gz", "hnsx_linux_amd64", true},
+		"wrong-prefix":               {"other_0.8.0_darwin_arm64.tar.gz", "hnsx_darwin_arm64", false},
+		"too-short":                  {"hnsx_darwin", "hnsx_darwin_arm64", false},
+		"empty":                      {"", "hnsx_darwin_arm64", false},
 	}
 	for label, c := range cases {
 		got := matchAssetName(c.name, c.want)

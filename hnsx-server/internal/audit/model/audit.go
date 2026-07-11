@@ -45,8 +45,8 @@ const (
 
 // Common actor types.
 const (
-	ActorTypeAgent = "agent"
-	ActorTypeUser  = "user"
+	ActorTypeAgent  = "agent"
+	ActorTypeUser   = "user"
 	ActorTypeSystem = "system"
 )
 

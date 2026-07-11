@@ -22,6 +22,9 @@ VENV_DIR    := $(WORKER_DIR)/.venv
 VENV_BIN    := $(VENV_DIR)/bin
 PY_PROTO_PATH := PATH="$(VENV_BIN):$$PATH"
 
+# Cross-platform sed -i: macOS requires an extension argument, Linux does not.
+SED_INPLACE := $(shell if sed --version >/dev/null 2>&1; then echo "-i"; else echo "-i ''"; fi)
+
 VERSION ?= 1.0.0
 
 # ---------------------------------------------------------------------------
@@ -209,9 +212,9 @@ proto-py:
 	@# does ``from hnsx.v1 import X_pb2``, but the file lives at
 	@# hnsx_worker/proto/gen/hnsx/v1/X_pb2.py.
 	@find $(WORKER_DIR)/hnsx_worker/proto/gen \( -name '*_pb2.py' -o -name '*_pb2_grpc.py' \) -exec \
-		sed -i '' -E 's|^from hnsx(\.v1)? import (.+)$$|from hnsx_worker.proto.gen.hnsx.v1 import \2|' {} +
+		sed $(SED_INPLACE) -E 's|^from hnsx(\.v1)? import (.+)$$|from hnsx_worker.proto.gen.hnsx.v1 import \2|' {} +
 	@find $(WORKER_DIR)/hnsx_worker/proto/gen \( -name '*_pb2.py' -o -name '*_pb2_grpc.py' \) -exec \
-		sed -i '' -E 's|^import hnsx(\.v1)?$$|import hnsx_worker.proto.gen.hnsx.v1 as hnsx_dot_v1|' {} +
+		sed $(SED_INPLACE) -E 's|^import hnsx(\.v1)?$$|import hnsx_worker.proto.gen.hnsx.v1 as hnsx_dot_v1|' {} +
 
 .PHONY: proto-all
 proto-all: proto proto-py

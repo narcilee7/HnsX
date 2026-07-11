@@ -197,16 +197,16 @@ type evalSetsLoadedMsg struct {
 
 // evalDetail shows runs for a single eval set and supports run + diff.
 type evalDetail struct {
-	client  *common.Client
-	setID   string
-	theme   common.Theme
+	client *common.Client
+	setID  string
+	theme  common.Theme
 
-	width   int
-	height  int
-	runs    []client.EvalRun
+	width    int
+	height   int
+	runs     []client.EvalRun
 	selected int
-	err     error
-	closed  bool
+	err      error
+	closed   bool
 }
 
 func newEvalDetail(client *common.Client, setID string, theme common.Theme) *evalDetail {

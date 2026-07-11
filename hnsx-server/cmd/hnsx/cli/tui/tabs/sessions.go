@@ -97,7 +97,6 @@ func (t SessionsTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, nil
 
 	case RefreshMsg:
-		return t, t.fetchSessions()
 		if !t.inDetail {
 			return t, tea.Batch(t.fetchSessions(), tickSessions())
 		}
@@ -268,10 +267,10 @@ type sessionDetail struct {
 	err    error
 	closed bool
 
-	ctx     context.Context
-	cancel  context.CancelFunc
-	events  chan client.Event
-	errCh   chan error
+	ctx    context.Context
+	cancel context.CancelFunc
+	events chan client.Event
+	errCh  chan error
 }
 
 func newSessionDetail(client *common.Client, id string, theme common.Theme) *sessionDetail {

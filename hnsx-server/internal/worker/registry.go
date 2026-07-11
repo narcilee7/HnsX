@@ -44,7 +44,7 @@ var ErrUnknownWorker = errors.New("worker: unknown worker_id")
 type Registry struct {
 	mu                 sync.RWMutex
 	workers            map[string]*WorkerRecord
-	sessionAssignments map[string]string   // session_id -> worker_id
+	sessionAssignments map[string]string              // session_id -> worker_id
 	workerSessions     map[string]map[string]struct{} // worker_id -> set of session_ids
 	now                func() time.Time
 }
