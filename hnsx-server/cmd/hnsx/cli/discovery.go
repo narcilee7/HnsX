@@ -27,18 +27,18 @@ type ExampleDomain struct {
 
 // TemplateIndex is the shape of templates/index.yaml.
 type TemplateIndex struct {
-	Version   string            `yaml:"version"`
-	Templates []TemplateEntry   `yaml:"templates"`
+	Version   string          `yaml:"version"`
+	Templates []TemplateEntry `yaml:"templates"`
 }
 
 // TemplateEntry describes one template in the index.
 type TemplateEntry struct {
-	ID           string              `yaml:"id"`
-	Name         string              `yaml:"name"`
-	Description  string              `yaml:"description"`
-	Tags         []string            `yaml:"tags"`
-	Source       string              `yaml:"source"`
-	Variables    []TemplateVariable  `yaml:"variables"`
+	ID           string               `yaml:"id"`
+	Name         string               `yaml:"name"`
+	Description  string               `yaml:"description"`
+	Tags         []string             `yaml:"tags"`
+	Source       string               `yaml:"source"`
+	Variables    []TemplateVariable   `yaml:"variables"`
 	Requirements TemplateRequirements `yaml:"requirements"`
 }
 
@@ -50,9 +50,9 @@ type TemplateVariable struct {
 
 // TemplateRequirements describes runtime prerequisites.
 type TemplateRequirements struct {
-	Providers        []string `yaml:"providers"`
-	MinWorkers       int      `yaml:"min_workers"`
-	SandboxRuntimes  []string `yaml:"sandbox_runtimes"`
+	Providers       []string `yaml:"providers"`
+	MinWorkers      int      `yaml:"min_workers"`
+	SandboxRuntimes []string `yaml:"sandbox_runtimes"`
 }
 
 // loadTemplateIndex reads <repoRoot>/templates/index.yaml if it exists.

@@ -84,20 +84,20 @@ type AggregateWithSession struct {
 // multi-session traces (e.g. supervisor→specialist) can carry a single
 // trace_id across sessions in the future without an API break.
 type TraceSummary struct {
-	TraceID              string
-	SessionID            string
-	DomainID             string
-	DomainVersion        string
-	StartedAt            time.Time
-	CompletedAt          time.Time
-	DurationMs           int64
-	Status               string
-	ObservationCount     int
-	TotalCostUSD         float64
-	TotalPromptTokens    int
+	TraceID               string
+	SessionID             string
+	DomainID              string
+	DomainVersion         string
+	StartedAt             time.Time
+	CompletedAt           time.Time
+	DurationMs            int64
+	Status                string
+	ObservationCount      int
+	TotalCostUSD          float64
+	TotalPromptTokens     int
 	TotalCompletionTokens int
-	AgentInvocations     int
-	ToolInvocations      int
+	AgentInvocations      int
+	ToolInvocations       int
 }
 
 // TraceDetail is the per-trace detail payload behind GET /api/v1/traces/:id.

@@ -8,11 +8,11 @@
 //
 // Subcommand tree (see docs/cli-roadmap.md for the full vocabulary):
 //
-//   Lifecycle   up | down | restart | status | doctor | logs | reset
-//   Discovery   try | examples | completion
-//   Local       validate | run
-//   Remote      remote <domains|sessions|evals> ...    (deprecated)
-//   Meta        version | help
+//	Lifecycle   up | down | restart | status | doctor | logs | reset
+//	Discovery   try | examples | completion
+//	Local       validate | run
+//	Remote      remote <domains|sessions|evals> ...    (deprecated)
+//	Meta        version | help
 package main
 
 import (

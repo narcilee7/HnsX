@@ -15,6 +15,6 @@ type RefreshMsg struct{}
 
 // CommandResultMsg carries the outcome of a root-level command dispatch.
 type CommandResultMsg struct {
-	Info  string
-	Err   error
+	Info string
+	Err  error
 }

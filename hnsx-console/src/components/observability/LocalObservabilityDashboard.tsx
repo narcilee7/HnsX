@@ -29,8 +29,8 @@ export function LocalObservabilityDashboard() {
   const { data: sessionsData } = useSessions({ limit: 50 })
   const { data: approvalsData } = useApprovals({ status: 'pending', limit: 10 })
 
-  const sessions = sessionsData?.items ?? []
-  const pendingApprovals = approvalsData?.items ?? []
+  const sessions = useMemo(() => sessionsData?.items ?? [], [sessionsData])
+  const pendingApprovals = useMemo(() => approvalsData?.items ?? [], [approvalsData])
 
   const statusSlices = useMemo(() => {
     const completed = sessions.filter((s) => s.state === 'completed').length

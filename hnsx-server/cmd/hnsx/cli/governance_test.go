@@ -9,11 +9,11 @@ import (
 
 func TestCsvEscape(t *testing.T) {
 	cases := map[string]string{
-		"hello":          "hello",
-		"a,b":            "\"a,b\"",
-		"with\nnewline":  "\"with\nnewline\"",
-		`a"b`:            `"a""b"`,
-		"":               "",
+		"hello":         "hello",
+		"a,b":           "\"a,b\"",
+		"with\nnewline": "\"with\nnewline\"",
+		`a"b`:           `"a""b"`,
+		"":              "",
 	}
 	for in, want := range cases {
 		if got := csvEscape(in); got != want {

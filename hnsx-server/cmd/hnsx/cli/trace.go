@@ -40,12 +40,12 @@ type traceListItem struct {
 
 func newTraceListCmd(cfg *Config) *cobra.Command {
 	var (
-		session  string
-		domain   string
-		since    string
-		costMin  string
-		limit    int
-		filters  []string
+		session string
+		domain  string
+		since   string
+		costMin string
+		limit   int
+		filters []string
 	)
 	cmd := &cobra.Command{
 		Use:   "list",

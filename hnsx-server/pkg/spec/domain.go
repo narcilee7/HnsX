@@ -60,14 +60,14 @@ type PromptSpec struct {
 
 // SkillSpec defines a reusable business capability bundle.
 type SkillSpec struct {
-	Name         string       `json:"name,omitempty" yaml:"name,omitempty"`
-	Description  string       `json:"description,omitempty" yaml:"description,omitempty"`
-	Prompts      []PromptSpec `json:"prompts,omitempty" yaml:"prompts,omitempty"`
-	Tools        []ToolConfig `json:"tools,omitempty" yaml:"tools,omitempty"`
-	McpRefs      []string     `json:"mcp_refs,omitempty" yaml:"mcp_refs,omitempty"`
+	Name         string        `json:"name,omitempty" yaml:"name,omitempty"`
+	Description  string        `json:"description,omitempty" yaml:"description,omitempty"`
+	Prompts      []PromptSpec  `json:"prompts,omitempty" yaml:"prompts,omitempty"`
+	Tools        []ToolConfig  `json:"tools,omitempty" yaml:"tools,omitempty"`
+	McpRefs      []string      `json:"mcp_refs,omitempty" yaml:"mcp_refs,omitempty"`
 	Examples     []ExampleSpec `json:"examples,omitempty" yaml:"examples,omitempty"`
-	Sandbox      *SandboxSpec `json:"sandbox,omitempty" yaml:"sandbox,omitempty"`
-	OutputSchema string       `json:"output_schema,omitempty" yaml:"output_schema,omitempty"`
+	Sandbox      *SandboxSpec  `json:"sandbox,omitempty" yaml:"sandbox,omitempty"`
+	OutputSchema string        `json:"output_schema,omitempty" yaml:"output_schema,omitempty"`
 }
 
 // ExampleSpec is a few-shot example for a skill.
@@ -147,15 +147,15 @@ type PolicySpec struct {
 
 // ApprovalSpec defines human-in-the-loop gates.
 type ApprovalSpec struct {
-	DefaultTimeoutSeconds int              `json:"default_timeout_seconds,omitempty" yaml:"default_timeout_seconds,omitempty"`
-	RequiredFor           RequiredForSpec  `json:"required_for,omitempty" yaml:"required_for,omitempty"`
+	DefaultTimeoutSeconds int             `json:"default_timeout_seconds,omitempty" yaml:"default_timeout_seconds,omitempty"`
+	RequiredFor           RequiredForSpec `json:"required_for,omitempty" yaml:"required_for,omitempty"`
 }
 
 // RequiredFor specifies which operations require approval.
 type RequiredForSpec struct {
-	Tools           []string `json:"tools,omitempty" yaml:"tools,omitempty"`
-	Resources       []string `json:"resources,omitempty" yaml:"resources,omitempty"`
-	CostThresholdUSD float64 `json:"cost_threshold_usd,omitempty" yaml:"cost_threshold_usd,omitempty"`
+	Tools            []string `json:"tools,omitempty" yaml:"tools,omitempty"`
+	Resources        []string `json:"resources,omitempty" yaml:"resources,omitempty"`
+	CostThresholdUSD float64  `json:"cost_threshold_usd,omitempty" yaml:"cost_threshold_usd,omitempty"`
 }
 
 // BudgetSpec constraints.

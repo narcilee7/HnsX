@@ -209,9 +209,16 @@ def register(registry):
         assert proc.stdin is not None
         proc.stdin.write(json.dumps({"session_id": "s-loop", "domain_spec_json": json.dumps(spec), "trigger_payload_json": "{}"}))
         proc.stdin.close()
-        # The full workflow is 20 × 0.05s = 1.0s. Sleep past one step to
-        # guarantee the subprocess is mid-iteration.
-        time.sleep(0.2)
+        # Wait until the subprocess has emitted session_start before sending
+        # SIGTERM. A fixed sleep is flaky on slow CI runners where Python
+        # startup + imports can take > 0.2s.
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            if any("session_start" in line for line in collected_stdout):
+                break
+            if proc.poll() is not None:
+                break
+            time.sleep(0.05)
         assert proc.poll() is None, "subprocess exited before SIGTERM"
         proc.send_signal(signal.SIGTERM)
         # Wait for graceful exit. The subprocess should:
