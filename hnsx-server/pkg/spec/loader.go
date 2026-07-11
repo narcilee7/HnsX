@@ -119,8 +119,8 @@ func Validate(spec *DomainSpec) error {
 		if id == "" {
 			return errors.New("skill map contains an entry with empty id")
 		}
-		if s.Prompt == "" {
-			return fmt.Errorf("skill %q: prompt is required", id)
+		if len(s.Prompts) == 0 && len(s.Tools) == 0 && len(s.McpRefs) == 0 && len(s.Examples) == 0 {
+			return fmt.Errorf("skill %q: must have at least one of prompts/tools/mcp_refs/examples", id)
 		}
 	}
 
