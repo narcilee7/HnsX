@@ -73,6 +73,9 @@ Use "hnsx <command> --help" for per-command details.
 	// v0.7 Power: format / diff / replay / debug bundle / plugin.
 	cmd.AddCommand(newPowerCmd(&cfg))
 
+	// v1.0 Product: telemetry opt-in.
+	cmd.AddCommand(newTelemetryCmd(&cfg))
+
 	// Remote commands (preserved; deprecation warnings begin in v0.4).
 	cmd.AddCommand(newRemoteCmd(&cfg))
 
