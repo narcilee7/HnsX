@@ -9,6 +9,8 @@ export interface MetricSummary {
   avg_duration_ms?: number
   agent_invocations?: number
   tool_invocations?: number
+  prompt_tokens?: number
+  completion_tokens?: number
 }
 
 export interface AgentMetric {

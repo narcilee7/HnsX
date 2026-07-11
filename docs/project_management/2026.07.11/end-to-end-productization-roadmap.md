@@ -174,12 +174,12 @@ Refs：`hnsx-console/src/pages/SessionDetailPage.tsx`、`hnsx-console/src/compon
 
 ### B3 — Dashboard 真实数据 + 可观测性默认开启
 
-- [ ] **console** `DashboardPage.tsx` 接入 `/api/v1/metrics`：24h cost、失败率、pending approvals、最近 sessions
-- [ ] **console** `LocalObservabilityDashboard.tsx` 移除 mock，接入真实 metrics / trace 摘要
-- [ ] **deploy** `deployments/local/docker-compose.yml` 默认启动 server + postgres + worker + tempo + grafana + OTLP exporter
-- [ ] **server** `HNSX_OTEL_EXPORTER` 默认值为 `otlp`，未设置时不静默关闭
-- [ ] **infra** 提供 5 张 Grafana dashboard JSON：session overview / cost / latency / policy violations / worker health
-- [ ] **console** `/observability` 页面在未起 Grafana 时显示友好空状态 + 启动命令
+- [x] **console** `DashboardPage.tsx` 接入 `/api/v1/metrics`：24h cost、失败率、pending approvals、最近 sessions
+- [x] **console** `LocalObservabilityDashboard.tsx` 移除 mock，接入真实 metrics / trace 摘要
+- [x] **deploy** `deployments/local/docker-compose.yml` 默认启动 server + postgres + worker + tempo + grafana + OTLP exporter
+- [x] **server** `HNSX_OTEL_EXPORTER` 默认值为 `otlp`，未设置时不静默关闭
+- [x] **infra** 提供 5 张 Grafana dashboard JSON：session overview / cost / latency / policy violations / worker health
+- [x] **console** `/observability` 页面在未起 Grafana 时显示友好空状态 + 启动命令
 
 #### 验收
 
