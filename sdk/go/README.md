@@ -1,15 +1,49 @@
 # HnsX Go SDK
 
-This directory is reserved for the HnsX Go SDK. It is currently a placeholder
-module (`github.com/hnsx-io/hnsx/sdk/go`) with no source files while the
-server-side Go module (`hnsx-server`) is being actively developed.
+Go SDK for the HnsX Harness platform REST API.
 
-It is **not yet included in `go.work`**. Once implementation starts, add it to
-`go.work` so the workspace covers both `hnsx-server/` and `sdk/go/`.
+## Install
 
-Planned scope:
-- `DomainSpec` / `Session` / `Observation` types generated from `proto/hnsx/v1`.
-- Client for the control-plane REST API (`docs/server-design/api-design.md`).
-- Helpers for building agent adapters in Go.
+```bash
+go get github.com/hnsx-io/hnsx/sdk/go
+```
 
-See `sdk/node/` for the TypeScript SDK reference implementation.
+## Usage
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+
+	"github.com/hnsx-io/hnsx/sdk/go"
+)
+
+func main() {
+	client := hnsx.NewClient("http://127.0.0.1:50052")
+
+	session, err := client.Sessions.Trigger(context.Background(), "customer-service", map[string]any{
+		"question": "I want a refund",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println(session.ID, session.State)
+}
+```
+
+## Resources
+
+- `client.Domains` — list, get, register YAML
+- `client.Sessions` — list, get, trigger, cancel
+- `client.Traces` — list, get
+- `client.Approvals` — list, approve, reject
+- `client.Evals` — list sets, create, run
+
+## Development
+
+```bash
+cd sdk/go
+go test ./...
+```
