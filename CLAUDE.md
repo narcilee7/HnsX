@@ -75,7 +75,38 @@ HnsX/
 1. `make build-server` 能过
 2. `go test ./...` 能过
 3. `./scripts/smoke.sh` 能过
-4. 如果改 API，检查 `hnsx-console/src/api/` 和 `hnsx-console/src/api/mappers.ts`
+4. `./scripts/smoke-cli.sh` 能过（CLI 表面）
+5. 如果改 API，检查 `hnsx-console/src/api/` 和 `hnsx-console/src/api/mappers.ts`
+6. 如果改 CLI 共享的 client 接口，同步更新 `hnsx-server/cmd/hnsx/cli/` 下的资源命令
+
+### 4.2.1 CLI 命令约定（v1.0）
+
+完整命令词表见 [`docs/cli-roadmap.md`](docs/cli-roadmap.md) §2。改动 CLI 时遵守：
+
+- **资源导向命名**：`hnsx <verb> <resource>`，类似 `kubectl` / `gh`
+- **Output 三态**：每条 list/show 默认 human 表格，加 `--output json|quiet` 切换
+- **退出码语义化**：`0` 成功 / `1` 用户错 / `2` 资源错 / `3` 服务器错 / `4` 权限错 / `5` 网络错
+- **配置三层**：`--flag` > `HNSX_*` env > `~/.config/hnsx/*.yaml`
+- **破坏性命令必须 `--confirm`**：policy apply / delete、secret set / delete、eval set delete
+- **共享 `internal/client/`**：CLI 不重写协议，加 endpoint 时同步在 `cmd/hnsx/cli/<resource>.go` 加新子命令
+- **测试**：单元测试放 `<x>_test.go`（同包），端到端 smoke 加进 `scripts/smoke-cli.sh`
+- **deprecated 命令**：只追加不删，旧 `hnsx remote <x>` 标记 hidden + 移除计划写进 v1.1
+
+常见新增命令落位：
+
+| 类型 | 文件 | 函数 |
+|---|---|---|
+| 资源 list/show | `cli/<resource>.go` | `newResource{List,Show,...}Cmd` |
+| 资源 trigger/exec | `cli/<resource>.go` | 同上 |
+| 治理（policy/secret/audit） | `cli/governance.go` | `newGovernanceCmd` 下挂 |
+| 表面（console/tui/update） | `cli/console.go` / `update.go` | 独立 command |
+| 高级（format/diff/replay） | `cli/power.go` | `newPowerCmd` 下挂 |
+
+每次新增 CLI 子命令至少满足：
+1. `--help` 写清楚用法 + 至少 1 个例子
+2. `human | json | quiet` 三种 output 都合理
+3. 至少 1 条单元测试（参数解析、边界、helper）
+4. smoke-cli.sh 至少 1 行覆盖
 
 改 `hnsx-worker` 时：
 
