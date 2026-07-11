@@ -256,11 +256,11 @@ Refs：`sdk/node/src/index.ts`、`sdk/node/src/client.ts`
 
 ### C2 — Python SDK
 
-- [ ] **sdk/python** 新建包：`hnsx/client.py`、`hnsx/models.py`、`hnsx/errors.py`
-- [ ] **sdk/python** 复用 `hnsx_worker/proto_client` 或新写 REST client（优先 REST，与 Node 一致）
-- [ ] **sdk/python** DomainSpec builder helper：`DomainSpecBuilder`
-- [ ] **sdk/python** SSE 消费 helper
-- [ ] **sdk/python** `pyproject.toml`、README、pytest 测试
+- [x] **sdk/python** 新建包：`hnsx/client.py`、`hnsx/models.py`、`hnsx/errors.py`
+- [x] **sdk/python** 复用 `hnsx_worker/proto_client` 或新写 REST client（优先 REST，与 Node 一致）
+- [x] **sdk/python** DomainSpec builder helper：`DomainSpecBuilder`
+- [x] **sdk/python** SSE 消费 helper
+- [x] **sdk/python** `pyproject.toml`、README、pytest 测试
 
 #### 验收
 
