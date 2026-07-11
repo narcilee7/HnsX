@@ -158,11 +158,11 @@ Refs：`hnsx-console/src/App.tsx`、`hnsx-console/src/components/layout/Sidebar.
 
 ### B2 — Session 实时流中的审批与 Policy
 
-- [ ] **console** `SessionDetailPage.tsx` 为 `paused` 状态绑定 Approve/Reject 按钮
-- [ ] **console** `ObservationTimeline.tsx` 渲染 approval 中断标记、预算/Policy 违规卡片
-- [ ] **console** Session 头部增加 Budget/Policy 摘要卡片（复用 server 返回的 cost/state）
-- [ ] **server** 确保 approval 决议后正确唤醒 session 并推送 SSE `session_resumed`
-- [ ] **worker** 接入 approval bus（当前 `session_executor.py:597` 中 `approval_bus=None`），让 worker 侧 policy 触发审批时能同步挂起
+- [x] **console** `SessionDetailPage.tsx` 为 `paused` 状态绑定 Approve/Reject 按钮
+- [x] **console** `ObservationTimeline.tsx` 渲染 approval 中断标记、预算/Policy 违规卡片
+- [x] **console** Session 头部增加 Budget/Policy 摘要卡片（复用 server 返回的 cost/state）
+- [x] **server** 确保 approval 决议后正确唤醒 session 并推送 SSE `session_resumed`
+- [x] **worker** 接入 approval bus（当前 `session_executor.py:597` 中 `approval_bus=None`），让 worker 侧 policy 触发审批时能同步挂起
 
 #### 验收
 

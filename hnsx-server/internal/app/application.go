@@ -302,6 +302,16 @@ func (b approvalStateBroadcaster) PublishApproval(event string, a *approvalmodel
 			Timestamp: now,
 			Payload:   map[string]any{"state": "running"},
 		})
+		b.state.PublishObservation(a.SessionID, runtime.Observation{
+			Kind:      "session_resumed",
+			SessionID: a.SessionID,
+			DomainID:  a.DomainID,
+			Timestamp: now,
+			Payload: map[string]any{
+				"reason":      "approval_resolved",
+				"approval_id": a.ID,
+			},
+		})
 	}
 	_ = base
 }

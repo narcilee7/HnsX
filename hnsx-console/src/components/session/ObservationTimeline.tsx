@@ -28,6 +28,8 @@ const kindVariantMap: Record<string, 'default' | 'secondary' | 'destructive' | '
   thinking: 'outline',
   approval_required: 'destructive',
   approval_resolved: 'default',
+  policy_violation: 'destructive',
+  session_resumed: 'default',
 }
 
 const kindAccentVar: Record<string, string> = {
@@ -43,6 +45,8 @@ const kindAccentVar: Record<string, string> = {
   thinking: 'var(--chart-5)',
   approval_required: 'var(--danger)',
   approval_resolved: 'var(--success)',
+  policy_violation: 'var(--danger)',
+  session_resumed: 'var(--success)',
 }
 
 export function ObservationCard({ observation, depth = 0, agentChanged }: ObservationCardProps) {
@@ -141,9 +145,12 @@ export function ObservationCard({ observation, depth = 0, agentChanged }: Observ
 
         {expanded && (
           <CardContent className="space-y-2 p-3 pt-0">
-            {(observation.kind === 'approval_required' || observation.kind === 'approval_resolved') &&
+            {(observation.kind === 'approval_required' ||
+              observation.kind === 'approval_resolved' ||
+              observation.kind === 'policy_violation' ||
+              observation.kind === 'session_resumed') &&
               isObject(observation.payload) && (
-                <ApprovalSummary payload={observation.payload as Record<string, unknown>} />
+                <EventSummary kind={observation.kind} payload={observation.payload as Record<string, unknown>} />
               )}
             {observation.payload && isObject(observation.payload) && Object.keys(observation.payload).length > 0 && (
               <div className="space-y-1">
@@ -240,7 +247,29 @@ export function useObservationFilters(observations: ObservationViewModel[]) {
   return { agents, kinds }
 }
 
-function ApprovalSummary({ payload }: { payload: Record<string, unknown> }) {
+function EventSummary({ kind, payload }: { kind: string; payload: Record<string, unknown> }) {
+  if (kind === 'policy_violation') {
+    const rule = payload.rule as string | undefined
+    const reason = payload.reason as string | undefined
+    return (
+      <div className="space-y-1 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs">
+        <div className="font-medium text-destructive">Policy Violation</div>
+        {rule && <div className="text-muted-foreground">Rule: {rule}</div>}
+        {reason && <div className="text-muted-foreground">Reason: {reason}</div>}
+      </div>
+    )
+  }
+
+  if (kind === 'session_resumed') {
+    const reason = payload.reason as string | undefined
+    return (
+      <div className="space-y-1 rounded-md border border-[var(--chart-grid)]/60 p-2 text-xs">
+        <div className="font-medium">Session Resumed</div>
+        {reason && <div className="text-muted-foreground">Reason: {reason}</div>}
+      </div>
+    )
+  }
+
   const action = (payload.action || payload.resource || 'human approval') as string
   const status = payload.status as string | undefined
   const risk = payload.risk_level as string | undefined
@@ -257,7 +286,9 @@ function ApprovalSummary({ payload }: { payload: Record<string, unknown> }) {
       {requestedBy && <div className="text-muted-foreground">Requested by: {String(requestedBy)}</div>}
       {reviewedBy && <div className="text-muted-foreground">Reviewed by: {String(reviewedBy)}</div>}
       {comment && <div className="text-muted-foreground">Comment: {String(comment)}</div>}
-      {(context?.reason as string | undefined) && <div className="text-muted-foreground">Reason: {String(context?.reason)}</div>}
+      {(context?.reason as string | undefined) && (
+        <div className="text-muted-foreground">Reason: {String(context?.reason)}</div>
+      )}
     </div>
   )
 }
