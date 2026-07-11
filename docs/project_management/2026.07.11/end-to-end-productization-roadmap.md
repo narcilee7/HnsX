@@ -118,12 +118,12 @@ Refs：`hnsx-server/cmd/hnsx/cli/run.go`、`hnsx-worker/hnsx_worker/session_exec
 
 ### A4 — Console Domain 编辑器闭环
 
-- [ ] **server** 实现 `PUT /api/v1/domains/:id` 与 `POST /api/v1/domains/:id/validate`
-- [ ] **server** `POST /api/v1/domains/:id/run` 支持从已注册 domain 触发本地/远端 session
-- [ ] **console** `DomainDetailPage.tsx` 从 API 加载真实 harness YAML 并传入编辑器
-- [ ] **console** `DomainEditor.tsx` 绑定 `onSave` / `onValidate` / `onRun`
-- [ ] **console** `DomainsPage.tsx` 的 "Register Domain" 按钮绑定上传/粘贴 YAML 弹窗
-- [ ] **console** `VersionsPanel` 接入真实版本历史（当前硬编码 `total:1`，见 `hnsx-server/pkg/api/domains.go:122-138`）
+- [x] **server** 实现 `PUT /api/v1/domains/:id` 与 `POST /api/v1/domains/:id/validate`
+- [x] **server** `POST /api/v1/domains/:id/run` 支持从已注册 domain 触发本地/远端 session
+- [x] **console** `DomainDetailPage.tsx` 从 API 加载真实 harness YAML 并传入编辑器
+- [x] **console** `DomainEditor.tsx` 绑定 `onSave` / `onValidate` / `onRun`
+- [x] **console** `DomainsPage.tsx` 的 "Register Domain" 按钮绑定上传/粘贴 YAML 弹窗
+- [x] **console** `VersionsPanel` 接入真实版本历史（当前硬编码 `total:1`，见 `hnsx-server/pkg/api/domains.go:122-138`）
 
 #### 验收
 
