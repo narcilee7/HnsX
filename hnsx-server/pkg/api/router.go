@@ -82,8 +82,10 @@ func newRouter(s *Server) *gin.Engine {
 		approvals := v1.Group("/approvals")
 		{
 			approvals.GET("", s.ListApprovals)
+			approvals.POST("", s.CreateApproval)
 			ap := approvals.Group("/:id")
 			{
+				ap.GET("", s.GetApproval)
 				ap.POST("/approve", s.ApproveApproval)
 				ap.POST("/reject", s.RejectApproval)
 			}
