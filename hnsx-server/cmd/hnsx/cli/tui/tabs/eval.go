@@ -3,6 +3,7 @@ package tabs
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -20,9 +21,11 @@ type EvalTab struct {
 	height int
 	theme  common.Theme
 
-	sets     []client.EvalSet
-	selected int
-	err      error
+	sets        []client.EvalSet
+	filtered    []client.EvalSet
+	selected    int
+	filterQuery string
+	err         error
 
 	// detail state
 	inDetail bool
@@ -63,13 +66,32 @@ func (t EvalTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case evalSetsLoadedMsg:
 		t.sets = msg.items
 		t.err = msg.err
-		if t.selected >= len(t.sets) {
-			t.selected = len(t.sets) - 1
+		t.applyFilter()
+		if t.selected >= len(t.filtered) {
+			t.selected = len(t.filtered) - 1
 		}
 		if t.selected < 0 {
 			t.selected = 0
 		}
 		return t, nil
+
+	case SelectMsg:
+		for i, s := range t.filtered {
+			if s.ID == msg.ID {
+				t.selected = i
+				return t, nil
+			}
+		}
+		return t, nil
+
+	case FilterMsg:
+		t.filterQuery = strings.ToLower(msg.Query)
+		t.applyFilter()
+		return t, nil
+
+	case RefreshMsg:
+		return t, t.fetchSets()
+
 	case tickMsg:
 		return t, t.fetchSets()
 	case actionMsg:
@@ -84,13 +106,13 @@ func (t EvalTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.selected--
 			}
 		case "down", "j":
-			if t.selected < len(t.sets)-1 {
+			if t.selected < len(t.filtered)-1 {
 				t.selected++
 			}
 		case "enter":
-			if t.selected >= 0 && t.selected < len(t.sets) {
+			if t.selected >= 0 && t.selected < len(t.filtered) {
 				t.inDetail = true
-				t.detail = newEvalDetail(t.client, t.sets[t.selected].ID, t.theme)
+				t.detail = newEvalDetail(t.client, t.filtered[t.selected].ID, t.theme)
 				t.detail.setSize(t.width, t.height)
 				return t, t.detail.Init()
 			}
@@ -120,7 +142,7 @@ func (t EvalTab) View() string {
 
 	headers := []string{"ID", "DOMAIN", "CASES", "LAST RUN"}
 	var rows []components.Row
-	for _, s := range t.sets {
+	for _, s := range t.filtered {
 		rows = append(rows, components.Row{Cells: []string{
 			s.ID,
 			s.DomainID,
@@ -145,12 +167,26 @@ func (t EvalTab) fetchSets() tea.Cmd {
 }
 
 func (t EvalTab) runEval() tea.Cmd {
-	if t.selected < 0 || t.selected >= len(t.sets) {
+	if t.selected < 0 || t.selected >= len(t.filtered) {
 		return nil
 	}
 	return func() tea.Msg {
-		_, err := t.client.RunEval(t.sets[t.selected].ID)
+		_, err := t.client.RunEval(t.filtered[t.selected].ID)
 		return actionMsg{err: err, kind: "run-eval"}
+	}
+}
+
+func (t *EvalTab) applyFilter() {
+	if t.filterQuery == "" {
+		t.filtered = append([]client.EvalSet(nil), t.sets...)
+		return
+	}
+	t.filtered = t.filtered[:0]
+	for _, s := range t.sets {
+		if strings.Contains(strings.ToLower(s.ID), t.filterQuery) ||
+			strings.Contains(strings.ToLower(s.DomainID), t.filterQuery) {
+			t.filtered = append(t.filtered, s)
+		}
 	}
 }
 

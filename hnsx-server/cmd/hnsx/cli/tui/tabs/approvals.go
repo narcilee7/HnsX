@@ -2,6 +2,7 @@ package tabs
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,9 +20,11 @@ type ApprovalsTab struct {
 	height int
 	theme  common.Theme
 
-	approvals []common.ApprovalItem
-	selected  int
-	err       error
+	approvals   []common.ApprovalItem
+	filtered    []common.ApprovalItem
+	selected    int
+	filterQuery string
+	err         error
 
 	// reject input state
 	rejecting bool
@@ -76,13 +79,32 @@ func (t ApprovalsTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case approvalsLoadedMsg:
 		t.approvals = msg.items
 		t.err = msg.err
-		if t.selected >= len(t.approvals) {
-			t.selected = len(t.approvals) - 1
+		t.applyFilter()
+		if t.selected >= len(t.filtered) {
+			t.selected = len(t.filtered) - 1
 		}
 		if t.selected < 0 {
 			t.selected = 0
 		}
 		return t, nil
+
+	case SelectMsg:
+		for i, a := range t.filtered {
+			if a.ID == msg.ID {
+				t.selected = i
+				return t, nil
+			}
+		}
+		return t, nil
+
+	case FilterMsg:
+		t.filterQuery = strings.ToLower(msg.Query)
+		t.applyFilter()
+		return t, nil
+
+	case RefreshMsg:
+		return t, t.fetchApprovals()
+
 	case tickMsg:
 		return t, tea.Batch(t.fetchApprovals(), tickApprovals())
 	case actionMsg:
@@ -97,13 +119,13 @@ func (t ApprovalsTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.selected--
 			}
 		case "down", "j":
-			if t.selected < len(t.approvals)-1 {
+			if t.selected < len(t.filtered)-1 {
 				t.selected++
 			}
 		case "a":
 			return t, t.approve()
 		case "x":
-			if t.selected >= 0 && t.selected < len(t.approvals) {
+			if t.selected >= 0 && t.selected < len(t.filtered) {
 				t.rejecting = true
 				t.input.Focus()
 				return t, nil
@@ -144,7 +166,7 @@ func (t ApprovalsTab) View() string {
 
 	headers := []string{"SESSION", "RISK", "REASON", "AGE"}
 	var rows []components.Row
-	for _, a := range t.approvals {
+	for _, a := range t.filtered {
 		rows = append(rows, components.Row{Cells: []string{
 			a.SessionID,
 			a.Risk,
@@ -169,22 +191,37 @@ func (t ApprovalsTab) fetchApprovals() tea.Cmd {
 }
 
 func (t ApprovalsTab) approve() tea.Cmd {
-	if t.selected < 0 || t.selected >= len(t.approvals) {
+	if t.selected < 0 || t.selected >= len(t.filtered) {
 		return nil
 	}
 	return func() tea.Msg {
-		err := t.client.ApproveApproval(t.approvals[t.selected].ID)
+		err := t.client.ApproveApproval(t.filtered[t.selected].ID)
 		return actionMsg{err: err, kind: "approve"}
 	}
 }
 
 func (t ApprovalsTab) reject(reason string) tea.Cmd {
-	if t.selected < 0 || t.selected >= len(t.approvals) {
+	if t.selected < 0 || t.selected >= len(t.filtered) {
 		return nil
 	}
 	return func() tea.Msg {
-		err := t.client.RejectApproval(t.approvals[t.selected].ID, reason)
+		err := t.client.RejectApproval(t.filtered[t.selected].ID, reason)
 		return actionMsg{err: err, kind: "reject"}
+	}
+}
+
+func (t *ApprovalsTab) applyFilter() {
+	if t.filterQuery == "" {
+		t.filtered = append([]common.ApprovalItem(nil), t.approvals...)
+		return
+	}
+	t.filtered = t.filtered[:0]
+	for _, a := range t.approvals {
+		if strings.Contains(strings.ToLower(a.ID), t.filterQuery) ||
+			strings.Contains(strings.ToLower(a.SessionID), t.filterQuery) ||
+			strings.Contains(strings.ToLower(a.Risk), t.filterQuery) {
+			t.filtered = append(t.filtered, a)
+		}
 	}
 }
 

@@ -3,6 +3,7 @@ package tabs
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -21,9 +22,11 @@ type DomainsTab struct {
 	height int
 	theme  common.Theme
 
-	domains  []client.DomainListItem
-	selected int
-	err      error
+	domains     []client.DomainListItem
+	filtered    []client.DomainListItem
+	selected    int
+	filterQuery string
+	err         error
 
 	// trigger state
 	triggering bool
@@ -77,13 +80,32 @@ func (t DomainsTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case domainsLoadedMsg:
 		t.domains = msg.items
 		t.err = msg.err
-		if t.selected >= len(t.domains) {
-			t.selected = len(t.domains) - 1
+		t.applyFilter()
+		if t.selected >= len(t.filtered) {
+			t.selected = len(t.filtered) - 1
 		}
 		if t.selected < 0 {
 			t.selected = 0
 		}
 		return t, nil
+
+	case SelectMsg:
+		for i, d := range t.filtered {
+			if d.ID == msg.ID {
+				t.selected = i
+				return t, nil
+			}
+		}
+		return t, nil
+
+	case FilterMsg:
+		t.filterQuery = strings.ToLower(msg.Query)
+		t.applyFilter()
+		return t, nil
+
+	case RefreshMsg:
+		return t, t.fetchDomains()
+
 	case tickMsg:
 		return t, tea.Batch(t.fetchDomains(), tickDomains())
 	case actionMsg:
@@ -98,13 +120,13 @@ func (t DomainsTab) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.selected--
 			}
 		case "down", "j":
-			if t.selected < len(t.domains)-1 {
+			if t.selected < len(t.filtered)-1 {
 				t.selected++
 			}
 		case "enter":
 			// TODO: show domain spec detail view in a follow-up polish phase.
 		case "R":
-			if t.selected >= 0 && t.selected < len(t.domains) {
+			if t.selected >= 0 && t.selected < len(t.filtered) {
 				t.triggering = true
 				t.input.Focus()
 				return t, nil
@@ -145,7 +167,7 @@ func (t DomainsTab) View() string {
 
 	headers := []string{"ID", "VERSION", "STATUS", "UPDATED"}
 	var rows []components.Row
-	for _, d := range t.domains {
+	for _, d := range t.filtered {
 		rows = append(rows, components.Row{Cells: []string{
 			d.ID,
 			d.Version,
@@ -161,6 +183,21 @@ func (t DomainsTab) View() string {
 	return body
 }
 
+func (t *DomainsTab) applyFilter() {
+	if t.filterQuery == "" {
+		t.filtered = append([]client.DomainListItem(nil), t.domains...)
+		return
+	}
+	t.filtered = t.filtered[:0]
+	for _, d := range t.domains {
+		if strings.Contains(strings.ToLower(d.ID), t.filterQuery) ||
+			strings.Contains(strings.ToLower(d.Version), t.filterQuery) ||
+			strings.Contains(strings.ToLower(d.Status), t.filterQuery) {
+			t.filtered = append(t.filtered, d)
+		}
+	}
+}
+
 func (t DomainsTab) fetchDomains() tea.Cmd {
 	return func() tea.Msg {
 		items, err := t.client.ListDomains()
@@ -169,7 +206,7 @@ func (t DomainsTab) fetchDomains() tea.Cmd {
 }
 
 func (t DomainsTab) trigger(payload string) tea.Cmd {
-	if t.selected < 0 || t.selected >= len(t.domains) {
+	if t.selected < 0 || t.selected >= len(t.filtered) {
 		return nil
 	}
 	trigger := map[string]any{}
@@ -179,7 +216,7 @@ func (t DomainsTab) trigger(payload string) tea.Cmd {
 		}
 	}
 	return func() tea.Msg {
-		_, err := t.client.TriggerSession(t.domains[t.selected].ID, trigger)
+		_, err := t.client.TriggerSession(t.filtered[t.selected].ID, trigger)
 		return actionMsg{err: err, kind: "trigger"}
 	}
 }

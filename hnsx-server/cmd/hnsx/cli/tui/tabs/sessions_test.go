@@ -29,6 +29,7 @@ func TestSessionsTab_Navigation(t *testing.T) {
 		{ID: "s1", DomainID: "d1", State: "running"},
 		{ID: "s2", DomainID: "d2", State: "completed"},
 	}
+	tab.filtered = tab.sessions
 	tab.width = 100
 	tab.height = 30
 

@@ -1,10 +1,13 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -39,11 +42,20 @@ type Model struct {
 	helpOpen  bool
 	serverOK  bool
 	tabs      []tea.Model
+
+	// command mode state
+	commandMode   bool
+	commandInput  textinput.Model
+	commandResult string
+	commandErr    error
 }
 
 // NewModel creates the root TUI model.
 func NewModel(serverURL string) Model {
 	th := common.NewTheme()
+	ti := textinput.New()
+	ti.Prompt = ":"
+	ti.Placeholder = "command"
 	return Model{
 		serverURL: serverURL,
 		client:    common.NewClient(serverURL),
@@ -52,6 +64,7 @@ func NewModel(serverURL string) Model {
 		statusBar: NewStatusBar(th),
 		help:      components.NewHelp(th.Help),
 		serverOK:  true, // optimistic until first health check
+		commandInput: ti,
 		tabs: []tea.Model{
 			tabs.NewSessionsTab(serverURL),
 			tabs.NewTracesTab(serverURL),
@@ -78,16 +91,39 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles global input and delegates to the active tab.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if m.helpOpen {
-			if keyMatches(msg, m.keys.Back, m.keys.Help, m.keys.Quit) {
+	// Help overlay takes precedence.
+	if m.helpOpen {
+		if k, ok := msg.(tea.KeyMsg); ok {
+			if keyMatches(k, m.keys.Back, m.keys.Help, m.keys.Quit) {
 				m.helpOpen = false
 				return m, nil
 			}
-			return m, nil
 		}
+		return m, nil
+	}
 
+	// Command mode input handling.
+	if m.commandMode {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "esc":
+				m.commandMode = false
+				m.commandInput.SetValue("")
+				m.commandResult = ""
+				m.commandErr = nil
+				return m, nil
+			case "enter":
+				return m.dispatchCommand(m.commandInput.Value())
+			}
+		}
+		var cmd tea.Cmd
+		m.commandInput, cmd = m.commandInput.Update(msg)
+		return m, cmd
+	}
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
 		switch {
 		case keyMatches(msg, m.keys.Quit):
 			return m, tea.Quit
@@ -100,6 +136,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case keyMatches(msg, m.keys.PrevTab):
 			m.activeTab = (m.activeTab - 1 + len(tabNames)) % len(tabNames)
 			return m, nil
+		case msg.String() == "/":
+			m.commandMode = true
+			m.commandInput.Focus()
+			return m, textinput.Blink
 		}
 
 		// Number keys 1-7 switch tabs directly.
@@ -121,6 +161,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case healthMsg:
 		m.serverOK = msg.ok
+
+	case tabs.CommandResultMsg:
+		m.commandResult = msg.Info
+		m.commandErr = msg.Err
 
 	// Let active tab handle its own messages.
 	default:
@@ -146,7 +190,7 @@ func (m Model) View() string {
 	tabBar := m.renderTabBar()
 	tabBarHeight := lipgloss.Height(tabBar)
 
-	// Footer
+	// Footer / command bar
 	footer := m.theme.Footer.Render(m.renderFooter())
 	footerHeight := lipgloss.Height(footer)
 
@@ -189,7 +233,16 @@ func (m Model) renderTabBar() string {
 }
 
 func (m Model) renderFooter() string {
-	return fmt.Sprintf("tab:%d/%d  │  ↑↓/jk 选择  │  enter 详情  │  ? help  │  q quit", m.activeTab+1, len(tabNames))
+	if m.commandMode {
+		return m.commandInput.View()
+	}
+	extra := ""
+	if m.commandErr != nil {
+		extra = m.theme.Badge["danger"].Render(fmt.Sprintf("  %v", m.commandErr))
+	} else if m.commandResult != "" {
+		extra = m.theme.Badge["success"].Render(fmt.Sprintf("  %s", m.commandResult))
+	}
+	return fmt.Sprintf("tab:%d/%d  │  ↑↓/jk 选择  │  enter 详情  │  ? help  │  / command  │  q quit%s", m.activeTab+1, len(tabNames), extra)
 }
 
 func (m Model) helpLines() []string {
@@ -201,7 +254,7 @@ func (m Model) helpLines() []string {
 		"shift+tab  上一个 tab",
 		"?        显示帮助",
 		"q        退出",
-		"/        过滤",
+		"/        命令模式（/session <id>、/approve <id> 等）",
 		"esc      返回",
 		"r        刷新",
 	}
@@ -294,3 +347,164 @@ var tickInterval = 2 * time.Second
 func SetTickInterval(d time.Duration) {
 	tickInterval = d
 }
+
+// command represents a parsed /command input.
+type command struct {
+	name   string
+	args   []string
+	kwargs map[string]string
+}
+
+// parseCommand parses "/name arg1 arg2 key=value" into a command struct.
+// The leading slash is optional.
+func parseCommand(input string) command {
+	input = strings.TrimSpace(input)
+	input = strings.TrimPrefix(input, "/")
+	parts := strings.Fields(input)
+	if len(parts) == 0 {
+		return command{}
+	}
+	c := command{
+		name:   strings.ToLower(parts[0]),
+		kwargs: map[string]string{},
+	}
+	for _, p := range parts[1:] {
+		if idx := strings.Index(p, "="); idx > 0 {
+			c.kwargs[p[:idx]] = p[idx+1:]
+		} else {
+			c.args = append(c.args, p)
+		}
+	}
+	return c
+}
+
+// dispatchCommand executes a parsed command and returns the updated model + cmd.
+func (m Model) dispatchCommand(input string) (tea.Model, tea.Cmd) {
+	m.commandInput.SetValue("")
+	m.commandResult = ""
+	m.commandErr = nil
+
+	cmd := parseCommand(input)
+	switch cmd.name {
+	case "", "help":
+		m.commandResult = "commands: session, trace, domain, approve, reject, trigger, filter, refresh, quit"
+	case "quit", "q":
+		return m, tea.Quit
+	case "session", "s":
+		if len(cmd.args) == 0 {
+			m.commandErr = fmt.Errorf("usage: /session <id>")
+			return m, nil
+		}
+		m.activeTab = 0
+		return m.sendToTab(0, tabs.SelectMsg{ID: cmd.args[0]})
+	case "trace", "t":
+		if len(cmd.args) == 0 {
+			m.commandErr = fmt.Errorf("usage: /trace <id>")
+			return m, nil
+		}
+		m.activeTab = 1
+		return m.sendToTab(1, tabs.SelectMsg{ID: cmd.args[0]})
+	case "domain", "d":
+		if len(cmd.args) == 0 {
+			m.commandErr = fmt.Errorf("usage: /domain <id>")
+			return m, nil
+		}
+		m.activeTab = 5
+		return m.sendToTab(5, tabs.SelectMsg{ID: cmd.args[0]})
+	case "approve", "a":
+		if len(cmd.args) == 0 {
+			m.commandErr = fmt.Errorf("usage: /approve <id>")
+			return m, nil
+		}
+		return m, m.approve(cmd.args[0])
+	case "reject", "r":
+		if len(cmd.args) == 0 {
+			m.commandErr = fmt.Errorf("usage: /reject <id> [reason]")
+			return m, nil
+		}
+		reason := ""
+		if len(cmd.args) > 1 {
+			reason = strings.Join(cmd.args[1:], " ")
+		}
+		return m, m.reject(cmd.args[0], reason)
+	case "trigger":
+		if len(cmd.args) == 0 {
+			m.commandErr = fmt.Errorf("usage: /trigger <domain> [json]")
+			return m, nil
+		}
+		trigger, err := parseTriggerJSON(strings.Join(cmd.args[1:], " "))
+		if err != nil {
+			m.commandErr = fmt.Errorf("invalid trigger: %w", err)
+			return m, nil
+		}
+		return m, m.trigger(cmd.args[0], trigger)
+	case "filter", "f":
+		query := ""
+		if len(cmd.args) > 0 {
+			query = strings.Join(cmd.args, " ")
+		}
+		return m.sendToTab(m.activeTab, tabs.FilterMsg{Query: query})
+	case "refresh", "re":
+		return m.sendToTab(m.activeTab, tabs.RefreshMsg{})
+	default:
+		m.commandErr = fmt.Errorf("unknown command: %s", cmd.name)
+	}
+	return m, nil
+}
+
+func (m Model) sendToTab(idx int, msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.tabs[idx], cmd = m.tabs[idx].Update(msg)
+	return m, cmd
+}
+
+func (m Model) approve(id string) tea.Cmd {
+	return func() tea.Msg {
+		err := m.client.ApproveApproval(id)
+		if err != nil {
+			return tabs.CommandResultMsg{Err: err}
+		}
+		return tabs.CommandResultMsg{Info: fmt.Sprintf("approved %s", id)}
+	}
+}
+
+func (m Model) reject(id, reason string) tea.Cmd {
+	return func() tea.Msg {
+		err := m.client.RejectApproval(id, reason)
+		if err != nil {
+			return tabs.CommandResultMsg{Err: err}
+		}
+		return tabs.CommandResultMsg{Info: fmt.Sprintf("rejected %s", id)}
+	}
+}
+
+func (m Model) trigger(domainID string, trigger map[string]any) tea.Cmd {
+	return func() tea.Msg {
+		s, err := m.client.TriggerSession(domainID, trigger)
+		if err != nil {
+			return tabs.CommandResultMsg{Err: err}
+		}
+		return tabs.CommandResultMsg{Info: fmt.Sprintf("triggered %s", s.ID)}
+	}
+}
+
+func parseTriggerJSON(s string) (map[string]any, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return map[string]any{}, nil
+	}
+	out := map[string]any{}
+	if !strings.HasPrefix(s, "{") {
+		parts := strings.SplitN(s, "=", 2)
+		if len(parts) == 2 {
+			out[parts[0]] = parts[1]
+			return out, nil
+		}
+		return nil, fmt.Errorf("expected JSON object or key=value")
+	}
+	if err := json.Unmarshal([]byte(s), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
