@@ -199,4 +199,4 @@ trap - EXIT
 rm -f "$LOG"
 
 bold "ALL GOOD ✓"
-echo "  Try also: $BIN_DIR/hnsx run --domain $ROOT/example-domains/customer-service/domain.yaml --adapter noop"
+echo "  Try also: $BIN_DIR/hnsx run --domain $ROOT/example-domains/customer-service/domain.yaml"
