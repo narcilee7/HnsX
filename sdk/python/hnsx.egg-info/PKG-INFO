@@ -4,8 +4,8 @@ Version: 0.1.0
 Summary: Python SDK for the HnsX Harness platform.
 Author: HnsX Authors
 License: Apache-2.0
-Project-URL: Homepage, https://github.com/hnsx-io/hnsx
-Project-URL: Issues, https://github.com/hnsx-io/hnsx/issues
+Project-URL: Homepage, https://github.com/narcilee7/HnsX
+Project-URL: Issues, https://github.com/narcilee7/HnsX/issues
 Keywords: hnsx,agent,harness,sdk
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: Developers

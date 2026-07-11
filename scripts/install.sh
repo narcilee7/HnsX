@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-REPO="hnsx-io/hnsx"
+REPO="narcilee7/HnsX"
 BIN_NAME="hnsx"
 SERVER_BIN_NAME="hnsx-server"
 INSTALL_DIR="${HNSX_INSTALL_DIR:-$HOME/.local/bin}"
