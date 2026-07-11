@@ -16,9 +16,9 @@ import (
 type TracesTab struct {
 	client *common.Client
 
-	width   int
-	height  int
-	theme   common.Theme
+	width  int
+	height int
+	theme  common.Theme
 
 	traces      []common.TraceListItem
 	filtered    []common.TraceListItem

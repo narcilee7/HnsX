@@ -67,10 +67,10 @@ func harnessToProto(h *HarnessSpec) (*pb.Harness, error) {
 			return nil, fmt.Errorf("prompt %q schema: %w", id, err)
 		}
 		out.Prompts = append(out.Prompts, &pb.Prompt{
-			Id:          id,
-			Template:    p.Template,
-			PromptType:  p.Type,
-			Schema:      schema,
+			Id:         id,
+			Template:   p.Template,
+			PromptType: p.Type,
+			Schema:     schema,
 		})
 	}
 	for id, s := range h.Skills {
@@ -226,8 +226,8 @@ func harnessFromProto(h *pb.Harness) (*HarnessSpec, error) {
 
 func agentToProto(id string, a AgentSpec) *pb.Agent {
 	return &pb.Agent{
-		Id:           id,
-		Description:  a.Description,
+		Id:          id,
+		Description: a.Description,
 		Model: &pb.ModelRef{
 			Provider: a.Provider,
 			Model:    a.Model,
@@ -250,10 +250,10 @@ func agentFromProto(a *pb.Agent) (string, AgentSpec) {
 		return "", AgentSpec{}
 	}
 	return a.GetId(), AgentSpec{
-		ID:           a.GetId(),
-		Provider:     a.GetModel().GetProvider(),
-		Model:        a.GetModel().GetModel(),
-		Description:  a.GetDescription(),
+		ID:          a.GetId(),
+		Provider:    a.GetModel().GetProvider(),
+		Model:       a.GetModel().GetModel(),
+		Description: a.GetDescription(),
 		Adapter: AdapterConfig{
 			Kind:           a.GetAdapter().GetKind(),
 			TimeoutSeconds: int(a.GetAdapter().GetTimeoutSeconds()),
@@ -382,13 +382,13 @@ func sessionToProto(s *SessionSpec) *pb.Session {
 			for _, step := range s.Workflow.Steps {
 				input, _ := toJSONString(step.Input)
 				out.Workflow.Steps = append(out.Workflow.Steps, &pb.Step{
-					Id:          step.ID,
-					AgentRef:    step.Agent,
-					Input:       input,
-					Output:      step.Output,
-					Condition:   step.Condition,
-					Next:        step.Next,
-					OnError:     step.OnError,
+					Id:        step.ID,
+					AgentRef:  step.Agent,
+					Input:     input,
+					Output:    step.Output,
+					Condition: step.Condition,
+					Next:      step.Next,
+					OnError:   step.OnError,
 				})
 			}
 		}

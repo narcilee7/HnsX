@@ -151,16 +151,16 @@ func TestGetTrace_ReturnsObservationsAndRollup(t *testing.T) {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
 	var resp struct {
-		TraceID           string           `json:"trace_id"`
-		SessionID         string           `json:"session_id"`
-		DomainID          string           `json:"domain_id"`
-		Status            string           `json:"status"`
-		TotalCostUSD      float64          `json:"total_cost_usd"`
-		AgentInvocations  int              `json:"agent_invocations"`
-		ToolInvocations   int              `json:"tool_invocations"`
-		ObservationCount  int              `json:"observation_count"`
-		DurationMs        int64            `json:"duration_ms"`
-		Observations      []map[string]any `json:"observations"`
+		TraceID          string           `json:"trace_id"`
+		SessionID        string           `json:"session_id"`
+		DomainID         string           `json:"domain_id"`
+		Status           string           `json:"status"`
+		TotalCostUSD     float64          `json:"total_cost_usd"`
+		AgentInvocations int              `json:"agent_invocations"`
+		ToolInvocations  int              `json:"tool_invocations"`
+		ObservationCount int              `json:"observation_count"`
+		DurationMs       int64            `json:"duration_ms"`
+		Observations     []map[string]any `json:"observations"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)

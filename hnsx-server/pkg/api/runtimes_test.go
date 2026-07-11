@@ -57,9 +57,9 @@ func TestListRuntimes_ReturnsRegisteredWorkers(t *testing.T) {
 		Pid:      "12345",
 		Capacity: &pb.ResourceCapacity{
 			MaxConcurrentSessions: 4,
-			Providers:            []string{"anthropic", "openai"},
-			Models:               []string{"claude-sonnet-4"},
-			SandboxRuntimes:      []string{"none"},
+			Providers:             []string{"anthropic", "openai"},
+			Models:                []string{"claude-sonnet-4"},
+			SandboxRuntimes:       []string{"none"},
 		},
 		Labels: map[string]string{"gpu": "a100"},
 	}
@@ -69,7 +69,7 @@ func TestListRuntimes_ReturnsRegisteredWorkers(t *testing.T) {
 		Hostname: "host-b",
 		Capacity: &pb.ResourceCapacity{
 			MaxConcurrentSessions: 2,
-			Providers:            []string{"claudecode"},
+			Providers:             []string{"claudecode"},
 		},
 	}
 	if _, err := reg.Register(workerA); err != nil {

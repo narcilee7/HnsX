@@ -61,15 +61,15 @@ type Rules struct {
 // ListItem is what /api/v1/policies returns — enough metadata to drive
 // the Settings console without dragging in the rule body if it's large.
 type ListItem struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"`
-	BoundDomain string    `json:"bound_domain,omitempty"`
-	Budget      Budget    `json:"budget"`
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Description string      `json:"description,omitempty"`
+	BoundDomain string      `json:"bound_domain,omitempty"`
+	Budget      Budget      `json:"budget"`
 	Permissions Permissions `json:"permissions"`
 	Guardrails  []Guardrail `json:"guardrails"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
 }
 
 // Common policy errors.

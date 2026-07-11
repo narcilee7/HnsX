@@ -434,8 +434,29 @@ class WorkerService:
         finally:
             rc = handle.proc.wait()
             # The subprocess is responsible for emitting the authoritative
-            # session_end (completed/failed/cancelled). We only keep the
-            # bookkeeping cleanup here to avoid duplicate observations.
+            # session_end (completed/failed/cancelled). If it crashed without
+            # emitting one, synthesize a failed session_end so the scheduler
+            # can clean up the session state.
+            if not handle.session_ended and rc != 0:
+                log.warning(
+                    "session %s subprocess crashed (rc=%d); emitting synthetic failed session_end",
+                    handle.session_id,
+                    rc,
+                )
+                self._enqueue_observation(
+                    handle,
+                    {
+                        "kind": "session_end",
+                        "session_id": handle.session_id,
+                        "domain_id": "",
+                        "state": "failed",
+                        "payload": {
+                            "error": f"subprocess exited with code {rc}",
+                            "error_type": "SubprocessCrash",
+                        },
+                        "created_at_ms": int(time.time() * 1000),
+                    },
+                )
             with self._lock:
                 self._running.pop(handle.session_id, None)
             log.info("session %s exited rc=%d", handle.session_id, rc)
@@ -462,6 +483,7 @@ class WorkerService:
         )
 
         if obs.get("kind") == "session_end":
+            handle.session_ended = True
             payload = obs.get("payload") or {}
             result_dict = payload.get("result")
             if isinstance(result_dict, dict):
@@ -606,12 +628,13 @@ class WorkerService:
 
 
 class _SessionHandle:
-    __slots__ = ("proc", "session_id", "correlation_id")
+    __slots__ = ("proc", "session_id", "correlation_id", "session_ended")
 
     def __init__(self, proc: subprocess.Popen, session_id: str, correlation_id: str) -> None:
         self.proc = proc
         self.session_id = session_id
         self.correlation_id = correlation_id
+        self.session_ended = False
 
 
 def _outbound_iter(

@@ -7,9 +7,9 @@ import (
 
 	"gorm.io/gorm"
 
-	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 	"github.com/hnsx-io/hnsx/server/internal/worker/model"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
+	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
 const workerDefaultTenantUUID = "00000000-0000-0000-0000-000000000000"

@@ -34,9 +34,9 @@ type Repository interface {
 
 // InMemoryRepository is a thread-safe in-memory implementation.
 type InMemoryRepository struct {
-	mu       sync.RWMutex
-	records  []model.ObservationRecord
-	nextID   int64
+	mu      sync.RWMutex
+	records []model.ObservationRecord
+	nextID  int64
 }
 
 // NewInMemoryRepository constructs an empty repository.

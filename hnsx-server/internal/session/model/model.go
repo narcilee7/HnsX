@@ -18,12 +18,12 @@ type State string
 
 // Session lifecycle states.
 const (
-	StatePending    State = "pending"
-	StateRunning    State = "running"
-	StateCompleted  State = "completed"
-	StateFailed     State = "failed"
-	StateCancelled  State = "cancelled"
-	StatePaused     State = "paused"
+	StatePending   State = "pending"
+	StateRunning   State = "running"
+	StateCompleted State = "completed"
+	StateFailed    State = "failed"
+	StateCancelled State = "cancelled"
+	StatePaused    State = "paused"
 )
 
 // Common errors returned by the session service and repository.

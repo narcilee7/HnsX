@@ -356,7 +356,9 @@ func (c *Client) SessionEvents(ctx context.Context, id string) (<-chan Event, <-
 func (c *Client) DomainRegistryClient() v1connect.DomainRegistryServiceClient { return c.domainClient }
 
 // SessionSchedulerClient returns the underlying Connect session client.
-func (c *Client) SessionSchedulerClient() v1connect.SessionSchedulerServiceClient { return c.sessionClient }
+func (c *Client) SessionSchedulerClient() v1connect.SessionSchedulerServiceClient {
+	return c.sessionClient
+}
 
 // EvalClient returns the underlying Connect eval client.
 func (c *Client) EvalClient() v1connect.EvalServiceClient { return c.evalClient }
@@ -476,11 +478,11 @@ type EvalSet struct {
 
 // EvalCase is one test case inside an EvalSet.
 type EvalCase struct {
-	ID     string     `json:"id"`
-	Name   string     `json:"name"`
+	ID     string         `json:"id"`
+	Name   string         `json:"name"`
 	Input  map[string]any `json:"input"`
 	Expect map[string]any `json:"expect"`
-	Scorer EvalScorer   `json:"scorer"`
+	Scorer EvalScorer     `json:"scorer"`
 }
 
 // EvalScorer defines how to score a case.
@@ -510,14 +512,14 @@ type EvalRun struct {
 
 // EvalCaseResult is the outcome of one EvalCase within a run.
 type EvalCaseResult struct {
-	CaseID    string         `json:"case_id"`
-	SessionID string         `json:"session_id"`
-	Score     float64        `json:"score"`
-	Passed    bool           `json:"passed"`
-	Actual    map[string]any `json:"actual"`
-	Details   map[string]any `json:"details"`
-	DurationMs int64         `json:"duration_ms"`
-	CostUSD   float64        `json:"cost_usd"`
+	CaseID     string         `json:"case_id"`
+	SessionID  string         `json:"session_id"`
+	Score      float64        `json:"score"`
+	Passed     bool           `json:"passed"`
+	Actual     map[string]any `json:"actual"`
+	Details    map[string]any `json:"details"`
+	DurationMs int64          `json:"duration_ms"`
+	CostUSD    float64        `json:"cost_usd"`
 }
 
 // ListEvalSets returns all eval sets.

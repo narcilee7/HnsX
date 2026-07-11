@@ -11,7 +11,7 @@ const tabs = [
   { label: 'Workspace', href: (id: string) => `/domains/${id}/workspace`, icon: Briefcase },
   { label: 'Editor', href: (id: string) => `/domains/${id}`, icon: FileCode2 },
   { label: 'Runs', href: (id: string) => `/sessions?domain=${id}`, icon: PlayCircle },
-  { label: 'Evals', href: (_id: string) => `/evals`, icon: FlaskConical },
+  { label: 'Evals', href: () => `/evals`, icon: FlaskConical },
 ]
 
 export function DomainNav({ domainId }: DomainNavProps) {
