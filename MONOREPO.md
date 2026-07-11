@@ -9,11 +9,12 @@
 
 ### TypeScript workspace
 
-`pnpm-workspace.yaml` 声明三个子包：
+`pnpm-workspace.yaml` 声明四个子包：
 
 - `hnsx-console` — React 19 控制台（private）
 - `observability` — `@hnsx/observability` 组件库
 - `sdk/node` — `@hnsx/sdk-node` SDK
+- `website` — `@hnsx/website` Rspress 官网（private）
 
 ```bash
 # 安装所有 TS 依赖
@@ -24,6 +25,11 @@ pnpm build
 pnpm type-check
 pnpm lint
 pnpm test
+
+# 只构建官网
+cd website
+pnpm dev
+pnpm build
 ```
 
 ### Go modules
@@ -101,10 +107,11 @@ Go 和 Python 版本独立维护：
 ## 目录边界
 
 - `docs/` — 设计文档，变更需同步更新
+- `website/` — Rspress 官网与文档站，自动部署到 GitHub Pages
 - `proto/` — API 单一真相源，修改后必须 `make proto-all`
 - `hnsx-server/` — Go Control Plane（单一 module，双 cmd：CLI + server）
 - `hnsx-worker/` — Python Runtime Worker
-- `hnsx-console/` / `observability/` / `sdk/node/` — TypeScript 工作区
+- `hnsx-console/` / `observability/` / `sdk/node/` / `website` — TypeScript 工作区
 - `example-domains/` — DomainSpec YAML 示例
 
 ---
