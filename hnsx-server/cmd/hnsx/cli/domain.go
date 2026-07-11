@@ -21,7 +21,15 @@ func newDomainCmd(cfg *Config) *cobra.Command {
 	cmd.AddCommand(newDomainValidateCmd(cfg))
 	cmd.AddCommand(newDomainDeleteCmd(cfg))
 	cmd.AddCommand(newDomainExportCmd(cfg))
+	cmd.AddCommand(newDomainGroupFormatCmd(cfg))
 	return cmd
+}
+
+// newDomainGroupFormatCmd exposes the formatter under the `domain` resource
+// group as `hnsx domain format`. It reuses the implementation from
+// `hnsx power format` so both paths stay identical.
+func newDomainGroupFormatCmd(cfg *Config) *cobra.Command {
+	return newDomainFormatCmd(cfg)
 }
 
 func newDomainListCmd(cfg *Config) *cobra.Command {

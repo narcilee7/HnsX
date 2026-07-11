@@ -74,11 +74,11 @@ Refs：`proto/hnsx/v1/domain.proto`、`hnsx-server/pkg/spec/domain.go`、`exampl
 
 ### A2 — `hnsx init` + `hnsx domain format`
 
-- [ ] **cli** 新增 `hnsx init` 命令（`cli/discovery.go` 或新建 `cli/init.go`），支持 `--template` / `--output-dir`
-- [ ] **templates** 内置 4 个模板：`customer-service`、`code-review`、`research-assistant`、`blank`
-- [ ] **cli** 在 `hnsx domain` 下新增 `format` 子命令（与现有 `hnsx power format` 共存并标注推荐路径）
-- [ ] **formatter** 实现 YAML 标准化：固定缩进、按字段顺序排序、删除空行、统一字符串样式
-- [ ] **tests** 单元测试覆盖模板生成和 format
+- [x] **cli** 新增 `hnsx init` 命令（`cli/discovery.go` 或新建 `cli/init.go`），支持 `--template` / `--output-dir`
+- [x] **templates** 内置 4 个模板：`customer-service`、`code-review`、`research-assistant`、`blank`
+- [x] **cli** 在 `hnsx domain` 下新增 `format` 子命令（与现有 `hnsx power format` 共存并标注推荐路径）
+- [x] **formatter** 实现 YAML 标准化：固定缩进、按字段顺序排序、删除空行、统一字符串样式
+- [x] **tests** 单元测试覆盖模板生成和 format
 
 #### 验收
 

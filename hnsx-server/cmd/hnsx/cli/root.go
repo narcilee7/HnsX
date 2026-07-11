@@ -59,6 +59,7 @@ Use "hnsx <command> --help" for per-command details.
 	cmd.AddCommand(newResetCmd(&cfg))
 
 	// Discovery — v0.3 Lifesaver.
+	cmd.AddCommand(newInitCmd(&cfg))
 	cmd.AddCommand(newTryCmd(&cfg))
 	cmd.AddCommand(newExamplesCmd(&cfg))
 	cmd.AddCommand(newCompletionCmd())
