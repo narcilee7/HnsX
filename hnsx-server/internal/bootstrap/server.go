@@ -69,6 +69,7 @@ func NewServerFromArgs(args []string) (*Server, error) {
 		GoVersion: stdruntime.Version(),
 	}
 	apiServer := api.NewServer(build, application)
+	apiServer.TemplatesIndexPath = cfg.TemplatesIndexPath
 
 	connectSrv := controlplane.NewConnectServer(application)
 	apiServer.WithConnectHandler(connectSrv.Handler())

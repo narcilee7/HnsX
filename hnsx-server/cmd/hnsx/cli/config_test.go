@@ -85,3 +85,123 @@ func TestFileExists(t *testing.T) {
 	}
 	_ = os.Getenv // keep imports stable
 }
+
+func TestLoadConfigFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	data := []byte(`output: json
+verbose: true
+server_url: http://example.com:8080
+compose_file: /custom/compose.yaml
+no_tui: true
+`)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	fc, err := loadConfigFile(path)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if fc.Output != "json" {
+		t.Fatalf("output = %q", fc.Output)
+	}
+	if !fc.Verbose {
+		t.Fatal("verbose should be true")
+	}
+	if fc.ServerURL != "http://example.com:8080" {
+		t.Fatalf("server_url = %q", fc.ServerURL)
+	}
+}
+
+func TestLoadConfigFile_MissingIsNotError(t *testing.T) {
+	fc, err := loadConfigFile(filepath.Join(t.TempDir(), "missing.yaml"))
+	if err != nil {
+		t.Fatalf("missing file should not error: %v", err)
+	}
+	if fc.Output != "" {
+		t.Fatalf("expected empty output, got %q", fc.Output)
+	}
+}
+
+func TestConfigPriority_EnvOverridesFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte("output: json\nserver_url: http://file.example\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	t.Setenv("HNSX_CONFIG", path)
+	t.Setenv("HNSX_OUTPUT", "quiet")
+	cfg := Default()
+	if cfg.Output != "quiet" {
+		t.Fatalf("env should override file: got %q", cfg.Output)
+	}
+	if cfg.ServerURL != "http://file.example" {
+		t.Fatalf("file value should remain: got %q", cfg.ServerURL)
+	}
+}
+
+func TestConfigGetSet(t *testing.T) {
+	cfg := Default()
+	if err := cfg.Set("output", "json"); err != nil {
+		t.Fatalf("set output: %v", err)
+	}
+	v, err := cfg.Get("output")
+	if err != nil {
+		t.Fatalf("get output: %v", err)
+	}
+	if v != "json" {
+		t.Fatalf("output = %q", v)
+	}
+	if err := cfg.Set("output", "invalid"); err == nil {
+		t.Fatal("expected error for invalid output")
+	}
+	if err := cfg.Set("unknown", "x"); err == nil {
+		t.Fatal("expected error for unknown key")
+	}
+}
+
+func TestConfigSaveToFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hnsx", "config.yaml")
+	cfg := Config{
+		ConfigFile:  path,
+		Output:      "json",
+		Verbose:     true,
+		ServerURL:   "http://save.example",
+		ComposeFile: "/save/compose.yaml",
+		NoTui:       true,
+	}
+	if err := cfg.SaveToFile(); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	loaded, err := loadConfigFile(path)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if loaded.Output != "json" || !loaded.Verbose || loaded.ServerURL != "http://save.example" {
+		t.Fatalf("saved values mismatch: %+v", loaded)
+	}
+}
+
+func TestParseBool(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want bool
+	}{
+		{"true", true},
+		{"1", true},
+		{"yes", true},
+		{"on", true},
+		{"TRUE", true},
+		{"false", false},
+		{"0", false},
+		{"no", false},
+		{"", false},
+	} {
+		if got := parseBool(tc.in); got != tc.want {
+			t.Fatalf("parseBool(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}

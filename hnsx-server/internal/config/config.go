@@ -47,6 +47,11 @@ type Config struct {
 	// in memory after first load.
 	DomainCache bool `yaml:"domain_cache"`
 
+	// TemplatesIndexPath is the path to the template market index YAML.
+	// Defaults to "templates/index.yaml" relative to the server working
+	// directory. Empty disables the template endpoint.
+	TemplatesIndexPath string `yaml:"templates_index_path"`
+
 	// Redis is the optional Redis configuration. When present, the worker
 	// scheduling queue is backed by Redis so multiple Control Plane
 	// instances can share the same queue.
@@ -96,7 +101,8 @@ func Default() *Config {
 		Log: LogConfig{
 			Level: "info",
 		},
-		DomainCache: true,
+		DomainCache:        true,
+		TemplatesIndexPath: "templates/index.yaml",
 		Redis: RedisConfig{
 			Addr:           "127.0.0.1:6379",
 			QueueKeyPrefix: "hnsx:queue",
@@ -169,6 +175,9 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("HNSX_REDIS_QUEUE_PREFIX"); v != "" {
 		cfg.Redis.QueueKeyPrefix = v
+	}
+	if v := os.Getenv("HNSX_TEMPLATES_INDEX"); v != "" {
+		cfg.TemplatesIndexPath = v
 	}
 }
 

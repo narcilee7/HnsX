@@ -148,7 +148,32 @@ func newSessionShowCmd(cfg *Config) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			NewOutput(cfg.Output).Print(s)
+			o := NewOutput(cfg.Output)
+			if cfg.Output == "json" {
+				o.Print(s)
+				return nil
+			}
+			if cfg.Output == "quiet" {
+				fmt.Println(s.ID)
+				return nil
+			}
+			o.Card("Session", [][2]string{
+				{"id", s.ID},
+				{"domain", s.DomainID},
+				{"version", nonEmpty(s.DomainVersion, "-")},
+				{"state", s.State},
+				{"orchestration", nonEmpty(s.Orchestration, "-")},
+				{"started", nonEmpty(s.StartedAt, "-")},
+				{"completed", nonEmpty(s.CompletedAt, "-")},
+			})
+			if len(s.Trigger) > 0 {
+				o.Section("Trigger")
+				o.Print(s.Trigger)
+			}
+			if len(s.Result) > 0 {
+				o.Section("Result")
+				o.Print(s.Result)
+			}
 			return nil
 		},
 	}

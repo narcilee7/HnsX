@@ -1,0 +1,49 @@
+version: "1.0"
+templates:
+  - id: customer-service
+    name: Customer Service
+    description: |
+      Routes customer questions to triage/billing/technical agents.
+      Refunds and customer-data exports are gated behind human approval.
+    tags: [customer-support, workflow, approval]
+    source: example-domains/customer-service/domain.yaml
+    variables:
+      - name: company_name
+        default: Acme
+    requirements:
+      providers: [anthropic, openai]
+      min_workers: 1
+
+  - id: code-review
+    name: Code Review
+    description: |
+      Multi-turn PR reviewer that reads a diff and leaves structured comments.
+    tags: [developer-tools, multi-turn]
+    source: example-domains/code-review/domain.yaml
+    variables: []
+    requirements:
+      providers: [anthropic, openai]
+      min_workers: 1
+
+  - id: research-assistant
+    name: Research Assistant
+    description: |
+      ReAct agent with web search and summarisation tools.
+    tags: [research, react]
+    source: example-domains/financial-analysis/domain.yaml
+    variables: []
+    requirements:
+      providers: [anthropic, openai]
+      min_workers: 1
+
+  - id: mcp-demo
+    name: MCP Demo
+    description: |
+      Demonstrates calling an MCP server from a multi-turn agent.
+    tags: [demo, mcp, multi-turn]
+    source: example-domains/mcp-demo/domain.yaml
+    variables: []
+    requirements:
+      providers: [anthropic, openai]
+      min_workers: 1
+      sandbox_runtimes: [none]

@@ -109,6 +109,7 @@ func newRouter(s *Server) *gin.Engine {
 		v1.GET("/audit", s.ListAudit)
 		v1.GET("/metrics", s.GetMetrics)
 		v1.GET("/runtimes", s.ListRuntimes)
+		v1.GET("/templates", s.ListTemplates)
 
 		secrets := v1.Group("/secrets")
 		{

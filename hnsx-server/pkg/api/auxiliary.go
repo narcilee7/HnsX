@@ -5,10 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v3"
 
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	approvalmodel "github.com/hnsx-io/hnsx/server/internal/approval/model"
@@ -22,6 +26,129 @@ import (
 	tracemodel "github.com/hnsx-io/hnsx/server/internal/trace/model"
 	workerpkg "github.com/hnsx-io/hnsx/server/internal/worker"
 )
+
+// TemplateIndex is the shape of the template market index YAML
+// (templates/index.yaml). It is duplicated here intentionally so the API
+// layer can serve the gallery without importing CLI packages.
+type TemplateIndex struct {
+	Version   string          `yaml:"version"`
+	Templates []TemplateEntry `yaml:"templates"`
+}
+
+// TemplateEntry describes one template in the index.
+type TemplateEntry struct {
+	ID           string              `yaml:"id"`
+	Name         string              `yaml:"name"`
+	Description  string              `yaml:"description"`
+	Tags         []string            `yaml:"tags"`
+	Source       string              `yaml:"source"`
+	Variables    []TemplateVariable  `yaml:"variables"`
+	Requirements TemplateRequirements `yaml:"requirements"`
+}
+
+// TemplateVariable is a user-settable placeholder in a template.
+type TemplateVariable struct {
+	Name    string `yaml:"name"`
+	Default string `yaml:"default"`
+}
+
+// TemplateRequirements describes runtime prerequisites.
+type TemplateRequirements struct {
+	Providers       []string `yaml:"providers"`
+	MinWorkers      int      `yaml:"min_workers"`
+	SandboxRuntimes []string `yaml:"sandbox_runtimes"`
+}
+
+// ListTemplates handles GET /api/v1/templates — returns the discoverable
+// template market. The response mirrors the CLI `hnsx examples` output so
+// the console can render a gallery. An empty or missing index is not an
+// error; it renders the "no templates" empty state.
+func (s *Server) ListTemplates(c *gin.Context) {
+	if s.TemplatesIndexPath == "" {
+		writeJSON(c, http.StatusOK, map[string]any{
+			"items": []map[string]any{},
+			"total": 0,
+		})
+		return
+	}
+
+	idx, err := loadTemplateIndex(s.TemplatesIndexPath)
+	if err != nil {
+		// Missing index is OK (empty state); any other read error is 500.
+		if os.IsNotExist(err) {
+			writeJSON(c, http.StatusOK, map[string]any{
+				"items": []map[string]any{},
+				"total": 0,
+			})
+			return
+		}
+		writeError(c, NewInternal(err))
+		return
+	}
+
+	tag := strings.TrimSpace(strings.ToLower(c.Query("tag")))
+	items := make([]map[string]any, 0, len(idx.Templates))
+	for _, t := range idx.Templates {
+		if tag != "" && !sliceContainsFold(t.Tags, tag) {
+			continue
+		}
+		items = append(items, map[string]any{
+			"id":           t.ID,
+			"name":         t.Name,
+			"description":  strings.TrimSpace(t.Description),
+			"tags":         t.Tags,
+			"source":       t.Source,
+			"variables":    templateVariablesToJSON(t.Variables),
+			"requirements": templateRequirementsToJSON(t.Requirements),
+		})
+	}
+
+	writeJSON(c, http.StatusOK, map[string]any{
+		"items": items,
+		"total": len(items),
+	})
+}
+
+func loadTemplateIndex(path string) (*TemplateIndex, error) {
+	path = filepath.Clean(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var idx TemplateIndex
+	if err := yaml.Unmarshal(data, &idx); err != nil {
+		return nil, fmt.Errorf("parse template index: %w", err)
+	}
+	return &idx, nil
+}
+
+func templateVariablesToJSON(vars []TemplateVariable) []map[string]any {
+	out := make([]map[string]any, 0, len(vars))
+	for _, v := range vars {
+		out = append(out, map[string]any{
+			"name":    v.Name,
+			"default": v.Default,
+		})
+	}
+	return out
+}
+
+func templateRequirementsToJSON(req TemplateRequirements) map[string]any {
+	return map[string]any{
+		"providers":        req.Providers,
+		"min_workers":      req.MinWorkers,
+		"sandbox_runtimes": req.SandboxRuntimes,
+	}
+}
+
+func sliceContainsFold(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if strings.EqualFold(strings.TrimSpace(s), needle) {
+			return true
+		}
+	}
+	return false
+}
 
 // ListTraces handles GET /api/v1/traces — page of TraceSummary records
 // computed directly from the observations table. The shape is the
