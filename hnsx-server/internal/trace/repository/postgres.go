@@ -197,19 +197,19 @@ func (r *PostgresRepository) ListSummaries(filter model.TraceListFilter) (model.
 	// Detail; for List we keep the rollup simple and rely on the most
 	// recent observation as the completion marker.
 	type aggRow struct {
-		TraceID             string
-		SessionID           string
-		DomainID            string
-		DomainVersion       string
-		StartedAt           time.Time
-		CompletedAt         time.Time
-		ObservationCount    int
-		TotalCostUSD        float64
-		TotalPromptTokens   int
+		TraceID               string
+		SessionID             string
+		DomainID              string
+		DomainVersion         string
+		StartedAt             time.Time
+		CompletedAt           time.Time
+		ObservationCount      int
+		TotalCostUSD          float64
+		TotalPromptTokens     int
 		TotalCompletionTokens int
-		AgentInvocations    int
-		ToolInvocations     int
-		HadSessionEnd       int
+		AgentInvocations      int
+		ToolInvocations       int
+		HadSessionEnd         int
 	}
 
 	var rows []aggRow

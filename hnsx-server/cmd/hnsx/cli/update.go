@@ -17,10 +17,11 @@ import (
 // newUpdateCmd v0.8 wires the real self-update path against GitHub Releases.
 //
 // Behaviour:
-//   --check    only print whether a newer version exists
-//   (default)  if a newer version is found and the running binary is in a
-//              writable location, perform an in-place replacement after a
-//              confirmation prompt; otherwise print install instructions.
+//
+//	--check    only print whether a newer version exists
+//	(default)  if a newer version is found and the running binary is in a
+//	           writable location, perform an in-place replacement after a
+//	           confirmation prompt; otherwise print install instructions.
 //
 // v0.8 keeps this conservative: it never silently replaces a binary that
 // lives outside the user's home directory, and it always logs the action.
@@ -88,8 +89,8 @@ func newUpdateCmd(cfg *Config) *cobra.Command {
 
 // releaseInfo mirrors the subset of GitHub's release payload we consume.
 type releaseInfo struct {
-	TagName string       `json:"tag_name"`
-	Name    string       `json:"name"`
+	TagName string         `json:"tag_name"`
+	Name    string         `json:"name"`
 	Assets  []releaseAsset `json:"assets"`
 }
 

@@ -267,10 +267,10 @@ type sessionDetail struct {
 	err    error
 	closed bool
 
-	ctx     context.Context
-	cancel  context.CancelFunc
-	events  chan client.Event
-	errCh   chan error
+	ctx    context.Context
+	cancel context.CancelFunc
+	events chan client.Event
+	errCh  chan error
 }
 
 func newSessionDetail(client *common.Client, id string, theme common.Theme) *sessionDetail {

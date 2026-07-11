@@ -40,21 +40,21 @@ func (EvalCaseRecord) TableName() string { return "eval_cases" }
 
 // EvalRunRecord is the GORM entity for the `eval_runs` table.
 type EvalRunRecord struct {
-	ID              string     `gorm:"column:id;type:uuid;primary_key;default:gen_random_uuid()"`
-	TenantID        string     `gorm:"column:tenant_id;type:uuid;not null"`
-	EvalSetUUID     string     `gorm:"column:eval_set_uuid;type:uuid;not null;index:idx_eval_runs_eval_set_uuid"`
-	DomainUUID      string     `gorm:"column:domain_uuid;type:uuid;not null;index:idx_eval_runs_domain_uuid"`
-	DomainVersion   string     `gorm:"column:domain_version;type:varchar(64);not null"`
-	Orchestration   string     `gorm:"column:orchestration;type:varchar(64);not null"`
-	State           string     `gorm:"column:state;type:varchar(64);not null;default:'running'"`
-	Score           float64    `gorm:"column:score;type:decimal(5,4)"`
-	TotalCases      int        `gorm:"column:total_cases;type:int"`
-	PassedCases     int        `gorm:"column:passed_cases;type:int"`
-	TotalCostUSD    float64    `gorm:"column:total_cost_usd;type:decimal(12,6)"`
-	DurationMs      int64      `gorm:"column:duration_ms;type:bigint"`
-	BaselineRunUUID *string    `gorm:"column:baseline_run_uuid;type:uuid"`
-	ReportURL       string     `gorm:"column:report_url;type:text"`
-	CreatedBy       *string    `gorm:"column:created_by;type:uuid"`
+	ID              string  `gorm:"column:id;type:uuid;primary_key;default:gen_random_uuid()"`
+	TenantID        string  `gorm:"column:tenant_id;type:uuid;not null"`
+	EvalSetUUID     string  `gorm:"column:eval_set_uuid;type:uuid;not null;index:idx_eval_runs_eval_set_uuid"`
+	DomainUUID      string  `gorm:"column:domain_uuid;type:uuid;not null;index:idx_eval_runs_domain_uuid"`
+	DomainVersion   string  `gorm:"column:domain_version;type:varchar(64);not null"`
+	Orchestration   string  `gorm:"column:orchestration;type:varchar(64);not null"`
+	State           string  `gorm:"column:state;type:varchar(64);not null;default:'running'"`
+	Score           float64 `gorm:"column:score;type:decimal(5,4)"`
+	TotalCases      int     `gorm:"column:total_cases;type:int"`
+	PassedCases     int     `gorm:"column:passed_cases;type:int"`
+	TotalCostUSD    float64 `gorm:"column:total_cost_usd;type:decimal(12,6)"`
+	DurationMs      int64   `gorm:"column:duration_ms;type:bigint"`
+	BaselineRunUUID *string `gorm:"column:baseline_run_uuid;type:uuid"`
+	ReportURL       string  `gorm:"column:report_url;type:text"`
+	CreatedBy       *string `gorm:"column:created_by;type:uuid"`
 	CreatedAt       time.Time
 	CompletedAt     *time.Time `gorm:"column:completed_at;type:timestamptz"`
 }

@@ -17,10 +17,10 @@ func TestDeriveCapabilities_IncludesOrchestration(t *testing.T) {
 	}
 	caps := DeriveCapabilities(s)
 	want := map[string]bool{
-		"provider:anthropic":  true,
-		"model:claude":        true,
-		"adapter:anthropic":   true,
-		"sandbox:none":        true,
+		"provider:anthropic":       true,
+		"model:claude":             true,
+		"adapter:anthropic":        true,
+		"sandbox:none":             true,
 		"orchestration:supervisor": true,
 	}
 	for _, c := range caps {

@@ -6,16 +6,16 @@ import (
 
 // morandi palette, kept in sync with observability/src/tokens/morandi.css.
 var (
-	primary   = lipgloss.Color("#7A8B7F")
-	success   = lipgloss.Color("#7E9B7A")
-	warning   = lipgloss.Color("#C9A87C")
-	danger    = lipgloss.Color("#B57F7F")
-	info      = lipgloss.Color("#7E8FB0")
-	muted     = lipgloss.Color("#9C9C92")
-	bgLight   = lipgloss.Color("#F5F1EA")
-	bgDark    = lipgloss.Color("#2B2A28")
-	fgLight   = lipgloss.Color("#2B2A28")
-	fgDark    = lipgloss.Color("#F5F1EA")
+	primary = lipgloss.Color("#7A8B7F")
+	success = lipgloss.Color("#7E9B7A")
+	warning = lipgloss.Color("#C9A87C")
+	danger  = lipgloss.Color("#B57F7F")
+	info    = lipgloss.Color("#7E8FB0")
+	muted   = lipgloss.Color("#9C9C92")
+	bgLight = lipgloss.Color("#F5F1EA")
+	bgDark  = lipgloss.Color("#2B2A28")
+	fgLight = lipgloss.Color("#2B2A28")
+	fgDark  = lipgloss.Color("#F5F1EA")
 )
 
 // Theme holds the terminal styles used across the TUI.
