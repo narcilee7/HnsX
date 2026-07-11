@@ -1,4 +1,4 @@
-import { Sparklines, SparklinesArea, SparklinesLine, SparklinesSpots } from 'react-sparklines'
+import { Sparklines, SparklinesCurve, SparklinesLine, SparklinesSpots } from 'react-sparklines'
 import { cn } from '../lib/utils'
 
 export interface SparklineProps {
@@ -53,34 +53,45 @@ export function Sparkline({
       aria-label={ariaLabel ?? `Sparkline ${variant}`}
     >
       <Sparklines data={data} height={height} margin={margin} style={{ width: '100%' }}>
-        {kind === 'area' && (
-          <SparklinesArea
-            style={{
-              fill: fill,
-              stroke: stroke,
-              strokeWidth: 1.75,
-            }}
-          />
-        )}
-        {kind === 'line' && (
-          <SparklinesLine
-            style={{
-              stroke: stroke,
-              strokeWidth: 1.75,
-              fill: 'none',
-            }}
-          />
-        )}
-        {endDot && (
-          <SparklinesSpots
-            size={2.5}
-            style={{
-              fill: stroke,
-              stroke: stroke,
-              strokeWidth: 0,
-            }}
-          />
-        )}
+        {[
+          kind === 'area'
+            ? (
+                <SparklinesCurve
+                  key="area"
+                  style={{
+                    fill: fill,
+                    stroke: stroke,
+                    strokeWidth: 1.75,
+                  }}
+                />
+              )
+            : null,
+          kind === 'line'
+            ? (
+                <SparklinesLine
+                  key="line"
+                  style={{
+                    stroke: stroke,
+                    strokeWidth: 1.75,
+                    fill: 'none',
+                  }}
+                />
+              )
+            : null,
+          endDot
+            ? (
+                <SparklinesSpots
+                  key="spots"
+                  size={2.5}
+                  style={{
+                    fill: stroke,
+                    stroke: stroke,
+                    strokeWidth: 0,
+                  }}
+                />
+              )
+            : null,
+        ].filter(Boolean)}
       </Sparklines>
     </div>
   )
