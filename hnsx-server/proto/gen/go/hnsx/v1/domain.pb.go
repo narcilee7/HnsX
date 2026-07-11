@@ -923,6 +923,7 @@ type Policy struct {
 	Permissions   *Permission            `protobuf:"bytes,2,opt,name=permissions,proto3" json:"permissions,omitempty"`
 	Guardrails    []*Guardrail           `protobuf:"bytes,3,rep,name=guardrails,proto3" json:"guardrails,omitempty"`
 	Approval      *Approval              `protobuf:"bytes,4,opt,name=approval,proto3" json:"approval,omitempty"`
+	Presets       []string               `protobuf:"bytes,5,rep,name=presets,proto3" json:"presets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -981,6 +982,13 @@ func (x *Policy) GetGuardrails() []*Guardrail {
 func (x *Policy) GetApproval() *Approval {
 	if x != nil {
 		return x.Approval
+	}
+	return nil
+}
+
+func (x *Policy) GetPresets() []string {
+	if x != nil {
+		return x.Presets
 	}
 	return nil
 }
@@ -2404,14 +2412,15 @@ const file_hnsx_v1_domain_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\";\n" +
 	"\aSandbox\x12\x18\n" +
 	"\abackend\x18\x01 \x01(\tR\abackend\x12\x16\n" +
-	"\x06config\x18\x02 \x01(\tR\x06config\"\xcb\x01\n" +
+	"\x06config\x18\x02 \x01(\tR\x06config\"\xe5\x01\n" +
 	"\x06Policy\x12'\n" +
 	"\x06budget\x18\x01 \x01(\v2\x0f.hnsx.v1.BudgetR\x06budget\x125\n" +
 	"\vpermissions\x18\x02 \x01(\v2\x13.hnsx.v1.PermissionR\vpermissions\x122\n" +
 	"\n" +
 	"guardrails\x18\x03 \x03(\v2\x12.hnsx.v1.GuardrailR\n" +
 	"guardrails\x12-\n" +
-	"\bapproval\x18\x04 \x01(\v2\x11.hnsx.v1.ApprovalR\bapproval\"f\n" +
+	"\bapproval\x18\x04 \x01(\v2\x11.hnsx.v1.ApprovalR\bapproval\x12\x18\n" +
+	"\apresets\x18\x05 \x03(\tR\apresets\"f\n" +
 	"\x06Budget\x12 \n" +
 	"\fmax_cost_usd\x18\x01 \x01(\x01R\n" +
 	"maxCostUsd\x12\x1b\n" +

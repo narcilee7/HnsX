@@ -191,12 +191,12 @@ Refs：`hnsx-console/src/pages/DashboardPage.tsx`、`deployments/local/docker-co
 
 ### B4 — 模板市场与策略 Presets
 
-- [ ] **repo** 新增 `templates/` 目录或 `example-domains/templates.yaml` 索引，含标签、描述、变量、最小运行要求、策略包
-- [ ] **cli** `hnsx examples` 读取模板索引，支持 `--tag` 过滤
-- [ ] **console** 新增 `/gallery` 页面展示模板卡片，支持一键复制/初始化
-- [ ] **proto/spec** 扩展 `PolicySpec` 支持 `presets: [safe_customer_service]` 高层 DSL
-- [ ] **server/worker** policy engine 解析 presets 并展开为底层 guardrails
-- [ ] **examples** 为 `customer-service` 添加 `policy.presets: [safe_customer_service]`，默认禁止 shell/文件写、退款需审批
+- [x] **repo** 新增 `templates/` 目录或 `example-domains/templates.yaml` 索引，含标签、描述、变量、最小运行要求、策略包
+- [x] **cli** `hnsx examples` 读取模板索引，支持 `--tag` 过滤
+- [x] **console** 新增 `/gallery` 页面展示模板卡片，支持一键复制/初始化
+- [x] **proto/spec** 扩展 `PolicySpec` 支持 `presets: [safe_customer_service]` 高层 DSL
+- [x] **server/worker** policy engine 解析 presets 并展开为底层 guardrails
+- [x] **examples** 为 `customer-service` 添加 `policy.presets: [safe_customer_service]`，默认禁止 shell/文件写、退款需审批
 
 #### 验收
 
@@ -211,11 +211,11 @@ Refs：`templates/`、`hnsx-server/pkg/policy/engine.go`、`hnsx-worker/hnsx_wor
 
 ### B5 — CLI human 输出与配置层
 
-- [ ] **cli** 实现 `~/.config/hnsx/config.yaml` 读取：`cli/config.go` 补全 viper/自写 loader，优先级 flag > env > config
-- [ ] **cli** `show/get` 类命令增加 human 卡片/键值渲染（`cli/output.go`），不再只输出美化 JSON
-- [ ] **cli** 统一 `--output human|json|quiet`，确保每条 `show` 命令三种模式都合理
-- [ ] **cli** `hnsx config get/set/show` 命令组（可放入 `power` 或顶层）
-- [ ] **tests** 单元测试覆盖配置加载优先级和 human 输出 snapshot
+- [x] **cli** 实现 `~/.config/hnsx/config.yaml` 读取：`cli/config.go` 补全 viper/自写 loader，优先级 flag > env > config
+- [x] **cli** `show/get` 类命令增加 human 卡片/键值渲染（`cli/output.go`），不再只输出美化 JSON
+- [x] **cli** 统一 `--output human|json|quiet`，确保每条 `show` 命令三种模式都合理
+- [x] **cli** `hnsx config get/set/show` 命令组（可放入 `power` 或顶层）
+- [x] **tests** 单元测试覆盖配置加载优先级和 human 输出 snapshot
 
 #### 验收
 

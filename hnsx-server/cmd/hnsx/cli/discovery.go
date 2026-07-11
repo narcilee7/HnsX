@@ -18,53 +18,157 @@ import (
 
 // ExampleDomain describes one discoverable example domain shipped with HnsX.
 type ExampleDomain struct {
-	Name        string `json:"name"`
-	Path        string `json:"path"`
-	Description string `json:"description,omitempty"`
-	Mode        string `json:"mode,omitempty"`
+	Name        string   `json:"name"`
+	Path        string   `json:"path"`
+	Description string   `json:"description,omitempty"`
+	Mode        string   `json:"mode,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
 }
 
-// discoverExamples scans <repoRoot>/example-domains/ and parses each
-// domain.yaml to extract id/description/mode. Failures on individual files
-// are reported via stderr but do not abort the listing.
-func discoverExamples(cfg *Config) ([]ExampleDomain, error) {
-	dir := filepath.Join(cfg.RepoRoot, "example-domains")
-	entries, err := os.ReadDir(dir)
+// TemplateIndex is the shape of templates/index.yaml.
+type TemplateIndex struct {
+	Version   string            `yaml:"version"`
+	Templates []TemplateEntry   `yaml:"templates"`
+}
+
+// TemplateEntry describes one template in the index.
+type TemplateEntry struct {
+	ID           string              `yaml:"id"`
+	Name         string              `yaml:"name"`
+	Description  string              `yaml:"description"`
+	Tags         []string            `yaml:"tags"`
+	Source       string              `yaml:"source"`
+	Variables    []TemplateVariable  `yaml:"variables"`
+	Requirements TemplateRequirements `yaml:"requirements"`
+}
+
+// TemplateVariable is a user-settable placeholder in a template.
+type TemplateVariable struct {
+	Name    string `yaml:"name"`
+	Default string `yaml:"default"`
+}
+
+// TemplateRequirements describes runtime prerequisites.
+type TemplateRequirements struct {
+	Providers        []string `yaml:"providers"`
+	MinWorkers       int      `yaml:"min_workers"`
+	SandboxRuntimes  []string `yaml:"sandbox_runtimes"`
+}
+
+// loadTemplateIndex reads <repoRoot>/templates/index.yaml if it exists.
+func loadTemplateIndex(cfg *Config) (*TemplateIndex, error) {
+	path := filepath.Join(cfg.RepoRoot, "templates", "index.yaml")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", dir, err)
+		if os.IsNotExist(err) {
+			return &TemplateIndex{}, nil
+		}
+		return nil, fmt.Errorf("read template index: %w", err)
 	}
-	var out []ExampleDomain
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		path := filepath.Join(dir, e.Name(), "domain.yaml")
+	var idx TemplateIndex
+	if err := yaml.Unmarshal(data, &idx); err != nil {
+		return nil, fmt.Errorf("parse template index: %w", err)
+	}
+	return &idx, nil
+}
+
+// discoverExamples scans <repoRoot>/templates/index.yaml (preferred) and falls
+// back to scanning <repoRoot>/example-domains/ for any template not in the
+// index. Failures on individual files are reported via stderr but do not abort
+// the listing.
+func discoverExamples(cfg *Config) ([]ExampleDomain, error) {
+	idx, err := loadTemplateIndex(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	byName := make(map[string]ExampleDomain)
+	for _, t := range idx.Templates {
+		path := filepath.Join(cfg.RepoRoot, t.Source)
 		if _, err := os.Stat(path); err != nil {
-			continue
+			// Best-effort: if the indexed source is missing, keep the entry but
+			// note it may fail at try/init time.
+			path = t.Source
 		}
-		ex := ExampleDomain{Name: e.Name(), Path: path}
+		mode := ""
 		if b, err := os.ReadFile(path); err == nil {
 			var doc struct {
-				ID          string `yaml:"id"`
-				Description string `yaml:"description"`
-				Harness     struct {
+				Harness struct {
 					Session struct {
 						Mode string `yaml:"mode"`
 					} `yaml:"session"`
 				} `yaml:"harness"`
 			}
 			if err := yaml.Unmarshal(b, &doc); err == nil {
-				if doc.ID != "" {
-					ex.Name = doc.ID
-				}
-				ex.Description = doc.Description
-				ex.Mode = doc.Harness.Session.Mode
+				mode = doc.Harness.Session.Mode
 			}
 		}
+		byName[t.ID] = ExampleDomain{
+			Name:        t.ID,
+			Path:        path,
+			Description: strings.SplitN(t.Description, "\n", 2)[0],
+			Mode:        mode,
+			Tags:        t.Tags,
+		}
+	}
+
+	// Fall back to scanning example-domains for anything not indexed.
+	dir := filepath.Join(cfg.RepoRoot, "example-domains")
+	entries, err := os.ReadDir(dir)
+	if err == nil {
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			path := filepath.Join(dir, e.Name(), "domain.yaml")
+			if _, err := os.Stat(path); err != nil {
+				continue
+			}
+			name := e.Name()
+			if _, ok := byName[name]; ok {
+				continue
+			}
+			ex := ExampleDomain{Name: name, Path: path}
+			if b, err := os.ReadFile(path); err == nil {
+				var doc struct {
+					ID          string `yaml:"id"`
+					Description string `yaml:"description"`
+					Harness     struct {
+						Session struct {
+							Mode string `yaml:"mode"`
+						} `yaml:"session"`
+					} `yaml:"harness"`
+				}
+				if err := yaml.Unmarshal(b, &doc); err == nil {
+					if doc.ID != "" {
+						ex.Name = doc.ID
+					}
+					ex.Description = strings.SplitN(doc.Description, "\n", 2)[0]
+					ex.Mode = doc.Harness.Session.Mode
+				}
+			}
+			byName[ex.Name] = ex
+		}
+	}
+
+	out := make([]ExampleDomain, 0, len(byName))
+	for _, ex := range byName {
 		out = append(out, ex)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
+}
+
+func matchesTag(ex ExampleDomain, tag string) bool {
+	if tag == "" {
+		return true
+	}
+	for _, t := range ex.Tags {
+		if strings.EqualFold(t, tag) {
+			return true
+		}
+	}
+	return false
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +176,7 @@ func discoverExamples(cfg *Config) ([]ExampleDomain, error) {
 // ---------------------------------------------------------------------------
 
 func newExamplesCmd(cfg *Config) *cobra.Command {
+	var tag string
 	cmd := &cobra.Command{
 		Use:   "examples",
 		Short: "List the example domains shipped with HnsX",
@@ -81,30 +186,38 @@ func newExamplesCmd(cfg *Config) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			var filtered []ExampleDomain
+			for _, it := range items {
+				if matchesTag(it, tag) {
+					filtered = append(filtered, it)
+				}
+			}
 			if cfg.Output == "json" {
-				out.Print(items)
+				out.Print(filtered)
 				return nil
 			}
 			if cfg.Output == "quiet" {
-				for _, e := range items {
+				for _, e := range filtered {
 					fmt.Println(e.Name)
 				}
 				return nil
 			}
-			headers := []string{"NAME", "MODE", "DESCRIPTION"}
-			rows := make([][]string, 0, len(items))
-			for _, e := range items {
-				desc := strings.SplitN(e.Description, "\n", 2)[0]
+			headers := []string{"NAME", "MODE", "TAGS", "DESCRIPTION"}
+			rows := make([][]string, 0, len(filtered))
+			for _, e := range filtered {
+				desc := e.Description
 				if len(desc) > 60 {
 					desc = desc[:57] + "..."
 				}
-				rows = append(rows, []string{e.Name, e.Mode, desc})
+				tags := strings.Join(e.Tags, ", ")
+				rows = append(rows, []string{e.Name, e.Mode, tags, desc})
 			}
 			out.Table(headers, rows)
 			out.Line("\n→ run one with: hnsx try <name>")
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&tag, "tag", "", "filter examples by tag")
 	return cmd
 }
 

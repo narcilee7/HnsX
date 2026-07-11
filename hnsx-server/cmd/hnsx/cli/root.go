@@ -78,6 +78,7 @@ Use "hnsx <command> --help" for per-command details.
 	// console remains an explicit command.
 	cmd.AddCommand(newConsoleCmd(&cfg))
 	cmd.AddCommand(newUpdateCmd(&cfg))
+	cmd.AddCommand(newConfigCmd(&cfg))
 
 	// v0.6 Governance: policy / secret / approval / audit / auth.
 	cmd.AddCommand(newGovernanceCmd(&cfg))

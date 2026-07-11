@@ -65,24 +65,10 @@ harness:
   sandbox:
     policy: none
   policy:
-    budget:
-      max_cost_usd: 1.0
-      max_turns: 20
-    permissions:
-      allow_network: true
-      allow_file_write: false
-      allow_file_delete: false
-      allow_shell: false
-    # W14 approval DSL: gate sensitive tools + resources + high-cost calls.
+    presets:
+      - safe_customer_service
     approval:
-      default_timeout_seconds: 600
       required_for:
-        tools:
-          - issue_refund
-          - export_customer_data
-        resources:
-          - "billing:write"
-          - "customer:*"
         cost_threshold_usd: 0.25
   session:
     mode: workflow

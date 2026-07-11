@@ -32,6 +32,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from hnsx_worker.policy.presets import expand_presets, known_presets
 from hnsx_worker.tools import ToolContext, ToolDecision
 
 log = logging.getLogger("hnsx_worker.policy.engine")
@@ -169,6 +170,7 @@ class PolicyEngine:
             return
 
         policy = (spec.get("harness", {}) or {}).get("policy", {}) or {}
+        policy = expand_presets(policy)
         budget_cfg = policy.get("budget", {}) or {}
         self.budget = Budget(
             max_cost_usd=float(budget_cfg.get("max_cost_usd") or 0),
