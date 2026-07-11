@@ -47,7 +47,7 @@ func NewCommandList(theme common.Theme) CommandList {
 		theme:     theme,
 		commands:  DefaultCommands,
 		filtered:  make([]Command, len(DefaultCommands)),
-		maxHeight: 7,
+		maxHeight: 5,
 	}
 	copy(c.filtered, c.commands)
 	return c
@@ -107,7 +107,7 @@ func (c *CommandList) Visible() bool {
 	return len(c.filtered) > 0
 }
 
-// View renders the command list.
+// View renders the command list as a dropdown panel anchored above the command input.
 func (c *CommandList) View() string {
 	if !c.Visible() {
 		return ""
@@ -118,6 +118,20 @@ func (c *CommandList) View() string {
 		visibleCount = c.maxHeight
 	}
 
+	innerWidth := c.width - 2
+	if innerWidth < 1 {
+		innerWidth = c.width
+	}
+
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#F5F1EA")).
+		Background(lipgloss.Color("#3A3937")).
+		Padding(0, 1).
+		Render("Command")
+	divider := strings.Repeat("─", innerWidth-lipgloss.Width(title))
+	header := lipgloss.JoinHorizontal(lipgloss.Bottom, title, divider)
+
 	var lines []string
 	for i := 0; i < visibleCount; i++ {
 		cmd := c.filtered[i]
@@ -125,23 +139,25 @@ func (c *CommandList) View() string {
 		if cmd.Args != "" {
 			name += " " + cmd.Args
 		}
-		line := name
-		if c.width > 0 {
-			descStyle := c.theme.Muted
-			desc := descStyle.Render(cmd.Description)
-			// Leave some padding between name and description.
-			nameWidth := lipgloss.Width(name)
-			descWidth := lipgloss.Width(desc)
-			available := c.width - nameWidth - descWidth - 4
-			if available > 0 {
-				gap := strings.Repeat(" ", available)
-				line = name + gap + cmd.Description
-			}
+
+		nameStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#F5F1EA"))
+		descStyle := c.theme.Muted
+		namePart := nameStyle.Render(name)
+		descPart := descStyle.Render(cmd.Description)
+
+		nameW := lipgloss.Width(namePart)
+		descW := lipgloss.Width(descPart)
+		gapW := innerWidth - nameW - descW - 2
+		if gapW < 1 {
+			gapW = 1
 		}
+		gap := strings.Repeat(" ", gapW)
+
+		line := " " + name + gap + cmd.Description
 		if i == c.selected {
-			line = c.theme.RowSelected.Render(line)
+			line = c.theme.RowSelected.Width(innerWidth).Render(line)
 		} else {
-			line = c.theme.RowNormal.Render(line)
+			line = c.theme.RowNormal.Width(innerWidth).Render(line)
 		}
 		lines = append(lines, line)
 	}
@@ -150,28 +166,41 @@ func (c *CommandList) View() string {
 		return ""
 	}
 
+	content := lipgloss.JoinVertical(lipgloss.Left, append([]string{header}, lines...)...)
 	return lipgloss.NewStyle().
 		Width(c.width).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("#7A8B7F")).
+		BorderTop(true).
+		BorderLeft(true).
+		BorderRight(true).
 		Background(lipgloss.Color("#2B2A28")).
-		Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+		Render(content)
 }
 
 func (c *CommandList) filter() {
-	c.selected = 0
 	input := strings.TrimSpace(c.input)
 	input = strings.TrimPrefix(input, "/")
 	input = strings.ToLower(input)
 
-	if input == "" {
-		c.filtered = make([]Command, len(c.commands))
-		copy(c.filtered, c.commands)
-		return
+	var prevName string
+	if c.selected >= 0 && c.selected < len(c.filtered) {
+		prevName = c.filtered[c.selected].Name
 	}
 
 	c.filtered = c.filtered[:0]
 	for _, cmd := range c.commands {
 		if strings.HasPrefix(strings.ToLower(cmd.Name), input) {
 			c.filtered = append(c.filtered, cmd)
+		}
+	}
+
+	// Preserve the previous selection when it still matches; otherwise reset to top.
+	c.selected = 0
+	for i, cmd := range c.filtered {
+		if cmd.Name == prevName {
+			c.selected = i
+			break
 		}
 	}
 }

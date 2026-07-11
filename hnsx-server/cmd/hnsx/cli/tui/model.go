@@ -211,17 +211,8 @@ func (m Model) View() string {
 	footer := m.theme.Footer.Render(m.renderFooter())
 	footerHeight := lipgloss.Height(footer)
 
-	// Command palette appears above the footer while selecting a command.
-	paletteHeight := 0
-	var palette string
-	if m.commandMode {
-		m.commandList.SetWidth(m.width)
-		palette = m.commandList.View()
-		paletteHeight = lipgloss.Height(palette)
-	}
-
-	// Body height accounts for header + tab bar + footer + optional palette.
-	bodyHeight := m.height - headerHeight - tabBarHeight - footerHeight - paletteHeight
+	// Body height accounts for header + tab bar + footer.
+	bodyHeight := m.height - headerHeight - tabBarHeight - footerHeight
 	if bodyHeight < 0 {
 		bodyHeight = 0
 	}
@@ -232,8 +223,16 @@ func (m Model) View() string {
 	active, _ = active.Update(bodyMsg)
 	body := active.View()
 
+	// Command palette overlays the bottom of the body so it does not push the
+	// tab bar/content upward.
+	if m.commandMode {
+		m.commandList.SetWidth(m.width)
+		palette := m.commandList.View()
+		body = overlayBottom(body, palette, m.width)
+	}
+
 	// Stack vertically.
-	content := lipgloss.JoinVertical(lipgloss.Left, header, tabBar, body, palette, footer)
+	content := lipgloss.JoinVertical(lipgloss.Left, header, tabBar, body, footer)
 
 	if m.helpOpen {
 		helpLines := m.helpLines()
@@ -531,6 +530,30 @@ func (m Model) trigger(domainID string, trigger map[string]any) tea.Cmd {
 		}
 		return tabs.CommandResultMsg{Info: fmt.Sprintf("triggered %s", s.ID)}
 	}
+}
+
+// overlayBottom replaces the bottom portion of body with overlay so the palette
+// floats above the tab content without compressing the rest of the layout.
+func overlayBottom(body, overlay string, width int) string {
+	if overlay == "" {
+		return body
+	}
+	bodyH := lipgloss.Height(body)
+	overlayH := lipgloss.Height(overlay)
+	keep := bodyH - overlayH
+	if keep < 0 {
+		keep = 0
+	}
+
+	lines := strings.Split(body, "\n")
+	if len(lines) > keep {
+		lines = lines[:keep]
+	}
+	// Pad if the body is shorter than expected.
+	for len(lines) < keep {
+		lines = append(lines, strings.Repeat(" ", width))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, strings.Join(lines, "\n"), overlay)
 }
 
 func parseTriggerJSON(s string) (map[string]any, error) {
