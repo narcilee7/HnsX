@@ -101,4 +101,43 @@ ok "trace list works"
   || fail "eval set list failed"
 ok "eval set list works"
 
-bold "all v0.3 + v0.4 CLI smoke checks passed"
+bold "[v0.6/1] governance commands"
+# policy list
+"$HNSX" --server "$SERVER_URL" governance policy list >/dev/null \
+  || fail "governance policy list failed"
+ok "governance policy list works"
+
+# approval list
+"$HNSX" --server "$SERVER_URL" governance approval list >/dev/null \
+  || fail "governance approval list failed"
+ok "governance approval list works"
+
+# audit list (with limit + JSON)
+"$HNSX" --server "$SERVER_URL" governance audit list --limit 5 --output json >/dev/null \
+  || fail "governance audit list failed"
+ok "governance audit list works"
+
+# secret set without --confirm should be a no-op
+out="$("$HNSX" --server "$SERVER_URL" governance secret set smoke-test --value dummy 2>&1)"
+echo "$out" | grep -q "Re-run with --confirm" || fail "secret set without --confirm should print warning"
+ok "secret set without --confirm is a no-op"
+
+# policy delete without --confirm should be a no-op
+out="$("$HNSX" --server "$SERVER_URL" governance policy delete smoke-test 2>&1)"
+echo "$out" | grep -qi "re-run with --confirm" || fail "policy delete without --confirm should print warning"
+ok "policy delete without --confirm is a no-op"
+
+# auth login + status + logout
+export HNSX_AUTH_FILE="$(mktemp -t hnsx-auth.XXXXXX.yaml)"
+"$HNSX" --server "$SERVER_URL" governance auth login --token test-token >/dev/null \
+  || fail "auth login failed"
+[[ -f "$HNSX_AUTH_FILE" ]] || fail "auth file not written"
+"$HNSX" --server "$SERVER_URL" governance auth status >/dev/null \
+  || fail "auth status failed"
+"$HNSX" --server "$SERVER_URL" governance auth logout >/dev/null \
+  || fail "auth logout failed"
+[[ ! -f "$HNSX_AUTH_FILE" ]] || fail "auth file not removed"
+rm -f "$HNSX_AUTH_FILE"
+ok "auth login/status/logout round-trip"
+
+bold "all v0.3 + v0.4 + v0.6 CLI smoke checks passed"
