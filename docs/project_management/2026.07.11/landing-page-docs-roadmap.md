@@ -148,13 +148,17 @@ pnpm build    # 生成 website/dist，无报错
   - `why-harness.md`（Why harness）
   - `api-at-a-glance.md`（API 一览）
   - `vision-in-practice.md`（愿景落地）
-- [x] 配置 Rspress `themeConfig.nav` 与 `sidebar`，让用户能在 landing、blog、docs 间跳转
+- [x] 在 `website/docs/guide/` 下新建入门指南：
+  - `quick-start.md`（5 分钟跑通）
+  - `install.md`（curl / brew / 源码）
+  - `domain-spec.md`（Domain 入门）
+  - `cli-basics.md`（常用 CLI）
+- [x] 配置 Rspress `themeConfig.nav` 与 `sidebar`，让用户能在 landing、guide、blog、docs 间跳转
 - [x] 启用 Rspress 内置搜索（基于 FlexSearch）
-- [ ] `guide/` 系列入门文档（quick-start / install / domain-spec / cli-basics）留待后续补齐
 
 #### 验收
 - 左侧 sidebar 能展开所有设计文档分组
-- 顶部 nav 可在 Home / Guide / Design / GitHub 间切换
+- 顶部 nav 可在 Home / Guide / Blog / Design / API / GitHub 间切换
 - 搜索框能搜到 `docs/vision.md` 的关键词
 
 ---
@@ -163,10 +167,10 @@ pnpm build    # 生成 website/dist，无报错
 
 目标：每次 push 到 `feat/tui_migration`（或 main）自动部署。
 
-- [ ] 创建 `.github/workflows/website.yml`：
+- [x] 创建 `.github/workflows/website.yml`：
   - trigger: `push` 到 main / `feat/tui_migration`，或 `website/**`、`docs/**` 变更
-  - job: pnpm install → build website → deploy to `gh-pages`
-- [ ] Rspress `base` 配置适配 GitHub Pages 子路径：`/HnsX/`
+  - job: pnpm install → 带 `GH_PAGES=true` 构建 website → deploy to `gh-pages`
+- [x] Rspress `base` 配置按环境切换：本地 `/`，GitHub Pages `/HnsX/`
 - [ ] 验证 GitHub Pages 站点能正常访问，资源路径正确
 - [ ] 更新 `README.md` 和 `docs/cli-roadmap.md` 里的 `hnsx.dev` 链接说明（若已部署）
 
@@ -183,9 +187,9 @@ open https://narcilee7.github.io/HnsX/
 
 目标：站点在社交媒体上分享时像模像样。
 
-- [ ] 配置 Rspress `head`：title、description、og:image、twitter:card
-- [ ] 生成/绘制 Open Graph 图片（1200×630），可先文字图
-- [ ] 404 页面
+- [x] 配置 Rspress `head`：title、description、og:image、twitter:card
+- [x] 生成/绘制 Open Graph 图片（1200×630）和 favicon
+- [x] 自定义 404 页面
 - [ ] 检查所有内部链接是否可点（无死链）
 - [ ] 加 `sitemap.xml`（Rspress 插件或构建后生成）
 
