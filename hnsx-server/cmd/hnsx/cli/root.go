@@ -2,9 +2,17 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/hnsx-io/hnsx/server/cmd/hnsx/cli/tui"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
+
+// isTerminal reports whether stdout is a terminal.
+func isTerminal() bool {
+	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+}
 
 // NewRootCmd constructs the hnsx root cobra command. It binds persistent
 // flags, registers subcommands, and returns the assembled tree.
@@ -29,8 +37,11 @@ Use "hnsx <command> --help" for per-command details.
 `,
 		SilenceUsage:  true,
 		SilenceErrors: false,
-		// NoArgs -> show help (better UX than silent exit 1).
+		// NoArgs -> launch TUI when running in a terminal, otherwise show help.
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 && !cfg.NoTui && isTerminal() {
+				return tui.Run(cfg.ServerURL)
+			}
 			return cmd.Help()
 		},
 	}
@@ -62,9 +73,9 @@ Use "hnsx <command> --help" for per-command details.
 	cmd.AddCommand(newTraceCmd(&cfg))
 	cmd.AddCommand(newEvalCmd(&cfg))
 
-	// v0.5 Bridge: surface commands.
+	// v0.5 Bridge: surface commands. TUI is the default no-arg entry point;
+	// console remains an explicit command.
 	cmd.AddCommand(newConsoleCmd(&cfg))
-	cmd.AddCommand(newTuiCmd(&cfg))
 	cmd.AddCommand(newUpdateCmd(&cfg))
 
 	// v0.6 Governance: policy / secret / approval / audit / auth.
