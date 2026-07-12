@@ -1,0 +1,122 @@
+name: 🐛 Bug Report
+description: Something is broken or behaves unexpectedly. Not for security issues — see SECURITY.md.
+title: "[bug] "
+labels: ["bug", "triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please fill in the sections below.
+        If this is a **security issue**, do **not** file it here — email
+        `security@hnsx.io` instead (see [SECURITY.md](../../SECURITY.md)).
+
+  - type: input
+    id: hnsx-version
+    attributes:
+      label: HnsX version
+      description: Output of `hnsx version`, or the git SHA you built from.
+      placeholder: "v1.0.0  (commit 2d9d5c7)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Where the bug shows up.
+      options:
+        - CLI (`hnsx` binary)
+        - Server (`hnsx-server`)
+        - Worker (`hnsx-worker`, Python)
+        - Console (React UI)
+        - SDK — Go
+        - SDK — Node/TypeScript
+        - SDK — Python
+        - Proto / API contract
+        - Documentation / website
+        - Packaging / install
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux (amd64)
+        - Linux (arm64)
+        - Windows (WSL2)
+        - Windows (native)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: |
+        Minimal steps to reproduce the bug. If it requires a DomainSpec,
+        paste the smallest possible `domain.yaml`. Use code fences.
+      placeholder: |
+        ```bash
+        hnsx try customer-service
+        hnsx session trigger --domain customer-service --question "..."
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened. Paste error messages verbatim.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      description: |
+        Relevant CLI output, server logs, worker stack traces. Wrap in
+        ```text fences. Strip any API keys or secrets — HnsX will not
+        see them, but please redact proactively.
+      placeholder: |
+        ```
+        ERRO[2026-07-12T10:23:45Z] adapter "anthropic" returned 401 ...
+        ```
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: |
+        Anything else relevant — first time vs. regression, related
+        issues, workaround attempts, screenshots.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Self-check
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I am not reporting a security vulnerability here (security@hnsx.io).
+          required: true
+        - label: I can reproduce this on the latest `main` branch.
+          required: false
+        - label: I am willing to open a PR with a fix.
+          required: false

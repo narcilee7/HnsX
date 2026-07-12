@@ -1,0 +1,14 @@
+# Configuration for GitHub's issue chooser. This file tells GitHub which
+# templates to offer when someone clicks "New issue" and lets us redirect
+# low-signal categories to Discussions instead.
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 GitHub Discussions
+    url: https://github.com/narcilee7/HnsX/discussions
+    about: How-to questions, show-and-tell, design discussion — better than Issues for open-ended threads.
+  - name: 🔒 Security disclosure
+    url: https://github.com/narcilee7/HnsX/blob/main/SECURITY.md
+    about: Email security@hnsx.io for vulnerabilities. Do not file them as public Issues.
+  - name: 📖 Documentation
+    url: https://narcilee7.github.io/HnsX/
+    about: The HnsX docs site — installation, quick start, CLI reference, design docs.

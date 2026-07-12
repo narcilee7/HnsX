@@ -1,0 +1,105 @@
+name: ✨ Feature Request
+description: Propose a new feature for HnsX. Please discuss first before opening a PR.
+title: "[feat] "
+labels: ["enhancement", "triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening this, please skim:
+        - [docs/vision.md](../../docs/vision.md) — does this fit the vision?
+        - [docs/ROADMAP.md](../../docs/ROADMAP.md) — is it already planned for a later phase?
+        - existing issues — has it been discussed?
+
+        If the answer to any of those is "no", please start a
+        [Discussion](../../discussions) thread first.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: |
+        What problem are you trying to solve? Why is the current state
+        painful? Be concrete — give a real workflow or scenario, not a
+        hypothetical one.
+      placeholder: |
+        As a [role], I want to [action] so that [outcome].
+
+        Concrete example: "As a FinTech SaaS engineer, I want every
+        Claude call to be tagged with a per-customer cost budget so
+        that finance can reconcile LLM spend at month-end."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        What do you want HnsX to do? Sketch the API, CLI flag,
+        DomainSpec shape, or console page you have in mind. A rough
+        sketch is fine — clarity matters more than completeness.
+      placeholder: |
+        ```yaml
+        # domain.yaml
+        harness:
+          policy:
+            budget:
+              max_cost_usd_per_session: 5.00
+              tags: { tenant_id: "acme-corp" }
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: |
+        What else did you consider? Why isn't it good enough? This
+        helps reviewers understand the trade-offs you weighed.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Roughly how big is this change?
+      options:
+        - Tiny — single file, no schema change (≤ 1 day)
+        - Small — 1-3 files, maybe a CLI flag (≤ 1 week)
+        - Medium — touches a few components, schema or proto change (2-4 weeks)
+        - Large — needs design discussion first (> 1 month)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Who benefits
+      options:
+        - Independent developers / solo builders
+        - Small teams / startups
+        - Enterprises / platform teams
+        - HnsX maintainers (refactor / DX improvement)
+        - Multiple of the above
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, screenshots, related issues, prior art in other tools.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Self-check
+      options:
+        - label: I have checked the vision and roadmap and this does not conflict.
+          required: true
+        - label: I have searched existing issues and Discussions.
+          required: true
+        - label: I am willing to send a PR if the proposal is accepted.
+          required: false

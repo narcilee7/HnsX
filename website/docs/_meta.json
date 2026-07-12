@@ -1,6 +1,11 @@
 {
   "index": "首页",
   "guide": "指南",
-  "blog": "博客",
-  "design": "设计文档"
+  "vision": "愿景",
+  "architecture": "架构",
+  "api-reference": "API 参考",
+  "console-design": "Console 设计",
+  "know-how": "技术深度",
+  "provenance": "Release 签名与 SBOM",
+  "blog": "博客"
 }

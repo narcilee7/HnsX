@@ -37,10 +37,10 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: '首页', link: '/', position: 'left' },
-      { text: '博客', link: '/blog/', position: 'left' },
       { text: '指南', link: '/guide/', position: 'left' },
-      { text: '文档', link: '/design/vision', position: 'left' },
-      { text: 'API', link: '/design/server-design/api-design', position: 'left' },
+      { text: '架构', link: '/architecture', position: 'left' },
+      { text: 'API', link: '/api-reference', position: 'left' },
+      { text: '博客', link: '/blog/', position: 'left' },
       {
         text: 'GitHub',
         link: 'https://github.com/narcilee7/HnsX',

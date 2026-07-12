@@ -154,24 +154,52 @@ jobs:
   final:
     name: Final
     runs-on: ubuntu-latest
-    needs: [proto, go, ts, worker]
+    needs: [proto, go, ts, worker, docs-sync]
     if: always()
     steps:
       - name: All green?
         run: |
-          if [ "${{ needs.proto.result }}"   != "success" ] || \
-             [ "${{ needs.go.result }}"      != "success" ] || \
-             [ "${{ needs.ts.result }}"      != "success" ] || \
-             [ "${{ needs.worker.result }}"  != "success" ]; then
+          if [ "${{ needs.proto.result }}"      != "success" ] || \
+             [ "${{ needs.go.result }}"         != "success" ] || \
+             [ "${{ needs.ts.result }}"         != "success" ] || \
+             [ "${{ needs.worker.result }}"     != "success" ] || \
+             [ "${{ needs.docs-sync.result }}"  != "success" ]; then
             echo "A required job failed:"
-            echo "  proto   : ${{ needs.proto.result }}"
-            echo "  go      : ${{ needs.go.result }}"
-            echo "  ts      : ${{ needs.ts.result }}"
-            echo "  worker  : ${{ needs.worker.result }}"
+            echo "  proto      : ${{ needs.proto.result }}"
+            echo "  go         : ${{ needs.go.result }}"
+            echo "  ts         : ${{ needs.ts.result }}"
+            echo "  worker     : ${{ needs.worker.result }}"
+            echo "  docs-sync  : ${{ needs.docs-sync.result }}"
             exit 1
           fi
           echo "All required jobs succeeded ✓"
-          echo "  proto   : ${{ needs.proto.result }}"
-          echo "  go      : ${{ needs.go.result }}"
-          echo "  ts      : ${{ needs.ts.result }}"
-          echo "  worker  : ${{ needs.worker.result }}"
+          echo "  proto      : ${{ needs.proto.result }}"
+          echo "  go         : ${{ needs.go.result }}"
+          echo "  ts         : ${{ needs.ts.result }}"
+          echo "  worker     : ${{ needs.worker.result }}"
+          echo "  docs-sync  : ${{ needs.docs-sync.result }}"
+
+  # ---------------------------------------------------------------------------
+  # Public docs sync gate — fail the PR if website/docs/ has drifted from
+  # documents/. This runs in CI rather than only at deploy time so the
+  # author gets a fast signal.
+  # ---------------------------------------------------------------------------
+  docs-sync:
+    name: Docs sync check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify website/docs/ matches documents/
+        run: |
+          set -euo pipefail
+          chmod +x scripts/sync-docs.sh
+          ./scripts/sync-docs.sh --check
+
+      - name: If out of sync, show a suggested diff
+        if: failure()
+        run: |
+          echo "::error::website/docs/ is out of sync with documents/."
+          echo "Run locally:"
+          echo "  ./scripts/sync-docs.sh"
+          echo "Then commit the resulting website/docs/ changes."

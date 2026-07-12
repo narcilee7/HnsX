@@ -21,7 +21,6 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-
 class SkillSpecError(ValueError):
     """Raised when a Skill spec dict is invalid (missing id, etc.)."""
 
