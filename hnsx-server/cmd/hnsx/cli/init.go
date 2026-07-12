@@ -16,6 +16,11 @@ import (
 var templatesFS embed.FS
 
 // newInitCmd generates a new DomainSpec from a template.
+//
+// Deprecated: use `hnsx new <domain-id>` instead. `hnsx new` produces a
+// per-domain folder (with README + .gitignore + next-step hints) on top of
+// the same domain.yaml. `hnsx init` is preserved for backward compatibility
+// and will be removed in v1.1.
 func newInitCmd(cfg *Config) *cobra.Command {
 	var (
 		templateName string
@@ -24,9 +29,14 @@ func newInitCmd(cfg *Config) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "init [flags] [domain-id]",
-		Short: "Generate a new DomainSpec from a template",
+		Use:        "init [flags] [domain-id]",
+		Short:      "Generate a new DomainSpec from a template (deprecated: use `hnsx new`)",
+		Deprecated: "use `hnsx new <domain-id>` instead — it scaffolds a full Domain folder",
 		Long: `Generate a new domain.yaml from a built-in template or the template index.
+
+This command is deprecated. Run "hnsx new <domain-id>" instead to get a
+per-domain folder (domain.yaml + README.md + .gitignore) with the same
+template content.
 
 Available built-in templates:
   blank              minimal single-agent domain

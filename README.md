@@ -10,9 +10,10 @@
 [官网](https://narcilee7.github.io/HnsX/) · [文档](https://narcilee7.github.io/HnsX/) · [博客](https://narcilee7.github.io/HnsX/blog) · [快速开始](#快速开始)
 
 <!-- Demo GIF placeholder: 5 秒从 npm i -g hnsx 到 hnsx deploy 成功的全流程
-     录制规格：1280×720，≤5s，≤3MB，丢进 docs/assets/demo.gif 后用下面这行引用 -->
+     录制规格：1280×720，≤5s，≤3MB，丢进 documents/assets/demo.gif 后用下面这行引用。
+     录制脚本见 documents/assets/demo.cast。 -->
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="HnsX 5 分钟 deploy 演示" width="720">
+  <img src="documents/assets/demo.gif" alt="HnsX 5 分钟 deploy 演示" width="720">
 </p>
 
 ```bash
