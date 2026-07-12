@@ -68,6 +68,7 @@ Use "hnsx <command> --help" for per-command details.
 	// Existing local commands (preserved, refactored to cobra).
 	cmd.AddCommand(newValidateCmd(&cfg))
 	cmd.AddCommand(newRunCmd(&cfg))
+	cmd.AddCommand(newDeployCmd(&cfg))
 
 	// v0.4 Operator: resource-oriented command groups.
 	cmd.AddCommand(newDomainCmd(&cfg))
