@@ -1,0 +1,108 @@
+# CODEOWNERS
+#
+# HnsX uses GitHub's CODEOWNERS file to auto-request review from the
+# right maintainer(s) when a PR touches a given area. The last matching
+# rule wins, so put the most specific paths first.
+#
+# Format: <pattern>  <owner1>  <owner2> ...
+# Owners must be GitHub usernames or team names (e.g. @narcilee7 or
+# @hnsx-io/core).
+#
+# Until we grow enough active maintainers to staff per-area teams,
+# everything below routes to the core team. As reviewers specialize,
+# replace @hnsx-io/core with the relevant team or individual.
+
+# Default owner for anything not matched below.
+/                                          @narcilee7
+
+# ---------------------------------------------------------------------------
+# Top-level meta — vision, roadmap, contributing, security, license
+# ---------------------------------------------------------------------------
+/README.md                                  @narcilee7
+/LICENSE                                    @narcilee7
+/CONTRIBUTING.md                            @narcilee7
+/SECURITY.md                                @narcilee7
+/CODE_OF_CONDUCT.md                         @narcilee7
+/CHANGELOG.md                               @narcilee7
+/CLAUDE.md                                  @narcilee7
+/AGENTS.md                                  @narcilee7
+/MONOREPO.md                                @narcilee7
+/.github/                                   @narcilee7
+
+# ---------------------------------------------------------------------------
+# API single source of truth — proto changes ripple to Go / TS / Python
+# ---------------------------------------------------------------------------
+/proto/                                     @narcilee7
+
+# ---------------------------------------------------------------------------
+# Go control plane + CLI
+# ---------------------------------------------------------------------------
+/hnsx-server/                               @narcilee7
+/hnsx-server/cmd/hnsx/                      @narcilee7   # CLI surface
+/hnsx-server/cmd/hnsx/cli/                  @narcilee7   # cobra commands
+/hnsx-server/cmd/hnsx/cli/tui/              @narcilee7   # Bubble Tea TUI
+/hnsx-server/internal/auth/                 @narcilee7   # auth & RBAC
+/hnsx-server/internal/policy/               @narcilee7   # policy engine
+/hnsx-server/internal/secret/               @narcilee7   # secret storage
+/hnsx-server/internal/audit/                @narcilee7   # audit log
+/hnsx-server/internal/session/              @narcilee7   # session lifecycle
+/hnsx-server/internal/evaluation/           @narcilee7   # eval runner
+/hnsx-server/pkg/api/                       @narcilee7   # REST handlers
+/hnsx-server/pkg/spec/                      @narcilee7   # DomainSpec loader
+/hnsx-server/pkg/runtime/                   @narcilee7   # runtime core
+
+# ---------------------------------------------------------------------------
+# Python runtime
+# ---------------------------------------------------------------------------
+/hnsx-worker/                               @narcilee7
+/hnsx-worker/hnsx_worker/session_executor.py    @narcilee7
+/hnsx-worker/hnsx_worker/session_runtime.py     @narcilee7
+/hnsx-worker/hnsx_worker/worker_service.py      @narcilee7
+/hnsx-worker/hnsx_worker/adapters/              @narcilee7   # LLM adapters
+/hnsx-worker/hnsx_worker/agents/                @narcilee7
+/hnsx-worker/hnsx_worker/tools/                 @narcilee7
+/hnsx-worker/hnsx_worker/sandbox/               @narcilee7
+/hnsx-worker/hnsx_worker/policy/                @narcilee7
+/hnsx-worker/hnsx_worker/eval/                  @narcilee7
+/hnsx-worker/hnsx_worker/harness/               @narcilee7
+
+# ---------------------------------------------------------------------------
+# Web console + shared frontend library
+# ---------------------------------------------------------------------------
+/hnsx-console/                              @narcilee7
+/hnsx-console/src/api/                      @narcilee7
+/hnsx-console/src/components/domain/        @narcilee7   # Domain editor
+/hnsx-console/src/components/session/       @narcilee7   # ObservationTimeline
+/hnsx-console/src/pages/                    @narcilee7
+/observability/                             @narcilee7
+
+# ---------------------------------------------------------------------------
+# SDKs (Go, Node, Python)
+# ---------------------------------------------------------------------------
+/sdk/go/                                    @narcilee7
+/sdk/node/                                  @narcilee7
+/sdk/python/                                @narcilee7
+
+# ---------------------------------------------------------------------------
+# Example DomainSpecs — used by `hnsx try` and the smoke tests
+# ---------------------------------------------------------------------------
+/example-domains/                           @narcilee7
+
+# ---------------------------------------------------------------------------
+# Local deployment + k8s manifests
+# ---------------------------------------------------------------------------
+/deployments/                               @narcilee7
+/deployments/local/docker-compose.yaml      @narcilee7
+
+# ---------------------------------------------------------------------------
+# Documentation site
+# ---------------------------------------------------------------------------
+/website/                                   @narcilee7
+/docs/                                      @narcilee7
+
+# ---------------------------------------------------------------------------
+# Build / packaging
+# ---------------------------------------------------------------------------
+/Makefile                                   @narcilee7
+/packaging/                                 @narcilee7
+/scripts/                                   @narcilee7

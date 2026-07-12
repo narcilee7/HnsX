@@ -1,0 +1,26 @@
+name: Pull Request Labeler
+
+# Auto-applies labels based on what files a PR touches. See
+# .github/labeler.yml for the path → label mapping.
+#
+# Skip on `dependabot/**` branches (those PRs are noisy and Dependabot
+# adds its own labels anyway).
+
+on:
+  - pull_request_target
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  labeler:
+    name: Apply labels
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'dependabot/') }}
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+          sync-labels: false

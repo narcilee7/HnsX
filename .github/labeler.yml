@@ -1,0 +1,102 @@
+# Auto-label PRs by touched path. The matching rule with the highest
+# specificity wins, so list big buckets last.
+#
+# Configured in .github/workflows/labeler.yml.
+
+proto:
+  - proto/**
+
+server:
+  - hnsx-server/**
+
+worker:
+  - hnsx-worker/**
+
+console:
+  - hnsx-console/**
+
+observability:
+  - observability/**
+
+sdk-go:
+  - sdk/go/**
+
+sdk-node:
+  - sdk/node/**
+
+sdk-python:
+  - sdk/python/**
+
+docs:
+  - docs/**
+  - website/**
+  - '**/*.md'
+  - '!**/CHANGELOG.md'
+
+example-domain:
+  - example-domains/**
+
+deployment:
+  - deployments/**
+  - docker-compose*.yml
+  - Dockerfile*
+
+ci:
+  - .github/**
+
+cli:
+  - hnsx-server/cmd/hnsx/cli/**
+
+tui:
+  - hnsx-server/cmd/hnsx/cli/tui/**
+
+api:
+  - hnsx-server/pkg/api/**
+  - hnsx-server/internal/api/**
+
+auth:
+  - hnsx-server/internal/auth/**
+
+policy:
+  - hnsx-server/internal/policy/**
+  - hnsx-server/pkg/policy/**
+
+secret:
+  - hnsx-server/internal/secret/**
+
+audit:
+  - hnsx-server/internal/audit/**
+
+session:
+  - hnsx-server/internal/session/**
+
+evaluation:
+  - hnsx-server/internal/evaluation/**
+
+runtime:
+  - hnsx-server/pkg/runtime/**
+  - hnsx-worker/hnsx_worker/session_*.py
+  - hnsx-worker/hnsx_worker/worker_service.py
+
+test:
+  - '**/*_test.go'
+  - '**/test_*.py'
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - tests/**
+
+chore:
+  - '**/.gitignore'
+  - '**/.editorconfig'
+  - '**/.prettierrc*'
+  - Makefile
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+
+dependencies:
+  - '**/package.json'
+  - '**/go.mod'
+  - '**/go.sum'
+  - '**/pyproject.toml'
+  - '**/requirements*.txt'

@@ -1,0 +1,37 @@
+name: ❓ Question / Help
+description: How-to questions, usage clarification, or "is this supported?". Use Discussions for longer threads.
+title: "[question] "
+labels: ["question"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Short questions are fine here. For longer how-to threads, please
+        use [GitHub Discussions](../../discussions) instead — they have
+        better threading, search, and won't get auto-closed.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: One sentence, then as much context as you need.
+      placeholder: |
+        How do I make `hnsx session trigger` use my Claude Code CLI as
+        the agent instead of the Anthropic API?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: What I've tried
+      description: |
+        Link to docs, search terms, attempted configurations. Saves
+        back-and-forth.
+
+  - type: input
+    id: hnsx-version
+    attributes:
+      label: HnsX version (if relevant)
+      placeholder: "v1.0.0"

@@ -1,13 +1,24 @@
 name: Deploy website to GitHub Pages
 
+# ---------------------------------------------------------------------------
+# Builds the Rspress docs site and deploys to GitHub Pages.
+#
+# The site renders markdown under website/docs/. That directory is the
+# mirror of documents/, kept in sync by scripts/sync-docs.sh. We run
+# the sync here BEFORE the build so the published site always reflects
+# the source-of-truth documents/. We also expose make docs-sync-check
+# as a separate CI gate (see ci.yml) so PRs that drift the mirror fail
+# before merge.
+# ---------------------------------------------------------------------------
+
 on:
   push:
     branches:
       - main
-      - feat/tui_migration
     paths:
+      - 'documents/**'
       - 'website/**'
-      - 'docs/**'
+      - 'scripts/sync-docs.sh'
       - '.github/workflows/website.yml'
   workflow_dispatch:
 
@@ -36,6 +47,13 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - name: Sync documents/ → website/docs/
+        run: |
+          set -euo pipefail
+          ./scripts/sync-docs.sh
+          # Show what changed for the run log.
+          git status --porcelain website/docs || true
+
       - name: Install dependencies
         run: pnpm install
 
@@ -49,3 +67,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./website/dist
+          # Don't commit the mirrored website/docs/ back to main.
+          # Without this, the workflow would push a no-op commit on
+          # every successful run.
+          enable_jekyll: false

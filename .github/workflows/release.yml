@@ -1,16 +1,40 @@
 name: Release
 
+# ---------------------------------------------------------------------------
+# Triggered by pushing a tag matching v*. Builds the Go CLI and Server for
+# 4 OS/arch combinations, attaches tarballs + sha256 to a GitHub Release.
+#
+# To cut a release locally:
+#   git tag vX.Y.Z
+#   git push origin vX.Y.Z
+#
+# The provenance job (cosign + SBOM) is gated behind a workflow_dispatch
+# trigger and is disabled for tag pushes until signing credentials are
+# configured. See docs/PROVENANCE.md for the setup checklist.
+# ---------------------------------------------------------------------------
+
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. v0.1.0). Required for workflow_dispatch.'
+        required: true
+        type: string
+      enable_provenance:
+        description: 'Enable cosign signatures + SBOM generation.'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
-  id-token: write # for cosign signature
+  id-token: write # for cosign signature (provenance job)
 
 env:
-  GO_VERSION: '1.23'
+  GO_VERSION: '1.25'
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -37,6 +61,8 @@ jobs:
             runner: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for VERSION stamping
 
       - uses: actions/setup-go@v5
         with:
@@ -44,20 +70,31 @@ jobs:
           cache: true
           cache-dependency-path: hnsx-server/go.sum
 
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build binaries
         env:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
+          set -euo pipefail
           make build-cli build-server
           mkdir -p dist
           cp bin/hnsx dist/hnsx
           cp bin/hnsx-server dist/hnsx-server
 
-      - name: Create tarball
+      - name: Create tarball + sha256
         working-directory: dist
         run: |
+          set -euo pipefail
           asset="hnsx_${{ matrix.os }}_${{ matrix.arch }}.tar.gz"
           tar -czf "$asset" hnsx hnsx-server
           sha256sum "$asset" > "$asset.sha256"
@@ -79,6 +116,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -90,28 +138,59 @@ jobs:
           mkdir -p release
           find dist -type f -exec cp {} release/ \;
 
-      - name: Generate checksums file
+      - name: Generate combined checksums
         working-directory: release
         run: |
           sha256sum hnsx_*.tar.gz > checksums.txt
+          echo "Combined checksums:"
+          cat checksums.txt
+
+      - name: Extract CHANGELOG section
+        id: changelog
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          if [ ! -f CHANGELOG.md ]; then
+            echo "No CHANGELOG.md found; relying on auto-generated release notes."
+            exit 0
+          fi
+          # Extract the section for this version from CHANGELOG.md.
+          # Keep prose only — drop the diff markers so it renders cleanly.
+          awk -v ver="[$version]" '
+            /^## \[/ { in_section = ($0 ~ ver); next }
+            in_section { print }
+          ' CHANGELOG.md > release_notes.md || true
+          if [ ! -s release_notes.md ]; then
+            echo "No CHANGELOG section for $version; using auto-generated notes."
+            rm -f release_notes.md
+          else
+            echo "Extracted $(wc -l < release_notes.md) lines from CHANGELOG."
+          fi
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*
-          generate_release_notes: true
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          body_path: release_notes.md
+          generate_release_notes: ${{ steps.changelog.outputs.release_notes.md == '' }}
           fail_on_unmatched_files: true
+          files: |
+            release/*.tar.gz
+            release/*.sha256
+            release/checksums.txt
 
   # ---------------------------------------------------------------------------
-  # Optional: cosign signatures and SBOM. These steps are scaffolded so the
-  # release pipeline can be hardened later without changing the workflow shape.
-  # They are no-ops until a signing identity is configured.
+  # Optional: cosign signatures and SBOM. Triggered only via
+  # workflow_dispatch with enable_provenance=true, OR can be enabled by
+  # flipping the `if` predicate below once signing credentials are
+  # configured. See docs/PROVENANCE.md for the setup checklist.
   # ---------------------------------------------------------------------------
   provenance:
-    name: Provenance
+    name: Provenance (cosign + SBOM)
     runs-on: ubuntu-latest
     needs: release
-    if: false # enable when cosign/SBOM credentials are configured
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.enable_provenance == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -127,12 +206,28 @@ jobs:
           path: dist
           pattern: hnsx-*
 
-      - name: Generate SBOM
+      - name: Generate SBOM (SPDX-JSON)
         run: |
           syft dir:. -o spdx-json=hnsx.spdx.json
+          sha256sum hnsx.spdx.json > hnsx.spdx.json.sha256
 
-      - name: Sign artifacts
+      - name: Sign release artifacts
+        env:
+          COSIGN_EXPERIMENTAL: '1'
         run: |
           for f in dist/**/*; do
-            cosign sign-blob --yes "$f" > "$f.sig"
+            [ -f "$f" ] || continue
+            case "$f" in
+              *.sig|*.sha256|*.pem) continue ;;
+            esac
+            cosign sign-blob --yes --output-signature "$f.sig" "$f"
           done
+
+      - name: Upload provenance artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hnsx-provenance
+          path: |
+            hnsx.spdx.json
+            hnsx.spdx.json.sha256
+            dist/**/*.sig

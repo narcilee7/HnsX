@@ -38,6 +38,26 @@ LDFLAGS := -s -w \
   -X '$(VERSION_PKG).Built=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)'
 
 # ---------------------------------------------------------------------------
+# Public docs sync
+#
+# `documents/` is the source of truth for everything user-facing.
+# `website/docs/` mirrors a subset of it so Rspress can render the GitHub
+# Pages site. `scripts/sync-docs.sh --check` is the CI gate that fails
+# when the mirror drifts.
+# ---------------------------------------------------------------------------
+.PHONY: docs-sync
+docs-sync:
+	@./scripts/sync-docs.sh
+
+.PHONY: docs-sync-check
+docs-sync-check:
+	@./scripts/sync-docs.sh --check
+
+.PHONY: docs-sync-clean
+docs-sync-clean:
+	@./scripts/sync-docs.sh --clean
+
+# ---------------------------------------------------------------------------
 # Top-level aliases
 # ---------------------------------------------------------------------------
 .PHONY: help
@@ -62,6 +82,8 @@ help:
 	@echo "  ci              - lint + type-check + test + worker-test (no smoke)"
 	@echo "  db-up/db-down   - local Postgres (deployments/local)"
 	@echo "  smoke           - end-to-end smoke (requires db-up)"
+	@echo "  docs-sync       - mirror documents/ -> website/docs/"
+	@echo "  docs-sync-check - fail if website/docs/ is out of sync (CI gate)"
 	@echo "  clean           - remove build artifacts"
 
 .PHONY: build
@@ -181,6 +203,17 @@ worker-import-check:
 
 # ---------------------------------------------------------------------------
 # Changesets (TypeScript workspace versioning)
+#
+# HnsX ships TWO release pipelines that run side by side:
+#
+#   1. TypeScript workspace (hnsx-console, observability, sdk/node, website)
+#      → pnpm changesets → npm/pnpm publish
+#   2. Go CLI + Server binaries (linux/amd64, linux/arm64, darwin/amd64,
+#      darwin/arm64) → push tag vX.Y.Z → .github/workflows/release.yml
+#
+# `make release` below drives (1). Tag-based Go releases are driven by
+# pushing a tag, not by this Makefile, but `make release-check` validates
+# the state before you push.
 # ---------------------------------------------------------------------------
 .PHONY: changeset
 changeset:
@@ -193,6 +226,78 @@ version:
 .PHONY: release
 release:
 	cd $(ROOT) && pnpm exec changeset publish
+
+# ---------------------------------------------------------------------------
+# Tag-based Go release helpers
+#
+# These targets do NOT publish anything themselves — they validate the
+# repo state so you can push the tag with confidence. The actual release
+# is driven by .github/workflows/release.yml on tag push.
+#
+# Typical flow:
+#   make release-check                     # local sanity
+#   git tag v0.1.0                         # the tag
+#   git push origin v0.1.0                 # CI builds and publishes
+# ---------------------------------------------------------------------------
+.PHONY: release-check
+release-check:
+	@echo "→ Pre-release checks for HnsX v$(VERSION)"
+	@echo ""
+	@echo "1. Repo state"
+	@git status --short && \
+	  (test -z "$$(git status --short)" || (echo "✗ Uncommitted changes" && exit 1))
+	@git diff --stat HEAD~5 HEAD -- CHANGELOG.md 2>/dev/null | tail -1 || true
+	@echo "  ✓ Working tree clean"
+	@echo ""
+	@echo "2. Branch"
+	@current_branch=$$(git rev-parse --abbrev-ref HEAD); \
+	  if [ "$$current_branch" != "main" ]; then \
+	    echo "  ⚠ Not on main (on $$current_branch). Tag from main is recommended."; \
+	  else \
+	    echo "  ✓ On main"; \
+	  fi
+	@echo ""
+	@echo "3. Local build"
+	@$(MAKE) -s build
+	@echo "  ✓ Build clean"
+	@echo ""
+	@echo "4. Tests"
+	@$(MAKE) -s test || (echo "✗ Tests failed" && exit 1)
+	@echo "  ✓ Tests pass"
+	@echo ""
+	@echo "5. Worker tests"
+	@$(MAKE) -s worker-test || (echo "✗ Worker tests failed" && exit 1)
+	@echo "  ✓ Worker tests pass"
+	@echo ""
+	@echo "6. Smoke (only if db-up)"
+	@if docker compose -f $(DEPLOY_DIR)/docker-compose.yaml ps postgres 2>/dev/null | grep -q "Up"; then \
+	  $(MAKE) -s smoke && echo "  ✓ Smoke passed" || (echo "✗ Smoke failed" && exit 1); \
+	else \
+	  echo "  ⊘ Skipped (postgres not running; run 'make db-up' to enable)"; \
+	fi
+	@echo ""
+	@echo "All pre-release checks passed."
+	@echo "Next: git tag v$(VERSION) && git push origin v$(VERSION)"
+
+.PHONY: release-go-dry-run
+release-go-dry-run:
+	@echo "→ Dry-run: would push tag v$(VERSION) from current commit"
+	@echo "  Commit:  $$(git rev-parse --short=12 HEAD)"
+	@echo "  Branch:  $$(git rev-parse --abbrev-ref HEAD)"
+	@echo "  Subject: $$(git log -1 --pretty=%s)"
+	@echo ""
+	@echo "To actually push: git tag v$(VERSION) && git push origin v$(VERSION)"
+
+.PHONY: release-tag
+release-tag:
+	@if [ -z "$$TAG" ]; then \
+	  echo "Usage: make release-tag TAG=v0.1.0"; \
+	  exit 1; \
+	fi
+	@echo "→ Creating annotated tag $$TAG"
+	@git tag -a "$$TAG" -m "Release $$TAG"
+	@echo "✓ Tag created locally. Push with:"
+	@echo "    git push origin $$TAG"
 
 # ---------------------------------------------------------------------------
 # Python worker proto generation

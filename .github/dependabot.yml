@@ -1,0 +1,136 @@
+# Dependabot configuration. Keeps the monorepo's Go, Python, and
+# TypeScript dependencies current without spamming reviewers — weekly
+# batches, no auto-merge.
+
+version: 2
+
+updates:
+  # ----- Go: server, CLI, Go SDK ------------------------------------------
+  - package-ecosystem: "gomod"
+    directory: "/hnsx-server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      go-direct:
+        applies-to: version-updates
+        patterns: ["*"]
+      go-minor:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps(server)"
+    labels:
+      - "dependencies"
+      - "server"
+
+  - package-ecosystem: "gomod"
+    directory: "/sdk/go"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(sdk-go)"
+    labels:
+      - "dependencies"
+      - "sdk-go"
+
+  # ----- Python: worker + Python SDK --------------------------------------
+  - package-ecosystem: "pip"
+    directory: "/hnsx-worker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      worker-direct:
+        applies-to: version-updates
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps(worker)"
+    labels:
+      - "dependencies"
+      - "worker"
+
+  - package-ecosystem: "pip"
+    directory: "/sdk/python"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(sdk-python)"
+    labels:
+      - "dependencies"
+      - "sdk-python"
+
+  # ----- TypeScript workspace ---------------------------------------------
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 8
+    groups:
+      typescript-minor:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+        patterns: ["*"]
+      typescript-major:
+        applies-to: version-updates
+        update-types: ["major"]
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps(ts)"
+    ignore:
+      # Avoid noisy majors until we upgrade the workspace intentionally.
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+    labels:
+      - "dependencies"
+      - "console"
+
+  # ----- Docker base images -----------------------------------------------
+  - package-ecosystem: "docker"
+    directory: "/deployments/local"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(docker)"
+    labels:
+      - "dependencies"
+      - "deployment"
+
+  # ----- GitHub Actions ----------------------------------------------------
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+      - "ci"
