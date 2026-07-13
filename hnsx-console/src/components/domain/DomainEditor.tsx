@@ -1,7 +1,10 @@
-import { useState } from 'react'
-import Editor from '@monaco-editor/react'
+import { Suspense, lazy, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Save, Check, Play } from 'lucide-react'
+
+// Monaco Editor 体积大，仅在进入编辑页时按需加载
+const Editor = lazy(() => import('@monaco-editor/react'))
 
 interface DomainEditorProps {
   value: string
@@ -13,18 +16,28 @@ interface DomainEditorProps {
   isValidating?: boolean
 }
 
+function EditorSkeleton() {
+  return (
+    <div className="rounded-md border">
+      <Skeleton className="h-[60vh] w-full rounded-none" />
+    </div>
+  )
+}
+
 export function DomainEditor({ value, onChange, onSave, onValidate, onRun, isSaving, isValidating }: DomainEditorProps) {
   return (
     <div className="space-y-4">
       <div className="rounded-md border overflow-hidden">
-        <Editor
-          height="60vh"
-          defaultLanguage="yaml"
-          value={value}
-          onChange={(v) => onChange(v || '')}
-          theme="vs-light"
-          options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
-        />
+        <Suspense fallback={<EditorSkeleton />}>
+          <Editor
+            height="60vh"
+            defaultLanguage="yaml"
+            value={value}
+            onChange={(v) => onChange(v || '')}
+            theme="vs-light"
+            options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
+          />
+        </Suspense>
       </div>
       <div className="flex gap-2">
         <Button onClick={onSave} disabled={isSaving}>

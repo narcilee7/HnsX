@@ -6,7 +6,7 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/trace/model"
 	"github.com/hnsx-io/hnsx/server/internal/trace/repository"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // Service records and queries traces.
@@ -20,7 +20,7 @@ func NewService(repo repository.Repository) *Service {
 }
 
 // Record persists a runtime observation.
-func (s *Service) Record(ctx context.Context, obs runtime.Observation) error {
+func (s *Service) Record(ctx context.Context, obs domain.Observation) error {
 	rec := model.FromRuntime(obs)
 	return s.repo.Save(&rec)
 }

@@ -1,4 +1,6 @@
-package runtime
+// SessionID generation — moved from pkg/runtime/session_id.go in Phase 3.
+
+package domain
 
 import (
 	"crypto/rand"

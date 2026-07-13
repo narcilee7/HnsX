@@ -11,7 +11,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/session/model"
 	"github.com/hnsx-io/hnsx/server/internal/session/repository"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // Service implements the session application use cases.
@@ -85,7 +85,7 @@ func (s *Service) MarkRunning(tenantID tenant.ID, id string) (*model.Session, er
 }
 
 // MarkCompleted stores the final result and transitions to completed.
-func (s *Service) MarkCompleted(tenantID tenant.ID, id string, result *runtime.Result) (*model.Session, error) {
+func (s *Service) MarkCompleted(tenantID tenant.ID, id string, result *domain.Result) (*model.Session, error) {
 	sess, err := s.repo.ByID(tenantID, id)
 	if err != nil {
 		return nil, err
@@ -161,7 +161,7 @@ func (s *Service) Rerun(tenantID tenant.ID, existing *model.Session) (*model.Ses
 		return nil, model.ErrInvalidSession
 	}
 	return s.Create(tenantID, CreateParams{
-		SessionID:     runtime.NewSessionID(existing.DomainID),
+		SessionID:     domain.NewSessionID(existing.DomainID),
 		DomainID:      existing.DomainID,
 		DomainVersion: existing.DomainVersion,
 		Orchestration: existing.Orchestration,

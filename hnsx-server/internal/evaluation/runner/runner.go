@@ -14,14 +14,13 @@ import (
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
 	"github.com/hnsx-io/hnsx/server/internal/evaluation/scorer"
 	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // Executor runs a single domain session synchronously and returns its result.
 // It is satisfied by *pkg/session.Executor.
 type Executor interface {
-	Execute(ctx context.Context, s *domain.DomainSpec, trigger map[string]any) (*runtime.Result, error)
+	Execute(ctx context.Context, s *domain.DomainSpec, trigger map[string]any) (*domain.Result, error)
 }
 
 // CostFunc returns the accrued cost (USD) for a finished session. Optional;
@@ -137,8 +136,8 @@ func (r *Runner) Run(ctx context.Context, run *evalmodel.EvalRun, set *evalmodel
 
 func (r *Runner) runCase(ctx context.Context, s *domain.DomainSpec, ec evalmodel.EvalCase) evalmodel.EvalResult {
 	caseStart := time.Now()
-	sessID := runtime.NewSessionID(s.ID)
-	cctx := runtime.WithSessionID(ctx, sessID)
+	sessID := domain.NewSessionID(s.ID)
+	cctx := domain.WithSessionID(ctx, sessID)
 
 	res := evalmodel.EvalResult{
 		CaseID:    ec.ID,

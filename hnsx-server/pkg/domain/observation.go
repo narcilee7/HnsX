@@ -1,9 +1,7 @@
-// Package runtime defines the canonical Observation event, the Adapter
-// contract, and the Runner that executes a DomainSpec end-to-end.
-//
-// This package is intentionally free of infrastructure dependencies so it can
-// be imported by both the CLI and the server.
-package runtime
+// Observation types — moved from pkg/runtime/observation.go in Phase 3.
+// See `docs/REFACTOR_PLAN.md` for the migration rationale.
+
+package domain
 
 import "time"
 

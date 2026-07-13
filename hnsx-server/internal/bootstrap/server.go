@@ -20,7 +20,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/api"
 	"github.com/hnsx-io/hnsx/server/pkg/controlplane"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 	"github.com/hnsx-io/hnsx/server/pkg/version"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
@@ -98,7 +98,7 @@ func NewServerFromArgs(args []string) (*Server, error) {
 				if obs.GetMetadata() != "" {
 					_ = json.Unmarshal([]byte(obs.GetMetadata()), &metadata)
 				}
-				ro := runtime.Observation{
+				ro := domain.Observation{
 					Kind:      obs.GetKind(),
 					SessionID: obs.GetSessionId(),
 					DomainID:  obs.GetDomainId(),
@@ -113,9 +113,6 @@ func NewServerFromArgs(args []string) (*Server, error) {
 				apiServer.PublishObservation(sessionID, ro)
 				if apiServer.TraceService != nil {
 					_ = apiServer.TraceService.Record(context.Background(), ro)
-				}
-				if application.Executor != nil {
-					application.Executor.ForwardObservation(context.Background(), ro)
 				}
 			}
 			grpcSrv.Sched.OnSessionStatus = func(tid tenant.ID, sessionID, state string) {

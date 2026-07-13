@@ -1,4 +1,4 @@
-// Package adapter provides implementations of the runtime.Adapter contract.
+// Package adapter provides implementations of the domain.Adapter contract.
 // Adapters wrap an external Agent model so that the runtime stays decoupled
 // from any specific provider. Two adapters are shipped here:
 //
@@ -12,14 +12,13 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
-// Compile-time checks: both adapters implement runtime.Adapter.
+// Compile-time checks: both adapters implement domain.Adapter.
 var (
-	_ runtime.Adapter = (*NoopAdapter)(nil)
-	_ runtime.Adapter = (*EchoAdapter)(nil)
+	_ domain.Adapter = (*NoopAdapter)(nil)
+	_ domain.Adapter = (*EchoAdapter)(nil)
 )
 
 // NoopAdapter returns a deterministic, provider-agnostic response. Real

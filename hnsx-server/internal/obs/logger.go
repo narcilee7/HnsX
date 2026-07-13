@@ -20,6 +20,9 @@ import (
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/hnsx-io/hnsx/server/internal/tenant"
+	"github.com/hnsx-io/hnsx/server/internal/trace"
 )
 
 // NewLogger constructs a zap.Logger from environment.
@@ -137,13 +140,37 @@ func HookFuncErr(ctx context.Context, name string, log *zap.Logger, fields ...za
 	}
 }
 
-// FieldsFromContext extracts standard request fields (trace_id / tenant_id)
-// from a context. HookFunc consumers usually want these as base fields.
+// FieldsFromContext extracts standard request fields (trace_id / tenant_id /
+// session_id) from a context. HookFunc consumers usually want these as base
+// fields.
 func FieldsFromContext(ctx context.Context) []zap.Field {
-	// Phase 1 placeholder: wire up to internal/trace + internal/tenant in
-	// a follow-up. Kept as a no-op so callers can always safely call.
-	_ = ctx
-	return nil
+	if ctx == nil {
+		return nil
+	}
+	var fields []zap.Field
+	if tid, ok := tenant.FromContextOK(ctx); ok && tid != "" {
+		fields = append(fields, zap.String("tenant_id", string(tid)))
+	}
+	if sid, ok := trace.SessionIDFromContext(ctx); ok && sid != "" {
+		fields = append(fields, zap.String("session_id", sid))
+	}
+	if traceID, ok := trace.TraceIDFromContext(ctx); ok && traceID != "" {
+		fields = append(fields, zap.String("trace_id", traceID))
+	}
+	return fields
+}
+
+// With returns a logger enriched with request-scoped fields from ctx.
+// It safely handles a nil log argument.
+func With(ctx context.Context, log *zap.Logger) *zap.Logger {
+	if log == nil {
+		return zap.NewNop()
+	}
+	fields := FieldsFromContext(ctx)
+	if len(fields) == 0 {
+		return log
+	}
+	return log.With(fields...)
 }
 
 // SanityCheck ensures the obs package compiles cleanly when added to the

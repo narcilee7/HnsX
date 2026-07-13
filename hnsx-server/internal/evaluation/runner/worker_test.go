@@ -18,7 +18,6 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	workerrepo "github.com/hnsx-io/hnsx/server/internal/worker/repository"
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
@@ -41,8 +40,8 @@ func TestWorkerPoolRunner_ScoresAndAggregates(t *testing.T) {
 
 	stop := make(chan struct{})
 	defer close(stop)
-	go driveWorkerPool(t, workerSvc, sessionSvc, stop, func(trigger map[string]any) *runtime.Result {
-		return &runtime.Result{State: "completed", Output: map[string]any{"answer": trigger["produce"]}}
+	go driveWorkerPool(t, workerSvc, sessionSvc, stop, func(trigger map[string]any) *domain.Result {
+		return &domain.Result{State: "completed", Output: map[string]any{"answer": trigger["produce"]}}
 	})
 
 	r := NewWorkerPoolRunner(sessionCmds, sessionSvc, evalSvc, nil)
@@ -84,11 +83,11 @@ func TestWorkerPoolRunner_FailedSessionScoresZero(t *testing.T) {
 
 	stop := make(chan struct{})
 	defer close(stop)
-	go driveWorkerPool(t, workerSvc, sessionSvc, stop, func(trigger map[string]any) *runtime.Result {
+	go driveWorkerPool(t, workerSvc, sessionSvc, stop, func(trigger map[string]any) *domain.Result {
 		if trigger["fail"].(bool) {
 			return nil
 		}
-		return &runtime.Result{State: "completed", Output: map[string]any{"answer": "yes"}}
+		return &domain.Result{State: "completed", Output: map[string]any{"answer": "yes"}}
 	})
 
 	r := NewWorkerPoolRunner(sessionCmds, sessionSvc, evalSvc, nil)
@@ -116,7 +115,7 @@ func TestWorkerPoolRunner_RequiresSessionService(t *testing.T) {
 	sessionSvc := sessionservice.NewService(sessionrepo.NewInMemoryRepository())
 	domainSvc := domainservice.NewService(domainrepo.NewInMemoryRepository())
 	workerSvc := workerservice.NewService(workerrepo.NewInMemoryRepository())
-	cmds := commands.NewSessionCommands(sessionSvc, domainSvc, workerSvc, nil, app.NewState())
+	cmds := commands.NewSessionCommands(sessionSvc, domainSvc, workerSvc, app.NewState())
 	r := NewWorkerPoolRunner(cmds, nil, evalSvc, nil)
 	if err := r.Run(t.Context(), &evalmodel.EvalRun{ID: "r", DomainID: "d1"}, &evalmodel.EvalSet{ID: "s", DomainID: "d1"}, &domain.DomainSpec{ID: "d1"}, 0); err == nil {
 		t.Fatal("expected error for missing session service")
@@ -141,8 +140,8 @@ func TestWorkerPoolRunner_UsesTenantFromContext(t *testing.T) {
 
 	stop := make(chan struct{})
 	defer close(stop)
-	go driveWorkerPool(t, workerSvc, sessionSvc, stop, func(trigger map[string]any) *runtime.Result {
-		return &runtime.Result{State: "completed", Output: map[string]any{"answer": trigger["produce"]}}
+	go driveWorkerPool(t, workerSvc, sessionSvc, stop, func(trigger map[string]any) *domain.Result {
+		return &domain.Result{State: "completed", Output: map[string]any{"answer": trigger["produce"]}}
 	})
 
 	r := NewWorkerPoolRunner(sessionCmds, sessionSvc, evalSvc, nil)
@@ -175,8 +174,8 @@ func TestWorkerPoolRunner_CreatesSessions(t *testing.T) {
 
 	stop := make(chan struct{})
 	defer close(stop)
-	go driveWorkerPool(t, workerSvc, sessionSvc, stop, func(map[string]any) *runtime.Result {
-		return &runtime.Result{State: "completed", Output: map[string]any{"answer": "yes"}}
+	go driveWorkerPool(t, workerSvc, sessionSvc, stop, func(map[string]any) *domain.Result {
+		return &domain.Result{State: "completed", Output: map[string]any{"answer": "yes"}}
 	})
 
 	r := NewWorkerPoolRunner(sessionCmds, sessionSvc, evalSvc, nil)
@@ -197,13 +196,13 @@ func newWorkerPoolTestDeps(t *testing.T) (*evalservice.Service, *sessionservice.
 	domainSvc := domainservice.NewService(domainrepo.NewInMemoryRepository())
 	workerSvc := workerservice.NewService(workerrepo.NewInMemoryRepository())
 	state := app.NewState()
-	cmds := commands.NewSessionCommands(sessionSvc, domainSvc, workerSvc, nil, state)
+	cmds := commands.NewSessionCommands(sessionSvc, domainSvc, workerSvc, state)
 	return evalSvc, sessionSvc, cmds, workerSvc
 }
 
 // driveWorkerPool pulls sessions from the worker queue and completes them using
 // the supplied result factory. It stops when the channel is closed.
-func driveWorkerPool(t *testing.T, workerSvc *workerservice.Service, sessionSvc *sessionservice.Service, stop <-chan struct{}, factory func(map[string]any) *runtime.Result) {
+func driveWorkerPool(t *testing.T, workerSvc *workerservice.Service, sessionSvc *sessionservice.Service, stop <-chan struct{}, factory func(map[string]any) *domain.Result) {
 	t.Helper()
 	for {
 		select {

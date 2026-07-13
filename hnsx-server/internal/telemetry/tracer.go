@@ -10,10 +10,10 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
-// TracerSink converts runtime.Observation events into OTel spans on the
+// TracerSink converts domain.Observation events into OTel spans on the
 // global TracerProvider. It is read-only with respect to the OTel API —
 // it does not start its own provider.
 //
@@ -41,7 +41,7 @@ func (s *TracerSink) Name() string { return "otel" }
 
 // Record converts an observation into a span. The span ends immediately
 // since observations are point-in-time events.
-func (s *TracerSink) Record(ctx context.Context, obs runtime.Observation) error {
+func (s *TracerSink) Record(ctx context.Context, obs domain.Observation) error {
 	start := obs.Timestamp
 	if start.IsZero() {
 		start = time.Now()
@@ -79,7 +79,7 @@ func (s *TracerSink) Close(_ context.Context) error { return nil }
 // helpers
 // ----------------------------------------------------------------------------
 
-func observationSpanName(obs runtime.Observation) string {
+func observationSpanName(obs domain.Observation) string {
 	if obs.AgentID != "" {
 		return "hnsx.observation." + obs.Kind + "." + obs.AgentID
 	}
@@ -89,7 +89,7 @@ func observationSpanName(obs runtime.Observation) string {
 	return "hnsx.observation." + obs.Kind
 }
 
-func observationAttrs(obs runtime.Observation) []attribute.KeyValue {
+func observationAttrs(obs domain.Observation) []attribute.KeyValue {
 	out := []attribute.KeyValue{
 		attribute.String("hnsx.kind", obs.Kind),
 	}

@@ -7,7 +7,6 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/session/model"
 	"github.com/hnsx-io/hnsx/server/internal/session/repository"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
@@ -83,7 +82,7 @@ func TestService_MarkCompleted(t *testing.T) {
 	svc := NewService(repo)
 
 	_, _ = svc.Create(testTenant, CreateParams{SessionID: "s", DomainID: "d", Orchestration: "single"})
-	result := &runtime.Result{Mode: domain.Single}
+	result := &domain.Result{Mode: string(domain.Single)}
 	sess, err := svc.MarkCompleted(testTenant, "s", result)
 	if err != nil {
 		t.Fatalf("mark completed: %v", err)

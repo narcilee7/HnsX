@@ -5,10 +5,10 @@ import (
 	"context"
 	"sync"
 
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
-// Broadcaster is a per-session pub/sub for runtime.Observation values.
+// Broadcaster is a per-session pub/sub for domain.Observation values.
 //
 // Subscribers register via Subscribe(); each receives:
 //   - a replay buffer of all events published so far (so SSE clients that
@@ -18,16 +18,16 @@ import (
 // Closed either by Close() or by the parent session ending.
 type Broadcaster struct {
 	mu        sync.Mutex
-	subs      map[chan runtime.Observation]struct{}
+	subs      map[chan domain.Observation]struct{}
 	closed    bool
-	buffer    []runtime.Observation
+	buffer    []domain.Observation
 	bufferCap int
 }
 
 // NewBroadcaster creates an empty broadcaster with the default replay buffer
 // (256 observations). Use WithBufferCap to adjust if your workload is bursty.
 func NewBroadcaster() *Broadcaster {
-	return &Broadcaster{subs: map[chan runtime.Observation]struct{}{}, bufferCap: 256}
+	return &Broadcaster{subs: map[chan domain.Observation]struct{}{}, bufferCap: 256}
 }
 
 // WithBufferCap sets the maximum number of recent observations retained for
@@ -43,8 +43,8 @@ func (b *Broadcaster) WithBufferCap(n int) *Broadcaster {
 // cap=64; if it fills the publisher blocks (slow consumer policy: wait).
 // Replay events buffered before subscription are pre-filled into the channel
 // before live events start streaming.
-func (b *Broadcaster) Subscribe() (<-chan runtime.Observation, func()) {
-	ch := make(chan runtime.Observation, 256)
+func (b *Broadcaster) Subscribe() (<-chan domain.Observation, func()) {
+	ch := make(chan domain.Observation, 256)
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
@@ -52,7 +52,7 @@ func (b *Broadcaster) Subscribe() (<-chan runtime.Observation, func()) {
 		return ch, func() {}
 	}
 	// Snapshot the replay buffer.
-	replay := make([]runtime.Observation, len(b.buffer))
+	replay := make([]domain.Observation, len(b.buffer))
 	copy(replay, b.buffer)
 	b.subs[ch] = struct{}{}
 	b.mu.Unlock()
@@ -78,7 +78,7 @@ func (b *Broadcaster) Subscribe() (<-chan runtime.Observation, func()) {
 
 // Publish records the observation in the replay buffer, then fans it out to
 // every live subscriber. Returns ctx.Err() if the context is canceled mid-flight.
-func (b *Broadcaster) Publish(ctx context.Context, obs runtime.Observation) error {
+func (b *Broadcaster) Publish(ctx context.Context, obs domain.Observation) error {
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
@@ -91,7 +91,7 @@ func (b *Broadcaster) Publish(ctx context.Context, obs runtime.Observation) erro
 		copy(b.buffer, b.buffer[len(b.buffer)-b.bufferCap:])
 		b.buffer = b.buffer[:b.bufferCap]
 	}
-	subs := make([]chan runtime.Observation, 0, len(b.subs))
+	subs := make([]chan domain.Observation, 0, len(b.subs))
 	for ch := range b.subs {
 		subs = append(subs, ch)
 	}

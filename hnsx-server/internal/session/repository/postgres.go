@@ -10,7 +10,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/session/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // PostgresRepository persists Session aggregates to Postgres using GORM.
@@ -207,9 +207,9 @@ func (r *PostgresRepository) toModel(tid string, rec SessionRecord) (*model.Sess
 		}
 	}
 
-	var result *runtime.Result
+	var result *domain.Result
 	if len(rec.ResultPayload) > 0 {
-		result = &runtime.Result{}
+		result = &domain.Result{}
 		if err := json.Unmarshal(rec.ResultPayload, result); err != nil {
 			return nil, err
 		}

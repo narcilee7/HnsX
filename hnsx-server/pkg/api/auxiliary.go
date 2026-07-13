@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
@@ -19,10 +17,10 @@ import (
 	approvalrepo "github.com/hnsx-io/hnsx/server/internal/approval/repository"
 	auditmodel "github.com/hnsx-io/hnsx/server/internal/audit/model"
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
-	evalrunner "github.com/hnsx-io/hnsx/server/internal/evaluation/runner"
+	"github.com/hnsx-io/hnsx/server/pkg/handler"
+	tracevm "github.com/hnsx-io/hnsx/server/pkg/handler/viewmodel"
 	policymodel "github.com/hnsx-io/hnsx/server/internal/policy/model"
 	secmodel "github.com/hnsx-io/hnsx/server/internal/secret/model"
-	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	tracemodel "github.com/hnsx-io/hnsx/server/internal/trace/model"
 	workerpkg "github.com/hnsx-io/hnsx/server/internal/worker"
 )
@@ -167,8 +165,8 @@ func (s *Server) ListTraces(c *gin.Context) {
 	from, hasFrom := parseTimeQuery(c.Query("from"))
 	to, hasTo := parseTimeQuery(c.Query("to"))
 
-	filter := tracemodel.TraceListFilter{
-		TenantID:  string(tenantFromGin(c)),
+	in := handler.ListTracesInput{
+		TenantID:  tenantFromGin(c),
 		DomainID:  c.Query("domain"),
 		SessionID: c.Query("session"),
 		AgentID:   c.Query("agent"),
@@ -176,10 +174,10 @@ func (s *Server) ListTraces(c *gin.Context) {
 		Offset:    offset,
 	}
 	if hasFrom {
-		filter.From = from
+		in.From = from
 	}
 	if hasTo {
-		filter.To = to
+		in.To = to
 	}
 
 	if s.TraceService == nil {
@@ -191,20 +189,41 @@ func (s *Server) ListTraces(c *gin.Context) {
 		})
 		return
 	}
-	res, err := s.TraceService.ListSummaries(filter)
+	out, err := s.Handlers.ListTraces(c.Request.Context(), in)
 	if err != nil {
+		if handler.IsTraceNotFound(err) {
+			writeError(c, &APIError{Code: "TRACE_NOT_FOUND", Message: err.Error()})
+			return
+		}
 		writeError(c, NewInternal(err))
 		return
 	}
-	out := make([]map[string]any, 0, len(res.Summaries))
-	for _, sum := range res.Summaries {
-		out = append(out, traceSummaryToJSON(sum))
+
+	items := make([]map[string]any, 0, len(out.Traces.Items))
+	for _, sum := range out.Traces.Items {
+		items = append(items, map[string]any{
+			"trace_id":          sum.TraceID,
+			"session_id":        sum.SessionID,
+			"domain_id":         sum.DomainID,
+			"domain_version":    sum.DomainVersion,
+			"status":            sum.Status,
+			"started_at":        formatTimePtr(sum.StartedAt),
+			"completed_at":      formatTimePtr(sum.CompletedAt),
+			"duration_ms":       sum.DurationMs,
+			"observation_count": sum.ObservationCount,
+			"total_cost_usd":    sum.TotalCostUSD,
+			"prompt_tokens":     sum.TotalPromptTokens,
+			"completion_tokens": sum.TotalCompletionTokens,
+			"agent_invocations": sum.AgentInvocations,
+			"tool_invocations":  sum.ToolInvocations,
+			"created_at":        queries.FormatTimeValue(sum.CreatedAt),
+		})
 	}
 	writeJSON(c, http.StatusOK, map[string]any{
-		"items":  out,
-		"total":  res.Total,
-		"limit":  limit,
-		"offset": offset,
+		"items":  items,
+		"total":  out.Traces.Total,
+		"limit":  out.Traces.Limit,
+		"offset": out.Traces.Offset,
 	})
 }
 
@@ -213,16 +232,19 @@ func (s *Server) ListTraces(c *gin.Context) {
 // stable TRACE_NOT_FOUND code when the trace_id has no observations.
 func (s *Server) GetTrace(c *gin.Context) {
 	id := c.Param("traceId")
-	if s.TraceService == nil {
+	if s.TraceService == nil || s.Handlers == nil {
 		writeError(c, &APIError{
 			Code:    "TRACE_NOT_FOUND",
 			Message: fmt.Sprintf("trace '%s' not found", id),
 		})
 		return
 	}
-	detail, err := s.TraceService.Detail(id)
+	out, err := s.Handlers.GetTrace(c.Request.Context(), handler.GetTraceInput{
+		TenantID: tenantFromGin(c),
+		TraceID:  id,
+	})
 	if err != nil {
-		if errors.Is(err, tracemodel.ErrTraceNotFound) {
+		if handler.IsTraceNotFound(err) {
 			writeError(c, &APIError{
 				Code:    "TRACE_NOT_FOUND",
 				Message: fmt.Sprintf("trace '%s' not found", id),
@@ -233,6 +255,7 @@ func (s *Server) GetTrace(c *gin.Context) {
 		return
 	}
 
+	detail := out.Trace
 	observations := make([]map[string]any, 0, len(detail.Observations))
 	for _, rec := range detail.Observations {
 		observations = append(observations, observationToMap(rec))
@@ -255,26 +278,6 @@ func (s *Server) GetTrace(c *gin.Context) {
 		"tool_invocations":  detail.ToolInvocations,
 		"observations":      observations,
 	})
-}
-
-func traceSummaryToJSON(sum tracemodel.TraceSummary) map[string]any {
-	out := map[string]any{
-		"trace_id":          sum.TraceID,
-		"session_id":        sum.SessionID,
-		"domain_id":         sum.DomainID,
-		"domain_version":    sum.DomainVersion,
-		"status":            sum.Status,
-		"started_at":        formatTimePtr(sum.StartedAt),
-		"completed_at":      formatTimePtr(sum.CompletedAt),
-		"duration_ms":       sum.DurationMs,
-		"observation_count": sum.ObservationCount,
-		"total_cost_usd":    sum.TotalCostUSD,
-		"prompt_tokens":     sum.TotalPromptTokens,
-		"completion_tokens": sum.TotalCompletionTokens,
-		"agent_invocations": sum.AgentInvocations,
-		"tool_invocations":  sum.ToolInvocations,
-	}
-	return out
 }
 
 func formatTimePtr(t time.Time) any {
@@ -783,13 +786,19 @@ func (s *Server) ListEvalRuns(c *gin.Context) {
 		return
 	}
 
-	runs, err := s.EvalService.RunsBySet(id)
+	out, err := s.Handlers.ListEvalRuns(c.Request.Context(), handler.ListEvalRunsInput{
+		TenantID: tenantFromGin(c),
+		SetID:    id,
+		Limit:    limit,
+		Offset:   offset,
+	})
 	if err != nil {
-		writeError(c, NewInternal(err))
+		writeError(c, mapEvalError(err))
 		return
 	}
 
-	total := len(runs)
+	total := out.Runs.Total
+	items := out.Runs.Items
 	if offset > total {
 		offset = total
 	}
@@ -797,29 +806,14 @@ func (s *Server) ListEvalRuns(c *gin.Context) {
 	if end > total {
 		end = total
 	}
-	runs = runs[offset:end]
-
-	out := make([]map[string]any, 0, len(runs))
-	for _, r := range runs {
-		out = append(out, map[string]any{
-			"id":             r.ID,
-			"eval_set_id":    r.EvalSetID,
-			"domain_id":      r.DomainID,
-			"domain_version": r.DomainVersion,
-			"orchestration":  r.Orchestration,
-			"state":          r.State,
-			"score":          r.Score,
-			"total_cases":    r.TotalCases,
-			"passed_cases":   r.PassedCases,
-			"total_cost_usd": r.TotalCostUSD,
-			"duration_ms":    r.DurationMs,
-			"created_at":     queries.FormatTimeValue(r.CreatedAt),
-			"completed_at":   queries.FormatTime(r.CompletedAt),
-		})
+	if offset < len(items) {
+		items = items[offset:end]
+	} else {
+		items = nil
 	}
 
 	writeJSON(c, http.StatusOK, map[string]any{
-		"items":  out,
+		"items":  items,
 		"total":  total,
 		"limit":  limit,
 		"offset": offset,
@@ -837,8 +831,7 @@ func (s *Server) RunEval(c *gin.Context) {
 		return
 	}
 
-	set, err := s.EvalService.GetSet(id)
-	if err != nil {
+	if _, err := s.EvalService.GetSet(id); err != nil {
 		if errors.Is(err, evalmodel.ErrEvalSetNotFound) {
 			writeError(c, &APIError{
 				Code:    "EVAL_SET_NOT_FOUND",
@@ -850,68 +843,19 @@ func (s *Server) RunEval(c *gin.Context) {
 		return
 	}
 
-	_, domain, ok := s.Queries.GetDomain(tenantFromGin(c), set.DomainID)
-	if !ok {
-		writeError(c, NewDomainNotFound(set.DomainID))
+	out, err := s.Handlers.RunEval(c.Request.Context(), handler.RunEvalInput{
+		TenantID: tenantFromGin(c),
+		SetID:    id,
+	})
+	if err != nil {
+		writeError(c, mapEvalError(err))
 		return
 	}
 
-	run := &evalmodel.EvalRun{
-		ID:            uuid.NewString(),
-		EvalSetID:     set.ID,
-		DomainID:      set.DomainID,
-		DomainVersion: domain.Version,
-		Orchestration: string(domain.Spec.Harness.Session.Mode),
-		State:         "running",
-		TotalCases:    len(set.Cases),
-	}
-	if err := s.EvalService.CreateRun(run); err != nil {
-		writeError(c, NewInternal(err))
-		return
-	}
-
-	// The eval runner dispatches each case as a session. Prefer the worker pool
-	// when available; fall back to the local executor for single-process tests.
-	specForRun := domain.Spec
-	budget := 0.0
-	if specForRun != nil {
-		budget = specForRun.Harness.Policy.Budget.MaxCostUSD
-	}
-	traceSvc := s.TraceService
-	costFn := func(sessionID string) float64 {
-		if traceSvc == nil {
-			return 0
-		}
-		agg, err := traceSvc.Aggregate([]string{sessionID})
-		if err != nil {
-			return 0
-		}
-		return agg.TotalCostUSD
-	}
-
-	var er evalrunner.EvalRunner
-	if s.WorkerService != nil && s.SessionCommands != nil {
-		er = evalrunner.NewWorkerPoolRunner(s.SessionCommands, s.App.SessionService, s.EvalService, costFn)
-	} else if s.Executor != nil {
-		er = evalrunner.New(s.Executor, s.EvalService, evalrunner.WithCostFunc(costFn))
-	} else {
-		writeError(c, &APIError{
-			Code:    "ADAPTER_NOT_IMPLEMENTED",
-			Message: "eval runner requires a worker pool or local executor",
-		})
-		return
-	}
-
-	tenantID := tenantFromGin(c)
-	go func() {
-		ctx := tenant.NewContext(context.Background(), tenantID)
-		_ = er.Run(ctx, run, set, specForRun, budget)
-	}()
-
-	c.Header("Location", fmt.Sprintf("/api/v1/evals/%s/runs/%s", set.ID, run.ID))
+	c.Header("Location", fmt.Sprintf("/api/v1/evals/%s/runs/%s", id, out.Run.RunID))
 	writeJSON(c, http.StatusAccepted, map[string]any{
-		"run_id": run.ID,
-		"state":  "running",
+		"run_id": out.Run.RunID,
+		"state":  out.Run.State,
 	})
 }
 
@@ -926,48 +870,44 @@ func (s *Server) GetEvalRun(c *gin.Context) {
 		return
 	}
 
-	run, err := s.EvalService.GetRun(runID)
+	out, err := s.Handlers.GetEvalRun(c.Request.Context(), handler.GetEvalRunInput{
+		TenantID: tenantFromGin(c),
+		RunID:    runID,
+	})
 	if err != nil {
-		if errors.Is(err, evalmodel.ErrEvalRunNotFound) {
-			writeError(c, &APIError{
-				Code:    "EVAL_RUN_NOT_FOUND",
-				Message: err.Error(),
-			})
-			return
-		}
-		writeError(c, NewInternal(err))
+		writeError(c, mapEvalError(err))
 		return
 	}
 
-	cases := make([]map[string]any, 0, len(run.Results))
-	for _, res := range run.Results {
+	run := out.Run
+	cases := make([]map[string]any, 0, len(run.Cases))
+	for _, res := range run.Cases {
 		cases = append(cases, map[string]any{
-			"case_id":     res.CaseID,
-			"session_id":  res.SessionID,
-			"score":       res.Score,
-			"passed":      res.Passed,
-			"actual":      res.Actual,
-			"details":     res.Details,
-			"duration_ms": res.DurationMs,
-			"cost_usd":    res.CostUSD,
+			"case_id":    res.CaseID,
+			"session_id": res.SessionID,
+			"score":      res.Score,
+			"passed":     res.Passed,
+			"actual":     res.Actual,
+			"details":    res.Details,
 		})
 	}
 
 	writeJSON(c, http.StatusOK, map[string]any{
-		"id":             run.ID,
-		"eval_set_id":    run.EvalSetID,
-		"domain_id":      run.DomainID,
-		"domain_version": run.DomainVersion,
-		"orchestration":  run.Orchestration,
-		"state":          run.State,
-		"score":          run.Score,
-		"total_cases":    run.TotalCases,
-		"passed_cases":   run.PassedCases,
-		"total_cost_usd": run.TotalCostUSD,
-		"duration_ms":    run.DurationMs,
-		"cases":          cases,
-		"created_at":     queries.FormatTimeValue(run.CreatedAt),
-		"completed_at":   queries.FormatTime(run.CompletedAt),
+		"id":              run.ID,
+		"eval_set_id":     run.EvalSetID,
+		"domain_id":       run.DomainID,
+		"domain_version":  run.DomainVersion,
+		"orchestration":   "",
+		"state":           run.State,
+		"score":           run.Score,
+		"total_cases":     run.Total,
+		"passed_cases":    run.Passed,
+		"total_cost_usd":  run.TotalCostUSD,
+		"duration_ms":     run.DurationMs,
+		"baseline_run_id": run.BaselineRunID,
+		"cases":           cases,
+		"created_at":      queries.FormatTimeValue(time.Time{}),
+		"completed_at":    "",
 	})
 }
 
@@ -1556,9 +1496,25 @@ func parseTimeQuery(v string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
+// mapEvalError maps evaluation handler errors to stable HTTP API error codes.
+func mapEvalError(err error) *APIError {
+	if err == nil {
+		return nil
+	}
+	switch {
+	case handler.IsEvalSetNotFound(err):
+		return &APIError{Code: "EVAL_SET_NOT_FOUND", Message: err.Error()}
+	case handler.IsEvalRunNotFound(err):
+		return &APIError{Code: "EVAL_RUN_NOT_FOUND", Message: err.Error()}
+	case handler.IsDomainNotFound(err):
+		return &APIError{Code: "DOMAIN_NOT_FOUND", Message: err.Error()}
+	}
+	return NewInternal(err)
+}
+
 // observationToMap renders a persisted observation record as the JSON shape used
 // by the trace endpoints.
-func observationToMap(rec tracemodel.ObservationRecord) map[string]any {
+func observationToMap(rec tracevm.ObservationItem) map[string]any {
 	return map[string]any{
 		"kind":              rec.Kind,
 		"trace_id":          rec.TraceID,

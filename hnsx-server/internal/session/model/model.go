@@ -10,7 +10,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // State represents the finite states of a session lifecycle.
@@ -42,7 +42,7 @@ type Session struct {
 	Orchestration string
 	State         State
 	Trigger       map[string]any
-	Result        *runtime.Result
+	Result        *domain.Result
 	StartedAt     time.Time
 	CompletedAt   *time.Time
 }

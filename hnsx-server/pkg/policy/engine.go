@@ -18,7 +18,6 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
@@ -153,11 +152,11 @@ func (e *Engine) Guardrails() []domain.GuardrailSpec {
 	return out
 }
 
-// Snapshot returns the current cost/token/turn counters as a runtime.Cost
+// Snapshot returns the current cost/token/turn counters as a domain.Cost
 // value. This is the single source of truth used to populate
-// runtime.Observation.Cost and drive trace/metric aggregation.
-func (e *Engine) Snapshot() *runtime.Cost {
-	return &runtime.Cost{
+// domain.Observation.Cost and drive trace/metric aggregation.
+func (e *Engine) Snapshot() *domain.Cost {
+	return &domain.Cost{
 		PromptTokens:     int(e.promptTokens.Load()),
 		CompletionTokens: int(e.completionTokens.Load()),
 		CostUSD:          float64FromBits(e.costUSD.Load()),

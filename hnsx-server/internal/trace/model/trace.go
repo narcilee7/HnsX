@@ -5,10 +5,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
-// ObservationRecord is a persisted copy of a runtime.Observation.
+// ObservationRecord is a persisted copy of a domain.Observation.
 type ObservationRecord struct {
 	ID               int64
 	TraceID          string
@@ -27,8 +27,8 @@ type ObservationRecord struct {
 	CreatedAt        time.Time
 }
 
-// FromRuntime converts a runtime.Observation into a record.
-func FromRuntime(obs runtime.Observation) ObservationRecord {
+// FromRuntime converts a domain.Observation into a record.
+func FromRuntime(obs domain.Observation) ObservationRecord {
 	r := ObservationRecord{
 		TraceID:   obs.TraceID,
 		SessionID: obs.SessionID,

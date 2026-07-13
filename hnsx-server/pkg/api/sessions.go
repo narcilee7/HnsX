@@ -2,67 +2,44 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/hnsx-io/hnsx/server/internal/app"
-	"github.com/hnsx-io/hnsx/server/internal/app/commands"
-	"github.com/hnsx-io/hnsx/server/internal/app/queries"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
+	"github.com/hnsx-io/hnsx/server/pkg/handler"
+	"github.com/hnsx-io/hnsx/server/pkg/handler/viewmodel"
 )
 
 // ListSessions handles GET /api/v1/sessions.
 func (s *Server) ListSessions(c *gin.Context) {
-	items := s.Queries.ListSessions(tenantFromGin(c))
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].StartedAt.After(items[j].StartedAt)
+	out, err := s.Handlers.ListSessions(c.Request.Context(), handler.ListSessionsInput{
+		TenantID: tenantFromGin(c),
+		Filters: viewmodel.SessionFilters{
+			DomainID: c.Query("domain"),
+			State:    c.Query("state"),
+		},
 	})
-
-	domainFilter := c.Query("domain")
-	stateFilter := c.Query("state")
-
-	out := make([]map[string]any, 0, len(items))
-	for _, sess := range items {
-		if domainFilter != "" && sess.DomainID != domainFilter {
-			continue
-		}
-		if stateFilter != "" && sess.State != stateFilter {
-			continue
-		}
-		out = append(out, map[string]any{
-			"id":             sess.ID,
-			"domain_id":      sess.DomainID,
-			"domain_version": sess.DomainVersion,
-			"orchestration":  sess.Orchestration,
-			"state":          sess.State,
-			"started_at":     queries.FormatTimeValue(sess.StartedAt),
-			"completed_at":   queries.FormatTime(sess.CompletedAt),
-			"summary":        sessionSummary(sess),
-		})
+	if err != nil {
+		writeError(c, mapSessionError(err))
+		return
 	}
-
-	writeJSON(c, http.StatusOK, map[string]any{
-		"items":  out,
-		"total":  len(out),
-		"limit":  len(out),
-		"offset": 0,
-	})
+	writeJSON(c, http.StatusOK, out.Sessions)
 }
 
 // GetSession handles GET /api/v1/sessions/:id.
 func (s *Server) GetSession(c *gin.Context) {
-	id := c.Param("id")
-	sess, ok := s.Queries.GetSession(tenantFromGin(c), id)
-	if !ok {
-		writeError(c, NewSessionNotFound(id))
+	out, err := s.Handlers.GetSession(c.Request.Context(), handler.GetSessionInput{
+		TenantID:  tenantFromGin(c),
+		SessionID: c.Param("id"),
+	})
+	if err != nil {
+		writeError(c, mapSessionError(err))
 		return
 	}
-	writeJSON(c, http.StatusOK, jsonSession(sess))
+	writeJSON(c, http.StatusOK, out.Session)
 }
 
 // TriggerSession handles POST /api/v1/sessions.
@@ -82,120 +59,84 @@ func (s *Server) TriggerSession(c *gin.Context) {
 // triggerSession is the shared backend for /sessions and /domains/:id/run.
 func (s *Server) triggerSession(c *gin.Context, tenantID tenant.ID, domainID string, trigger map[string]any) {
 	if domainID == "" {
-		writeError(c, &APIError{
-			Code:    "INVALID_REQUEST",
-			Message: "domain_id is required",
-		})
+		writeError(c, NewInvalidRequest("domain_id is required"))
 		return
 	}
-	_, d, ok := s.Queries.GetDomain(tenantID, domainID)
-	if !ok {
-		writeError(c, NewDomainNotFound(domainID))
-		return
-	}
-
-	sess, err := s.SessionCommands.Start(c.Request.Context(), tenantID, d, trigger)
+	out, err := s.Handlers.TriggerSession(c.Request.Context(), handler.TriggerSessionInput{
+		TenantID:      tenantID,
+		DomainID:      domainID,
+		DomainVersion: "",
+		Trigger:       trigger,
+	})
 	if err != nil {
+		if handler.IsDomainNotFound(err) {
+			writeError(c, NewDomainNotFound(domainID))
+			return
+		}
 		writeError(c, NewInternal(err))
 		return
 	}
 
-	c.Header("Location", commands.BuildSessionLocation(sess.ID))
-	writeJSON(c, http.StatusAccepted, map[string]any{
-		"id":    sess.ID,
-		"state": sess.State,
-	})
+	c.Header("Location", out.Location)
+	writeJSON(c, http.StatusAccepted, out.Session)
 }
 
 // CancelSession handles POST /api/v1/sessions/:id/cancel.
 func (s *Server) CancelSession(c *gin.Context) {
 	id := c.Param("id")
-	sess, err := s.SessionCommands.Cancel(c.Request.Context(), tenantFromGin(c), id)
+	out, err := s.Handlers.CancelSession(c.Request.Context(), handler.CancelSessionInput{
+		TenantID:  tenantFromGin(c),
+		SessionID: id,
+	})
 	if err != nil {
-		if errors.Is(err, commands.ErrSessionNotFound) {
-			writeError(c, NewSessionNotFound(id))
-			return
-		}
-		writeError(c, &APIError{
-			Code:    "INVALID_REQUEST",
-			Message: err.Error(),
-		})
+		writeError(c, mapSessionError(err))
 		return
 	}
-
-	if s.WorkerService != nil {
-		if workerID, ok := s.WorkerService.SessionWorker(id); ok {
-			s.WorkerService.SendCancel(workerID, id, "user requested cancel", time.Now().Add(5*time.Second).UnixMilli())
-		}
-	}
-
-	s.AppState.DetachBroadcaster(id)
-
-	writeJSON(c, http.StatusOK, jsonSession(sess))
+	writeJSON(c, http.StatusOK, out.Session)
 }
 
 // RerunSession handles POST /api/v1/sessions/:id/rerun.
 func (s *Server) RerunSession(c *gin.Context) {
 	id := c.Param("id")
-	sess, err := s.SessionCommands.Rerun(c.Request.Context(), tenantFromGin(c), id)
+	out, err := s.Handlers.RerunSession(c.Request.Context(), handler.RerunSessionInput{
+		TenantID:  tenantFromGin(c),
+		SessionID: id,
+	})
 	if err != nil {
-		if errors.Is(err, commands.ErrSessionNotFound) {
-			writeError(c, NewSessionNotFound(id))
-			return
-		}
-		writeError(c, NewInternal(err))
+		writeError(c, mapSessionError(err))
 		return
 	}
-
-	c.Header("Location", commands.BuildSessionLocation(sess.ID))
-	writeJSON(c, http.StatusAccepted, map[string]any{
-		"id":    sess.ID,
-		"state": sess.State,
-	})
+	c.Header("Location", out.Location)
+	writeJSON(c, http.StatusAccepted, out.Session)
 }
 
 // GetSessionTrace handles GET /api/v1/sessions/:id/trace.
-//
-// Returns the persisted observation trace for the session. When TraceService
-// is not configured, falls back to the in-memory broadcaster replay buffer.
 func (s *Server) GetSessionTrace(c *gin.Context) {
 	id := c.Param("id")
-	sess, ok := s.Queries.GetSession(tenantFromGin(c), id)
-	if !ok {
-		writeError(c, NewSessionNotFound(id))
+	out, err := s.Handlers.GetSessionTrace(c.Request.Context(), handler.GetSessionTraceInput{
+		TenantID:  tenantFromGin(c),
+		SessionID: id,
+	})
+	if err != nil {
+		writeError(c, mapSessionError(err))
 		return
 	}
-
-	observations := []map[string]any{}
-
-	if s.TraceService != nil {
-		records, err := s.TraceService.BySession(id)
-		if err != nil {
-			writeError(c, NewInternal(err))
-			return
-		}
-		for _, rec := range records {
-			observations = append(observations, observationToMap(rec))
-		}
-	}
-
 	writeJSON(c, http.StatusOK, map[string]any{
-		"trace_id":     id,
-		"session_id":   id,
-		"domain_id":    sess.DomainID,
-		"observations": observations,
+		"trace_id":     out.TraceID,
+		"session_id":   out.SessionID,
+		"domain_id":    out.DomainID,
+		"observations": out.Observations,
 	})
 }
 
 // StreamSessionEvents handles GET /api/v1/sessions/:id/events (SSE).
-//
-// On open, it replays the broadcaster's current snapshot, then streams new
-// events as they are published. Closes when the session completes or the
-// client disconnects.
 func (s *Server) StreamSessionEvents(c *gin.Context) {
 	id := c.Param("id")
-	if _, ok := s.Queries.GetSession(tenantFromGin(c), id); !ok {
-		writeError(c, NewSessionNotFound(id))
+	if _, err := s.Handlers.GetSession(c.Request.Context(), handler.GetSessionInput{
+		TenantID:  tenantFromGin(c),
+		SessionID: id,
+	}); err != nil {
+		writeError(c, mapSessionError(err))
 		return
 	}
 
@@ -242,60 +183,16 @@ func writeSSE(c *gin.Context, event string, payload any) {
 	c.Writer.Flush()
 }
 
-// ----------------------------------------------------------------------------
-// helpers
-// ----------------------------------------------------------------------------
-
-func jsonSession(sess *app.RegisteredSession) map[string]any {
-	out := map[string]any{
-		"id":             sess.ID,
-		"domain_id":      sess.DomainID,
-		"domain_version": sess.DomainVersion,
-		"orchestration":  sess.Orchestration,
-		"state":          sess.State,
-		"trigger":        sess.Trigger,
-		"started_at":     sess.StartedAt,
+// mapSessionError maps handler/session errors to canonical APIError values.
+func mapSessionError(err error) *APIError {
+	if err == nil {
+		return nil
 	}
-	if sess.CompletedAt != nil {
-		out["completed_at"] = *sess.CompletedAt
+	if handler.IsSessionNotFound(err) {
+		return NewSessionNotFound("")
 	}
-	if sess.Result != nil {
-		out["result"] = sess.Result
-		out["summary"] = registeredSessionSummary(sess)
+	if handler.IsInvalidSession(err) || handler.IsAlreadyTerminal(err) {
+		return &APIError{Code: "INVALID_REQUEST", Message: err.Error()}
 	}
-	return out
-}
-
-func registeredSessionSummary(sess *app.RegisteredSession) map[string]any {
-	out := map[string]any{
-		"duration_ms": uint64(0),
-	}
-	started, err := time.Parse(time.RFC3339, sess.StartedAt)
-	if err == nil && sess.CompletedAt != nil {
-		if completed, err := time.Parse(time.RFC3339, *sess.CompletedAt); err == nil {
-			delta := completed.Sub(started).Milliseconds()
-			if delta > 0 {
-				out["duration_ms"] = uint64(delta)
-			}
-		}
-	}
-	out["mode"] = sess.Orchestration
-	out["agent_invocations"] = 0
-	out["tool_invocations"] = 0
-	out["total_cost_usd"] = 0.0
-	return out
-}
-
-func sessionSummary(sess queries.SessionListItem) map[string]any {
-	out := map[string]any{
-		"duration_ms": uint64(0),
-	}
-	if sess.CompletedAt != nil {
-		out["duration_ms"] = uint64(sess.CompletedAt.Sub(sess.StartedAt).Milliseconds())
-	}
-	out["mode"] = sess.Orchestration
-	out["agent_invocations"] = 0
-	out["tool_invocations"] = 0
-	out["total_cost_usd"] = 0.0
-	return out
+	return NewInternal(err)
 }

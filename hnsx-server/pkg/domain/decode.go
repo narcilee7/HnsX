@@ -1,14 +1,12 @@
-// Package local holds pure, local-only commands that can be shared by the
-// CLI and the server without pulling in DB, HTTP, gRPC, or OTel dependencies.
-package local
+// Domain decoding helpers — moved from pkg/local/local.go in Phase 3.
+
+package domain
 
 import (
 	"encoding/json"
 	"io"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // DomainSummary is the output of ValidateDomain.
@@ -16,7 +14,7 @@ type DomainSummary struct {
 	Valid      bool
 	ID         string
 	Version    string
-	Mode       domain.HarnessSessionMode
+	Mode       HarnessSessionMode
 	AgentCount int
 	StepCount  int
 }
@@ -24,7 +22,7 @@ type DomainSummary struct {
 // ValidateDomain parses and validates a DomainSpec from a reader and returns
 // a summary. Body can be JSON or YAML.
 func ValidateDomain(r io.Reader, contentType string) (*DomainSummary, error) {
-	s, err := decodeDomainSpec(r, contentType)
+	s, err := DecodeDomainSpec(r, contentType)
 	if err != nil {
 		return nil, err
 	}
@@ -45,14 +43,14 @@ func ValidateDomain(r io.Reader, contentType string) (*DomainSummary, error) {
 }
 
 // DecodeDomainSpec parses either YAML or JSON into a validated *DomainSpec.
-func DecodeDomainSpec(r io.Reader, contentType string) (*domain.DomainSpec, error) {
+func DecodeDomainSpec(r io.Reader, contentType string) (*DomainSpec, error) {
 	body, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
 
-	var s domain.DomainSpec
-	if isYAMLContentType(contentType) || looksLikeYAML(body) {
+	var s DomainSpec
+	if IsYAMLContentType(contentType) || looksLikeYAML(body) {
 		if err := yaml.Unmarshal(body, &s); err != nil {
 			return nil, err
 		}
@@ -61,19 +59,14 @@ func DecodeDomainSpec(r io.Reader, contentType string) (*domain.DomainSpec, erro
 			return nil, err
 		}
 	}
-	if err := domain.Validate(&s); err != nil {
+	if err := Validate(&s); err != nil {
 		return nil, err
 	}
 	return &s, nil
 }
 
-// decodeDomainSpec is kept as an alias for internal use within this package.
-func decodeDomainSpec(r io.Reader, contentType string) (*domain.DomainSpec, error) {
-	return DecodeDomainSpec(r, contentType)
-}
-
-// isYAMLContentType returns true for explicit YAML content types.
-func isYAMLContentType(ct string) bool {
+// IsYAMLContentType returns true for explicit YAML content types.
+func IsYAMLContentType(ct string) bool {
 	switch ct {
 	case "application/yaml", "application/x-yaml", "text/yaml":
 		return true
@@ -82,13 +75,23 @@ func isYAMLContentType(ct string) bool {
 	}
 }
 
-// looksLikeYAML heuristically detects YAML bodies (e.g. leading "---").
+// looksLikeYAML is a best-effort sniff for the few cases where clients
+// forget to set Content-Type but send YAML anyway (e.g. raw POSTs from
+// the CLI's `hnsx domain apply --file`).
 func looksLikeYAML(data []byte) bool {
-	for i := 0; i < len(data); i++ {
-		if data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r' {
-			continue
-		}
-		return data[i] == '-'
+	trimmed := data
+	// strip leading whitespace
+	for len(trimmed) > 0 && (trimmed[0] == ' ' || trimmed[0] == '\n' || trimmed[0] == '\r' || trimmed[0] == '\t') {
+		trimmed = trimmed[1:]
 	}
-	return false
+	if len(trimmed) == 0 {
+		return false
+	}
+	// JSON must start with `{` or `[`; YAML typically starts with a key
+	// (`foo:`) or a list marker (`-`).
+	switch trimmed[0] {
+	case '{', '[':
+		return false
+	}
+	return true
 }

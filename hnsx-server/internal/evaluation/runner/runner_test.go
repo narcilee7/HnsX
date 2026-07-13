@@ -8,15 +8,14 @@ import (
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
 	evalrepo "github.com/hnsx-io/hnsx/server/internal/evaluation/repository"
 	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 type stubExecutor struct {
-	fn func(trigger map[string]any) (*runtime.Result, error)
+	fn func(trigger map[string]any) (*domain.Result, error)
 }
 
-func (e stubExecutor) Execute(_ context.Context, _ *domain.DomainSpec, trigger map[string]any) (*runtime.Result, error) {
+func (e stubExecutor) Execute(_ context.Context, _ *domain.DomainSpec, trigger map[string]any) (*domain.Result, error) {
 	return e.fn(trigger)
 }
 
@@ -50,8 +49,8 @@ func TestRunner_ScoresAndAggregates(t *testing.T) {
 	}
 	run := newRun(t, svc, set)
 
-	exec := stubExecutor{fn: func(trigger map[string]any) (*runtime.Result, error) {
-		return &runtime.Result{State: "completed", Output: map[string]any{"answer": trigger["produce"]}}, nil
+	exec := stubExecutor{fn: func(trigger map[string]any) (*domain.Result, error) {
+		return &domain.Result{State: "completed", Output: map[string]any{"answer": trigger["produce"]}}, nil
 	}}
 	r := New(exec, svc, WithConcurrency(2))
 
@@ -88,7 +87,7 @@ func TestRunner_ExecuteErrorScoresZero(t *testing.T) {
 	}
 	run := newRun(t, svc, set)
 
-	exec := stubExecutor{fn: func(map[string]any) (*runtime.Result, error) {
+	exec := stubExecutor{fn: func(map[string]any) (*domain.Result, error) {
 		return nil, errors.New("adapter blew up")
 	}}
 	r := New(exec, svc)
@@ -117,8 +116,8 @@ func TestRunner_BudgetGuardFailsRun(t *testing.T) {
 	}
 	run := newRun(t, svc, set)
 
-	exec := stubExecutor{fn: func(map[string]any) (*runtime.Result, error) {
-		return &runtime.Result{State: "completed", Output: map[string]any{}}, nil
+	exec := stubExecutor{fn: func(map[string]any) (*domain.Result, error) {
+		return &domain.Result{State: "completed", Output: map[string]any{}}, nil
 	}}
 	// Each case costs 1.0; budget of 0.5 trips after the first case.
 	r := New(exec, svc, WithConcurrency(1), WithCostFunc(func(string) float64 { return 1.0 }))

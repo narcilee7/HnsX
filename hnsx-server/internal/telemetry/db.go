@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/hnsx-io/hnsx/server/internal/trace/repository"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // DBSink persists each observation into the `observations` table created by
@@ -37,7 +37,7 @@ func (s *DBSink) Name() string { return "db" }
 // Record inserts one row per observation. Errors are returned (the runner
 // does not currently surface sink errors but a future telemetry-aware
 // control loop can use them).
-func (s *DBSink) Record(ctx context.Context, obs runtime.Observation) error {
+func (s *DBSink) Record(ctx context.Context, obs domain.Observation) error {
 	if s == nil || s.db == nil {
 		return nil
 	}

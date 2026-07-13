@@ -14,8 +14,7 @@ import (
 	domainmodel "github.com/hnsx-io/hnsx/server/internal/domain/model"
 	domainservice "github.com/hnsx-io/hnsx/server/internal/domain/service"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	"github.com/hnsx-io/hnsx/server/pkg/local"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // DomainCommands exposes domain lifecycle use cases.
@@ -40,7 +39,7 @@ func (c *DomainCommands) Register(ctx context.Context, tenantID tenant.ID, r io.
 	if c.domainSvc == nil {
 		return nil, errors.New("nil domain service")
 	}
-	s, err := local.DecodeDomainSpec(r, contentType)
+	s, err := domain.DecodeDomainSpec(r, contentType)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +64,7 @@ func (c *DomainCommands) Update(ctx context.Context, tenantID tenant.ID, id stri
 	if c.domainSvc == nil {
 		return nil, errors.New("nil domain service")
 	}
-	s, err := local.DecodeDomainSpec(r, contentType)
+	s, err := domain.DecodeDomainSpec(r, contentType)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +106,7 @@ type TriggerParams struct {
 }
 
 // NewSessionID generates a session ID for the given domain.
-var NewSessionID = runtime.NewSessionID
+var NewSessionID = domain.NewSessionID
 
 // Error helpers used by HTTP handlers.
 var (

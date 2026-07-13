@@ -1,10 +1,12 @@
-package runtime
+// Sink interface — moved from pkg/runtime/telemetry.go in Phase 3.
+
+package domain
 
 import "context"
 
 // Sink is the contract any telemetry backend must satisfy. Implementations
-// live in internal/telemetry; pkg/runtime only declares the interface so the
-// executor and runner can stay free of infrastructure dependencies.
+// live in internal/telemetry; this package only declares the interface so
+// the executor and runner can stay free of infrastructure dependencies.
 //
 // Implementations MUST be safe for concurrent use.
 type Sink interface {

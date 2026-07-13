@@ -9,7 +9,6 @@ import (
 	internalsession "github.com/hnsx-io/hnsx/server/internal/session/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/internal/testutil"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
@@ -72,7 +71,7 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 
 	// Update to completed with result.
 	sess.State = internalsession.StateCompleted
-	sess.Result = &runtime.Result{Mode: domain.Single}
+	sess.Result = &domain.Result{Mode: string(domain.Single)}
 	completed := time.Now().UTC()
 	sess.CompletedAt = &completed
 	if err := repo.Save(testTenant, sess); err != nil {
@@ -86,7 +85,7 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 	if got.State != internalsession.StateCompleted {
 		t.Fatalf("state after update = %q", got.State)
 	}
-	if got.Result == nil || got.Result.Mode != domain.Single {
+	if got.Result == nil || got.Result.Mode != string(domain.Single) {
 		t.Fatal("result not round-tripped")
 	}
 

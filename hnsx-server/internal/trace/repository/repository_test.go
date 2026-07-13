@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/trace/model"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 func TestInMemoryRepository_SaveAndQuery(t *testing.T) {
@@ -62,12 +62,12 @@ func TestInMemoryRepository_SaveAndQuery(t *testing.T) {
 }
 
 func TestInMemoryRepository_FromRuntime(t *testing.T) {
-	obs := runtime.Observation{
+	obs := domain.Observation{
 		Kind:      "agent_text",
 		SessionID: "s1",
 		DomainID:  "d1",
 		AgentID:   "a1",
-		Cost: &runtime.Cost{
+		Cost: &domain.Cost{
 			PromptTokens:     10,
 			CompletionTokens: 20,
 			CostUSD:          0.001,
