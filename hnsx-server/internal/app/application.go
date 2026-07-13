@@ -6,8 +6,13 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -83,18 +88,24 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 		return nil, fmt.Errorf("otel: %w", err)
 	}
 
-	if !cfg.PostgresEnabled() {
-		return nil, errors.New("postgres is required: set HNSX_DATABASE_URL")
-	}
-
-	store, err := db.Open(ctx, cfg.DatabaseURL)
+	store, err := openStore(ctx, cfg, log)
 	if err != nil {
 		return nil, fmt.Errorf("db: open: %w", err)
 	}
-	if err := db.Migrate(ctx, store.SQL, cfg.MigrationsDir); err != nil {
-		return nil, fmt.Errorf("db: migrate: %w", err)
+	if err := db.Migrate(ctx, store, cfg.MigrationsDir); err != nil {
+		// In daemon (SQLite) mode the existing /go/migrations target Postgres
+		// syntax (gen_random_uuid / JSONB / TIMESTAMPTZ) and will fail to
+		// parse. We log a warning and continue — the API still boots so the
+		// user can configure Postgres via HNSX_DATABASE_URL instead. Once
+		// v1.1 ports the migrations to ANSI SQL this warning goes away.
+		if cfg.SQLiteEnabled() {
+			log.Warn("migrations skipped under SQLite (v1.1 will port schema)", zap.Error(err))
+		} else {
+			return nil, fmt.Errorf("db: migrate: %w", err)
+		}
+	} else {
+		log.Info("migrations applied", zap.String("dir", cfg.MigrationsDir))
 	}
-	log.Info("migrations applied", zap.String("dir", cfg.MigrationsDir))
 
 	appState := NewState()
 
@@ -293,6 +304,63 @@ func (b approvalStateBroadcaster) PublishApproval(event string, a *approvalmodel
 type funcSink struct {
 	name   string
 	record func(context.Context, domain.Observation) error
+}
+
+// openStore picks Postgres when HNSX_DATABASE_URL is set, otherwise the
+// embedded SQLite file at <DaemonDataDir>/hnsx.db (parent dir auto-created).
+func openStore(ctx context.Context, cfg *config.Config, log *zap.Logger) (*db.DB, error) {
+	if cfg.PostgresEnabled() {
+		return db.Open(ctx, cfg.DatabaseURL)
+	}
+	sqlitePath := cfg.SQLitePath
+	if sqlitePath == "" {
+		sqlitePath = filepath.Join(cfg.DaemonDataDir, "hnsx.db")
+	}
+	if err := os.MkdirAll(filepath.Dir(sqlitePath), 0o755); err != nil {
+		return nil, fmt.Errorf("daemon: mkdir %s: %w", filepath.Dir(sqlitePath), err)
+	}
+	log.Info("daemon mode: using embedded SQLite",
+		zap.String("path", sqlitePath),
+		zap.String("data_dir", cfg.DaemonDataDir))
+	store, err := db.OpenSQLite(sqlitePath)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureSecretKey(cfg.DaemonDataDir, log); err != nil {
+		return nil, fmt.Errorf("daemon: secret key: %w", err)
+	}
+	return store, nil
+}
+
+// ensureSecretKey writes a random 32-byte hex key to <dataDir>/secret.key
+// on first boot and exports HNSX_SECRET_KEY for the rest of the process.
+// Existing users keep their key so encrypted secrets stay decryptable.
+func ensureSecretKey(dataDir string, log *zap.Logger) error {
+	keyPath := filepath.Join(dataDir, "secret.key")
+	if _, err := os.Stat(keyPath); err == nil {
+		b, readErr := os.ReadFile(keyPath)
+		if readErr != nil {
+			return fmt.Errorf("read %s: %w", keyPath, readErr)
+		}
+		_ = os.Setenv("HNSX_SECRET_KEY", strings.TrimSpace(string(b)))
+		return nil
+	}
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		return fmt.Errorf("mkdir %s: %w", dataDir, err)
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return fmt.Errorf("rand: %w", err)
+	}
+	hexed := hex.EncodeToString(key)
+	if err := os.WriteFile(keyPath, []byte(hexed), 0o600); err != nil {
+		return fmt.Errorf("write %s: %w", keyPath, err)
+	}
+	_ = os.Setenv("HNSX_SECRET_KEY", hexed)
+	log.Info("auto-generated HNSX_SECRET_KEY",
+		zap.String("path", keyPath),
+		zap.String("action", "BACK THIS UP — losing this file means losing access to encrypted secrets"))
+	return nil
 }
 
 func (s *funcSink) Name() string { return s.name }

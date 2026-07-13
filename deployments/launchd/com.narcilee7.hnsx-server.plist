@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS launchd template for hnsx-server.
+
+  Install via `make daemon-install` (which expands HNSX_DAEMON_DATA_DIR
+  to your home directory and copies this file to ~/Library/LaunchAgents/).
+  After install, the server auto-starts at login and restarts on crash.
+  Stop with `launchctl unload ~/Library/LaunchAgents/com.narcilee7.hnsx-server.plist`.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.narcilee7.hnsx-server</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PREFIX__/bin/hnsx-server</string>
+        <string>server</string>
+    </array>
+
+    <!-- Default daemon state lives in ~/Library/Application Support/hnsx.
+         Override with HNSX_DAEMON_DATA_DIR if you want it elsewhere. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HNSX_DAEMON_DATA_DIR</key>
+        <string>__DATA_DIR__</string>
+        <key>HNSX_OTEL_EXPORTER</key>
+        <string>none</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/hnsx-server.log</string>
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/hnsx-server.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

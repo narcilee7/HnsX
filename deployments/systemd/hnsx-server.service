@@ -1,0 +1,23 @@
+[Unit]
+Description=HnsX Control Plane (daemon)
+Documentation=https://github.com/narcilee7/HnsX
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=__PREFIX__/bin/hnsx-server server
+Environment=HNSX_DAEMON_DATA_DIR=__DATA_DIR__
+Environment=HNSX_OTEL_EXPORTER=none
+Restart=on-failure
+RestartSec=5
+
+# Hardening: don't run as root by default — install with `make daemon-install`
+# which drops this file under the invoking user's systemd dir.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

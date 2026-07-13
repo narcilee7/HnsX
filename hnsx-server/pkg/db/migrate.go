@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -16,14 +15,20 @@ import (
 // in lexicographic order. Idempotent — goose tracks the applied versions in
 // a `goose_db_version` table.
 //
-// Phase 1 ships two migrations under go/migrations:
-//
-//   - 000001_init_schema.up.sql   (tables per docs/server-design/tablebase-design.md)
-//   - 000002_observations.up.sql (single `observations` table for local-mode
-//     telemetry without OTLP).
+// The dialect is detected from the *DB's driver: "postgres" or "sqlite3".
+// SQLite support requires ported migrations; the existing set under
+// /go/migrations targets Postgres-specific syntax (gen_random_uuid, JSONB,
+// TIMESTAMPTZ) and will fail to parse under sqlite.
 //
 // `dir` must be an absolute path. Returns nil if no SQL files are present.
-func Migrate(ctx context.Context, sqlDB *sql.DB, dir string) error {
+func Migrate(ctx context.Context, database *DB, dir string) error {
+	if database == nil {
+		return errors.New("db.Migrate: nil *DB")
+	}
+	if database.IsNoDB() {
+		return errors.New("db.Migrate: NoDB")
+	}
+	sqlDB := database.SQL
 	if sqlDB == nil {
 		return errors.New("db.Migrate: nil *sql.DB")
 	}
@@ -45,12 +50,16 @@ func Migrate(ctx context.Context, sqlDB *sql.DB, dir string) error {
 		return nil
 	}
 
-	if err := goose.SetDialect("postgres"); err != nil {
-		return fmt.Errorf("db.Migrate: set dialect: %w", err)
+	dialect := "postgres"
+	if database.IsSQLite() {
+		dialect = "sqlite3"
+	}
+	if err := goose.SetDialect(dialect); err != nil {
+		return fmt.Errorf("db.Migrate: set dialect %q: %w", dialect, err)
 	}
 
 	if err := goose.UpContext(ctx, sqlDB, dir); err != nil {
-		return fmt.Errorf("db.Migrate: goose up: %w", err)
+		return fmt.Errorf("db.Migrate: goose up (%s): %w", dialect, err)
 	}
 	return nil
 }

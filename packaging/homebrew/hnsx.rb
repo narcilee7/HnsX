@@ -31,6 +31,32 @@ class Hnsx < Formula
   def install
     bin.install "hnsx"
     bin.install "hnsx-server"
+    # Auto-launch hnsx-server via launchd on install. The plist template
+    # is part of the Homebrew formula source; we expand the placeholders
+    # for the user's home + the prefix hnsx-server lives in.
+    agents_dir = File.expand_path("~/Library/LaunchAgents")
+    FileUtils.mkdir_p(agents_dir)
+    plist_src = buildpath/"deployments/launchd/com.narcilee7.hnsx-server.plist"
+    plist_dst = "#{agents_dir}/com.narcilee7.hnsx-server.plist"
+    data_dir  = File.expand_path("~/.local/share/hnsx")
+    log_dir   = File.expand_path("~/.local/var/log")
+    FileUtils.mkdir_p(data_dir)
+    FileUtils.mkdir_p(log_dir)
+    rendered = File.read(plist_src)
+      .gsub("__PREFIX__", HOMEBREW_PREFIX.to_s)
+      .gsub("__DATA_DIR__", data_dir)
+      .gsub("__LOG_DIR__", log_dir)
+    File.write(plist_dst, rendered)
+    system "launchctl", "load", "-w", plist_dst
+    ohai "hnsx-server launched via launchd at #{plist_dst}"
+  end
+
+  def uninstall
+    plist = File.expand_path("~/Library/LaunchAgents/com.narcilee7.hnsx-server.plist")
+    if File.exist?(plist)
+      system "launchctl", "unload", "-w", plist
+      File.delete(plist)
+    end
   end
 
   test do

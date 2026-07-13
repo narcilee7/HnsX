@@ -29,7 +29,7 @@ func OpenTestDB(t *testing.T) *db.DB {
 
 	wd, _ := os.Getwd()
 	migrationsDir := findMigrationsDir(t, wd)
-	if err := db.Migrate(ctx, database.SQL, migrationsDir); err != nil {
+	if err := db.Migrate(ctx, database, migrationsDir); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return database
