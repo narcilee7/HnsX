@@ -1,53 +1,68 @@
 # 快速开始
 
-> 目标：5 分钟内让 HnsX 跑起来，完成一次端到端 Session。
+> 目标：5 分钟内让 HnsX 跑起来（**默认走路径 A：daemon 模式，零依赖**），完成一次端到端 Domain CRUD + 前端体验。
 
 ## 前置条件
 
+**路径 A（默认，daemon 模式）**：
 - macOS / Linux / WSL
-- Docker & Docker Compose（用于本地 Postgres + Server + Worker）
-- Node 20+ 和 pnpm（用于控制台）
-- Go 1.22+（用于源码构建 server / CLI）
+- Go 1.22+（编译 server）
+- Node 20+ 和 pnpm（运行 console）
 
-## 1. 安装 CLI
+**路径 B（Postgres 全栈）**：再加上 Docker + Docker Compose。
 
-```bash
-curl -sSL https://raw.githubusercontent.com/narcilee7/HnsX/main/scripts/install.sh | sh
-```
-
-macOS 用户也可以：
+## 1. 启动 server
 
 ```bash
-brew install narcilee7/hnsx/hnsx
+make build-server
+./bin/hnsx-server server
 ```
 
-## 2. 启动本地全栈
+零环境变量。Server 自动：
+- 建 `~/.local/share/hnsx/hnsx.db`（SQLite）
+- 生成 `secret.key`
+- 应用 schema
+- 监听 `127.0.0.1:50051`
+
+## 2. 启动 console
+
+新终端：
 
 ```bash
-cd deployments/local
-docker compose up -d
+pnpm install --force
+pnpm dev
 ```
 
-这会拉起 Postgres、HnsX Server、Worker，以及可选的 Tempo + Grafana。
+浏览器打开 `http://localhost:5173`。
 
-## 3. 触发第一个 Session
+## 3. 浏览器点点点
 
-```bash
-hnsx try customer-service
-```
+- **Register Domain** → 弹 Monaco YAML 编辑器 → 粘下面这段 → Commit：
 
-如果一切正常，你会看到一次完整的客服分诊 Session：Trigger → Session → Turn → Observation。
+  ```yaml
+  id: customer-service
+  version: 1.0.0
+  description: First demo
+  harness:
+    agents:
+      main:
+        id: main
+        provider: anthropic
+        model: claude-haiku-4-5
+  session:
+    mode: single
+  ```
 
-## 4. 查看 Trace
+- 进 `/observability/debug` 看 Live Debug 入口
+- 进 `/sessions` / `/traces` 看列表（SQLite daemon 模式下默认空，要 trigger session 才会有）
 
-```bash
-hnsx trace list
-hnsx trace show <trace-id>
-```
+## 4. 想跑完整 Session / Trace / Worker 流程？
 
-或者在浏览器打开 `http://127.0.0.1:50052` 进入控制台。
+切到 **路径 B**（Postgres 全栈），见 [`local-dev.md`](./local-dev.md) 第 2 节。
 
 ## 下一步
 
-- 学习 [Domain 入门](/guide/domain-spec)
-- 阅读 [为什么需要 Harness](/blog/why-harness)
+- 本地完整手册 → [`local-dev.md`](./local-dev.md)
+- CLI 命令速查 → [`cli-basics.md`](./cli-basics.md)
+- Domain YAML 字段 → [`domain-spec.md`](./domain-spec.md)
+- [为什么需要 Harness](/blog/why-harness)
