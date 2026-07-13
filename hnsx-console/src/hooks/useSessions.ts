@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
-import { listSessions, getSession, createSession, cancelSession, rerunSession, getSessionTrace } from '@/api/sessions'
+import { listSessions, getSession, createSession, cancelSession, rerunSession, getSessionTrace, pauseSession, resumeSession } from '@/api/sessions'
 import { mapObservationFromJson, type ObservationViewModel } from '@/api/mappers'
 
 const sessionKeys = {
@@ -56,6 +56,27 @@ export function useRerunSession() {
     mutationFn: (id: string) => rerunSession(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: sessionKeys.lists() })
+    },
+  })
+}
+
+export function usePauseSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
+      pauseSession(id, reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sessionKeys.all })
+    },
+  })
+}
+
+export function useResumeSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => resumeSession(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sessionKeys.all })
     },
   })
 }
