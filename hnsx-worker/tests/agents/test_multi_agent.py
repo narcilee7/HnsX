@@ -117,30 +117,5 @@ def test_multi_agent_default_allowed_agents(scripted_multi_adapter: Any) -> None
     assert "got the answer" in out
 
 
-def test_multi_agent_builder_validates_agents(scripted_multi_adapter: Any) -> None:
-    from hnsx_worker.harness.loader import HarnessValidationError, load
-
-    # Single-agent spec + multi_agent strategy must fail at loader level.
-    spec = {
-        "id": "x",
-        "harness": {
-            "agents": {"only": {"id": "only", "adapter": {"kind": "noop"}}},
-            "orchestration": {"strategy": "multi_agent"},
-        },
-    }
-    with pytest.raises(HarnessValidationError):
-        load(spec)
-
-
-def test_multi_agent_loader_rejects_unknown_strategy() -> None:
-    from hnsx_worker.harness.loader import HarnessValidationError, load
-
-    spec = {
-        "id": "bad",
-        "harness": {
-            "agents": {"a": {"id": "a"}, "b": {"id": "b"}},
-            "orchestration": {"strategy": "totally_made_up"},
-        },
-    }
-    with pytest.raises(HarnessValidationError):
-        load(spec)
+# W16: multi_agent agent-count and strategy validation moved to the Go
+# server's ValidateDomain RPC. The Python loader is a data view.

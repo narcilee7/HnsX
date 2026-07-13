@@ -77,44 +77,9 @@ def test_load_validates_supervisor_references() -> None:
     assert harness.mode == "supervisor"
 
 
-def test_load_rejects_missing_supervisor_agent() -> None:
-    spec = {
-        "id": "s",
-        "harness": {
-            "agents": {"billing": {"id": "billing"}},
-            "session": {
-                "mode": "supervisor",
-                "supervisor": {
-                    "agent": "missing",
-                    "transitions": [],
-                },
-            },
-        },
-    }
-    with pytest.raises(HarnessValidationError):
-        load(spec)
-
-
-def test_load_rejects_bad_transition_target() -> None:
-    spec = {
-        "id": "s",
-        "harness": {
-            "agents": {
-                "supervisor": {"id": "supervisor"},
-            },
-            "session": {
-                "mode": "supervisor",
-                "supervisor": {
-                    "agent": "supervisor",
-                    "transitions": [
-                        {"condition": "", "to": "missing"},
-                    ],
-                },
-            },
-        },
-    }
-    with pytest.raises(HarnessValidationError):
-        load(spec)
+# W16: supervisor cross-reference validation moved to the Go server's
+# ValidateDomain RPC. The Python loader is now a data view; runtime
+# prerequisites are enforced by harness.runner.run.
 
 
 # ---------------------------------------------------------------------------
@@ -362,25 +327,13 @@ def test_load_populates_skill_registry() -> None:
 
 
 def test_load_passes_when_all_skill_refs_resolve() -> None:
-    # No exception means the validation passed.
+    # No exception means the skill registry was built successfully.
     load(_loader_spec_with_skills())
 
 
-def test_load_rejects_unknown_skill_ref() -> None:
-    spec = _loader_spec_with_skills()
-    spec["harness"]["agents"]["triage"]["skill_refs"] = ["does-not-exist"]
-    with pytest.raises(HarnessValidationError) as exc:
-        load(spec)
-    msg = str(exc.value)
-    assert "does-not-exist" in msg
-    assert "unknown skill" in msg
-
-
-def test_load_rejects_non_list_skill_refs() -> None:
-    spec = _loader_spec_with_skills()
-    spec["harness"]["agents"]["triage"]["skill_refs"] = "web-search"  # type: ignore[list-item]
-    with pytest.raises(HarnessValidationError):
-        load(spec)
+# W16: skill_ref cross-reference validation moved to the Go server's
+# ValidateDomain RPC. Unknown or malformed skill_refs are silently ignored
+# at load time; runtime resolution handles them gracefully.
 
 
 def test_load_rejects_duplicate_skill_ids() -> None:

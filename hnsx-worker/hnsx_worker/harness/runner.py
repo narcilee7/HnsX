@@ -65,6 +65,15 @@ def run(
 
     supervisor_cfg = harness.supervisor_cfg
     supervisor_name = str(supervisor_cfg.get("agent"))
+    if mode in ("supervisor", "hierarchical", "autonomous"):
+        if not supervisor_cfg or not supervisor_cfg.get("agent"):
+            raise OrchestrationError(
+                "session.supervisor.agent is required for supervisor mode"
+            )
+        if supervisor_name not in harness.agents:
+            raise OrchestrationError(
+                f"session.supervisor.agent {supervisor_name!r} not found in agents"
+            )
     transitions = list(supervisor_cfg.get("transitions") or [])
     exit_rules = list(supervisor_cfg.get("exit") or [])
     max_turns = int(

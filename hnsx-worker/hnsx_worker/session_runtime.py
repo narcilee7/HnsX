@@ -33,6 +33,7 @@ from hnsx_worker.logging import (
     session_id_var,
     trace_id_var,
 )
+from hnsx_worker.proto_client.client import ControlPlaneClient
 from hnsx_worker.session_executor import _Stopped, execute_session
 
 
@@ -120,6 +121,40 @@ def _merge_secrets_into_config(config: dict[str, Any]) -> None:
         config["secrets"] = env_secrets
 
 
+def _validate_spec_via_server(spec: dict[str, Any]) -> tuple[bool, str]:
+    """Ask the Go server to authoritatively validate ``spec``.
+
+    Returns ``(True, "")`` when the server says the spec is valid, or
+    ``(False, error_message)`` when it is invalid or unreachable.
+
+    If ``HNSX_SERVER`` is not set we skip the RPC and print a warning on
+    stderr. This keeps standalone unit tests working; production workers
+    are always launched with the server address.
+    """
+    server_addr = os.environ.get("HNSX_SERVER")
+    if not server_addr:
+        sys.stderr.write(
+            "session_runtime: HNSX_SERVER not set; skipping server-side "
+            "DomainSpec validation\n"
+        )
+        return True, ""
+
+    try:
+        spec_json = json.dumps(spec)
+    except TypeError as exc:
+        return False, f"failed to serialize spec to JSON: {exc}"
+
+    client = ControlPlaneClient(server_addr)
+    try:
+        valid, errors = client.validate_domain(spec_json)
+    finally:
+        client.close()
+
+    if valid:
+        return True, ""
+    return False, "DomainSpec validation failed:\n" + "\n".join(errors)
+
+
 def main() -> int:
     """Read config from stdin, run the session, return exit code."""
     _load_extra_adapters()
@@ -160,6 +195,20 @@ def main() -> int:
     except json.JSONDecodeError as e:
         sys.stderr.write(f"session_runtime: invalid trigger_payload_json: {e}\n")
         return 2
+
+    valid, err = _validate_spec_via_server(spec)
+    if not valid:
+        sys.stderr.write(f"session_runtime: {err}\n")
+        emit(
+            {
+                "kind": "session_end",
+                "session_id": session_id,
+                "domain_id": domain_id,
+                "state": "failed",
+                "payload": {"error": err, "error_type": "DomainValidationError"},
+            }
+        )
+        return 1
 
     emit(
         {

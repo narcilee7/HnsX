@@ -25,7 +25,7 @@ from concurrent import futures
 
 import grpc
 
-from hnsx_worker.proto.gen.hnsx.v1 import worker_pb2, worker_pb2_grpc
+from hnsx_worker.proto.gen.hnsx.v1 import control_plane_pb2, control_plane_pb2_grpc, worker_pb2, worker_pb2_grpc
 
 log = logging.getLogger("hnsx_worker.tests.mock_server")
 
@@ -51,6 +51,9 @@ class MockHnsXServer:
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=8))
         worker_pb2_grpc.add_WorkerServiceServicer_to_server(_WorkerServicer(self), server)
         worker_pb2_grpc.add_SchedulerServiceServicer_to_server(_SchedulerServicer(self), server)
+        control_plane_pb2_grpc.add_DomainRegistryServiceServicer_to_server(
+            _DomainRegistryServicer(self), server
+        )
         bound = server.add_insecure_port("[::]:0")
         server.start()
         self._server = server
@@ -146,6 +149,16 @@ class _SchedulerServicer(worker_pb2_grpc.SchedulerServiceServicer):
                 time.sleep(0.5)
         except Exception:
             return
+
+
+class _DomainRegistryServicer(control_plane_pb2_grpc.DomainRegistryServiceServicer):
+    def __init__(self, server: MockHnsXServer) -> None:
+        self.server = server
+
+    def ValidateDomain(self, request, context):  # noqa: ARG002
+        # The mock server trusts any spec the test hands it.
+        _ = request.domain_spec_json
+        return control_plane_pb2.ValidateDomainResponse(valid=True)
 
 
 def _noop_session(domain_spec_json: str = "") -> worker_pb2.PullSessionResponse:

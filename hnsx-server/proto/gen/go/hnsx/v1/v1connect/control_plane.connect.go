@@ -53,6 +53,9 @@ const (
 	// DomainRegistryServiceListDomainsProcedure is the fully-qualified name of the
 	// DomainRegistryService's ListDomains RPC.
 	DomainRegistryServiceListDomainsProcedure = "/hnsx.v1.DomainRegistryService/ListDomains"
+	// DomainRegistryServiceValidateDomainProcedure is the fully-qualified name of the
+	// DomainRegistryService's ValidateDomain RPC.
+	DomainRegistryServiceValidateDomainProcedure = "/hnsx.v1.DomainRegistryService/ValidateDomain"
 	// SessionSchedulerServiceScheduleSessionProcedure is the fully-qualified name of the
 	// SessionSchedulerService's ScheduleSession RPC.
 	SessionSchedulerServiceScheduleSessionProcedure = "/hnsx.v1.SessionSchedulerService/ScheduleSession"
@@ -92,6 +95,7 @@ type DomainRegistryServiceClient interface {
 	UnregisterDomain(context.Context, *connect.Request[v1.UnregisterDomainRequest]) (*connect.Response[v1.UnregisterDomainResponse], error)
 	GetDomain(context.Context, *connect.Request[v1.GetDomainRequest]) (*connect.Response[v1.GetDomainResponse], error)
 	ListDomains(context.Context, *connect.Request[v1.ListDomainsRequest]) (*connect.Response[v1.ListDomainsResponse], error)
+	ValidateDomain(context.Context, *connect.Request[v1.ValidateDomainRequest]) (*connect.Response[v1.ValidateDomainResponse], error)
 }
 
 // NewDomainRegistryServiceClient constructs a client for the hnsx.v1.DomainRegistryService service.
@@ -129,6 +133,12 @@ func NewDomainRegistryServiceClient(httpClient connect.HTTPClient, baseURL strin
 			connect.WithSchema(domainRegistryServiceMethods.ByName("ListDomains")),
 			connect.WithClientOptions(opts...),
 		),
+		validateDomain: connect.NewClient[v1.ValidateDomainRequest, v1.ValidateDomainResponse](
+			httpClient,
+			baseURL+DomainRegistryServiceValidateDomainProcedure,
+			connect.WithSchema(domainRegistryServiceMethods.ByName("ValidateDomain")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -138,6 +148,7 @@ type domainRegistryServiceClient struct {
 	unregisterDomain *connect.Client[v1.UnregisterDomainRequest, v1.UnregisterDomainResponse]
 	getDomain        *connect.Client[v1.GetDomainRequest, v1.GetDomainResponse]
 	listDomains      *connect.Client[v1.ListDomainsRequest, v1.ListDomainsResponse]
+	validateDomain   *connect.Client[v1.ValidateDomainRequest, v1.ValidateDomainResponse]
 }
 
 // RegisterDomain calls hnsx.v1.DomainRegistryService.RegisterDomain.
@@ -160,12 +171,18 @@ func (c *domainRegistryServiceClient) ListDomains(ctx context.Context, req *conn
 	return c.listDomains.CallUnary(ctx, req)
 }
 
+// ValidateDomain calls hnsx.v1.DomainRegistryService.ValidateDomain.
+func (c *domainRegistryServiceClient) ValidateDomain(ctx context.Context, req *connect.Request[v1.ValidateDomainRequest]) (*connect.Response[v1.ValidateDomainResponse], error) {
+	return c.validateDomain.CallUnary(ctx, req)
+}
+
 // DomainRegistryServiceHandler is an implementation of the hnsx.v1.DomainRegistryService service.
 type DomainRegistryServiceHandler interface {
 	RegisterDomain(context.Context, *connect.Request[v1.RegisterDomainRequest]) (*connect.Response[v1.RegisterDomainResponse], error)
 	UnregisterDomain(context.Context, *connect.Request[v1.UnregisterDomainRequest]) (*connect.Response[v1.UnregisterDomainResponse], error)
 	GetDomain(context.Context, *connect.Request[v1.GetDomainRequest]) (*connect.Response[v1.GetDomainResponse], error)
 	ListDomains(context.Context, *connect.Request[v1.ListDomainsRequest]) (*connect.Response[v1.ListDomainsResponse], error)
+	ValidateDomain(context.Context, *connect.Request[v1.ValidateDomainRequest]) (*connect.Response[v1.ValidateDomainResponse], error)
 }
 
 // NewDomainRegistryServiceHandler builds an HTTP handler from the service implementation. It
@@ -199,6 +216,12 @@ func NewDomainRegistryServiceHandler(svc DomainRegistryServiceHandler, opts ...c
 		connect.WithSchema(domainRegistryServiceMethods.ByName("ListDomains")),
 		connect.WithHandlerOptions(opts...),
 	)
+	domainRegistryServiceValidateDomainHandler := connect.NewUnaryHandler(
+		DomainRegistryServiceValidateDomainProcedure,
+		svc.ValidateDomain,
+		connect.WithSchema(domainRegistryServiceMethods.ByName("ValidateDomain")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/hnsx.v1.DomainRegistryService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DomainRegistryServiceRegisterDomainProcedure:
@@ -209,6 +232,8 @@ func NewDomainRegistryServiceHandler(svc DomainRegistryServiceHandler, opts ...c
 			domainRegistryServiceGetDomainHandler.ServeHTTP(w, r)
 		case DomainRegistryServiceListDomainsProcedure:
 			domainRegistryServiceListDomainsHandler.ServeHTTP(w, r)
+		case DomainRegistryServiceValidateDomainProcedure:
+			domainRegistryServiceValidateDomainHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -232,6 +257,10 @@ func (UnimplementedDomainRegistryServiceHandler) GetDomain(context.Context, *con
 
 func (UnimplementedDomainRegistryServiceHandler) ListDomains(context.Context, *connect.Request[v1.ListDomainsRequest]) (*connect.Response[v1.ListDomainsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hnsx.v1.DomainRegistryService.ListDomains is not implemented"))
+}
+
+func (UnimplementedDomainRegistryServiceHandler) ValidateDomain(context.Context, *connect.Request[v1.ValidateDomainRequest]) (*connect.Response[v1.ValidateDomainResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hnsx.v1.DomainRegistryService.ValidateDomain is not implemented"))
 }
 
 // SessionSchedulerServiceClient is a client for the hnsx.v1.SessionSchedulerService service.

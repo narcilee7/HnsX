@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -143,6 +144,23 @@ func (s *ConnectServer) ListDomains(ctx context.Context, req *connect.Request[pb
 		resp.Domains = append(resp.Domains, pbSpec)
 	}
 	return connect.NewResponse(resp), nil
+}
+
+func (s *ConnectServer) ValidateDomain(ctx context.Context, req *connect.Request[pb.ValidateDomainRequest]) (*connect.Response[pb.ValidateDomainResponse], error) {
+	ds, err := domain.DecodeDomainSpec(strings.NewReader(req.Msg.GetDomainSpecJson()), "application/json")
+	if err != nil {
+		return connect.NewResponse(&pb.ValidateDomainResponse{
+			Valid: false,
+			Errors: []*pb.ValidationError{{Field: "", Message: err.Error()}},
+		}), nil
+	}
+	if err := domain.Validate(ds); err != nil {
+		return connect.NewResponse(&pb.ValidateDomainResponse{
+			Valid: false,
+			Errors: []*pb.ValidationError{{Field: "", Message: err.Error()}},
+		}), nil
+	}
+	return connect.NewResponse(&pb.ValidateDomainResponse{Valid: true}), nil
 }
 
 // SessionSchedulerServiceHandler implementation.

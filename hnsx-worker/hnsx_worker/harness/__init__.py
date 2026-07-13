@@ -1,10 +1,13 @@
-"""Multi-agent orchestration support (W5).
+"""Multi-agent orchestration support (W5+).
 
 Public API:
 
-  - :func:`harness.loader.load` — validate a DomainSpec for orchestration.
+  - :func:`harness.loader.load` — typed data view of a DomainSpec.
   - :func:`harness.runner.run` — run supervisor / hierarchical / autonomous loops.
   - :func:`harness.transition.evaluate_condition` — evaluate a transition rule.
+
+Authoritative DomainSpec validation lives in the Go server and is invoked
+from ``session_runtime`` via the ``ValidateDomain`` gRPC call.
 """
 
 from __future__ import annotations

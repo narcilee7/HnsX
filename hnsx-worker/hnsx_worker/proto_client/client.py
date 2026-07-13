@@ -23,6 +23,8 @@ from typing import Any
 import grpc
 
 from hnsx_worker.proto.gen.hnsx.v1 import (
+    control_plane_pb2,
+    control_plane_pb2_grpc,
     observation_pb2,
     worker_pb2,
     worker_pb2_grpc,
@@ -89,6 +91,7 @@ class ControlPlaneClient:
         self._channel = grpc.insecure_channel(server_addr)
         self._worker = worker_pb2_grpc.WorkerServiceStub(self._channel)
         self._scheduler = worker_pb2_grpc.SchedulerServiceStub(self._channel)
+        self._domain_registry = control_plane_pb2_grpc.DomainRegistryServiceStub(self._channel)
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -201,6 +204,25 @@ class ControlPlaneClient:
             requeue=req.requeue,
         )
         self._scheduler.NackSession(proto_req, timeout=timeout)
+
+    def validate_domain(self, domain_spec_json: str, *, timeout: float = 10.0) -> tuple[bool, list[str]]:
+        """DomainRegistryService.ValidateDomain.
+
+        Returns ``(valid, error_messages)``. An unreachable server is reported
+        as ``(False, ["..."])`` so the caller can decide whether to fail hard.
+        """
+        proto_req = control_plane_pb2.ValidateDomainRequest(
+            domain_spec_json=domain_spec_json
+        )
+        try:
+            resp = self._domain_registry.ValidateDomain(proto_req, timeout=timeout)
+        except grpc.RpcError as exc:
+            return False, [f"ValidateDomain RPC failed: {exc.code()}: {exc.details() or exc}"]
+        except Exception as exc:  # noqa: BLE001
+            return False, [f"ValidateDomain RPC failed: {exc}"]
+        if resp.valid:
+            return True, []
+        return False, [f"{err.field}: {err.message}" for err in resp.errors]
 
     # ------------------------------------------------------------------ bidi stream
 
