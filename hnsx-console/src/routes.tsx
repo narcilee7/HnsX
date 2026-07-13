@@ -22,6 +22,7 @@ export const routes: RouteConfig[] = [
   { path: '/evals/:setId', component: lazy(() => import('@/pages/EvalSetPage')) },
   { path: '/evals/:setId/runs/:runId', component: lazy(() => import('@/pages/EvalRunPage')) },
   { path: '/observability', component: lazy(() => import('@/pages/ObservabilityPage')) },
+  { path: '/observability/debug', component: lazy(() => import('@/pages/ObservabilityDebugPage')) },
   { path: '/audit', component: lazy(() => import('@/pages/AuditPage')) },
   { path: '/approvals', component: lazy(() => import('@/pages/ApprovalsPage')) },
   { path: '/settings', component: lazy(() => import('@/pages/SettingsPage')) },

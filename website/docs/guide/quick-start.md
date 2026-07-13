@@ -1,53 +1,90 @@
 # 快速开始
 
-> 目标：5 分钟内让 HnsX 跑起来，完成一次端到端 Session。
+> 目标：5 分钟内让 HnsX 在本地跑起来——Postgres + server + console 三条命令完事。
 
 ## 前置条件
 
 - macOS / Linux / WSL
-- Docker & Docker Compose（用于本地 Postgres + Server + Worker）
-- Node 20+ 和 pnpm（用于控制台）
-- Go 1.22+（用于源码构建 server / CLI）
+- Go 1.22+（编译 server）
+- Node 20+ 和 pnpm（运行 console）
+- Postgres（任何方式——Homebrew / Docker / 系统包都行）
 
-## 1. 安装 CLI
+## 1. 启动 Postgres
 
-```bash
-curl -sSL hnsx.dev/install.sh | sh
-```
-
-macOS 用户也可以：
+任选一种：
 
 ```bash
-brew install narcilee7/hnsx/hnsx
+# Homebrew（macOS）
+brew install postgresql@16 && brew services start postgresql@16
+createuser hnsx --pwprompt   # 密码 hnsx
+createdb -O hnsx hnsx
+
+# Docker（最干净）
+docker run --name hnsx-pg -d -p 5432:5432 \
+  -e POSTGRES_USER=hnsx -e POSTGRES_PASSWORD=hnsx -e POSTGRES_DB=hnsx \
+  postgres:16
 ```
 
-## 2. 启动本地全栈
+DSN：`postgres://hnsx:hnsx@localhost:5432/hnsx?sslmode=disable`
+
+## 2. 启动 server
 
 ```bash
-cd deployments/local
-docker compose up -d
+make build-server
+HNSX_DATABASE_URL='postgres://hnsx:hnsx@localhost:5432/hnsx?sslmode=disable' \
+  ./bin/hnsx-server server
 ```
 
-这会拉起 Postgres、HnsX Server、Worker，以及可选的 Tempo + Grafana。
+Server 自动：
+- 跑 goose migrations（`migrations applied`）
+- 首次启动生成 `~/.local/share/hnsx/secret.key`
+- 监听 `:50051`（REST + Connect/gRPC）
 
-## 3. 触发第一个 Session
+## 3. 启动 console
+
+新终端：
 
 ```bash
-hnsx try customer-service
+pnpm install --force
+pnpm dev
 ```
 
-如果一切正常，你会看到一次完整的客服分诊 Session：Trigger → Session → Turn → Observation。
+浏览器打开 `http://localhost:5173`。
 
-## 4. 查看 Trace
+## 4. 浏览器点点点
+
+- **Register Domain** → Monaco YAML 编辑器 → 粘下面这段 → Commit：
+
+  ```yaml
+  id: customer-service
+  version: 1.0.0
+  description: First demo
+  harness:
+    agents:
+      main:
+        id: main
+        provider: anthropic
+        model: claude-haiku-4-5
+  session:
+    mode: single
+  ```
+
+- 进 `/observability/debug` 看 Live Debug 入口
+- 进 `/sessions` / `/traces` 看列表
+
+## 5. 让 session 真跑起来（可选）
+
+需要 worker 在跑，否则 session 卡 pending：
 
 ```bash
-hnsx trace list
-hnsx trace show <trace-id>
+make worker-install
+HNSX_SERVER=127.0.0.1:50061 \
+  .venv/bin/python -m hnsx_worker.worker_service
 ```
-
-或者在浏览器打开 `http://127.0.0.1:50052` 进入控制台。
 
 ## 下一步
 
-- 学习 [Domain 入门](/guide/domain-spec)
-- 阅读 [为什么需要 Harness](/blog/why-harness)
+- 本地完整手册（包含 worker / launchd / Python gRPC 详解）→ [`local-dev.md`](./local-dev.md)
+- CLI 命令速查 → [`cli-basics.md`](./cli-basics.md)
+- Domain YAML 字段 → [`domain-spec.md`](./domain-spec.md)
+- [为什么需要 Harness](/blog/why-harness)

@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"time"
@@ -284,6 +283,3 @@ func (r *PostgresRepository) toModel(tid string, rec DomainRecord) (*model.Regis
 }
 
 var _ Repository = (*PostgresRepository)(nil)
-
-// Ensure context import is referenced when needed.
-var _ = context.Background()
