@@ -16,6 +16,9 @@ import grpc
 import pytest
 
 from hnsx_worker.proto.gen.hnsx.v1 import (
+    control_plane_pb2,
+    control_plane_pb2_grpc,
+    domain_pb2,
     observation_pb2,
     worker_pb2,
     worker_pb2_grpc,
@@ -23,6 +26,7 @@ from hnsx_worker.proto.gen.hnsx.v1 import (
 from hnsx_worker.proto_client import (
     AckRequest,
     ControlPlaneClient,
+    DomainRef,
     HeartbeatRequest,
     NackRequest,
     Observation,
@@ -37,6 +41,7 @@ from hnsx_worker.proto_client import (
     WorkerHealthStatus,
     WorkerInfo,
 )
+from hnsx_worker.proto_client.client import ControlPlaneError
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +59,14 @@ class _MockControlPlane:
         self.acks: list[worker_pb2.AckSessionRequest] = []
         self.nacks: list[worker_pb2.NackSessionRequest] = []
         self.stream_requests: list[worker_pb2.StreamChannelRequest] = []
+        # DomainRegistry traffic (mirrors mock_server.py's servicer).
+        self.registered_domains: list[domain_pb2.DomainSpec] = []
+        self.unregister_calls: list[domain_pb2.DomainRef] = []
+        self.get_domain_calls: list[domain_pb2.DomainRef] = []
+        self.list_domain_calls: list[control_plane_pb2.ListDomainsRequest] = []
+        # Most recent gRPC metadata received on RegisterDomain — used by the
+        # auth-metadata tests to assert interceptor behavior.
+        self.last_register_metadata: list[tuple[str, str]] | None = None
         # Next pull-session response (overridable per-test).
         self.next_pull = worker_pb2.PullSessionResponse()
         # Cancel command to push down the bidi stream (overridable).
@@ -61,11 +74,15 @@ class _MockControlPlane:
         self._server: grpc.Server | None = None
         self.addr: str = ""
         self._lock = threading.Lock()
+        self._domain_store: dict[tuple[str, str], domain_pb2.DomainSpec] = {}
 
     def start(self) -> None:
         server = grpc.server(__import__("concurrent.futures", fromlist=["ThreadPoolExecutor"]).ThreadPoolExecutor(max_workers=8))
         worker_pb2_grpc.add_WorkerServiceServicer_to_server(_WorkerServicer(self), server)
         worker_pb2_grpc.add_SchedulerServiceServicer_to_server(_SchedulerServicer(self), server)
+        control_plane_pb2_grpc.add_DomainRegistryServiceServicer_to_server(
+            _DomainRegistryServicer(self), server
+        )
         bound = server.add_insecure_port("[::]:0")
         server.start()
         self._server = server
@@ -123,6 +140,61 @@ class _SchedulerServicer(worker_pb2_grpc.SchedulerServiceServicer):
             if self.m.inbound_cancel is not None and seen_count >= 2:
                 yield self.m.inbound_cancel
                 return
+
+
+class _DomainRegistryServicer(control_plane_pb2_grpc.DomainRegistryServiceServicer):
+    def __init__(self, m: _MockControlPlane) -> None:
+        self.m = m
+
+    def RegisterDomain(self, request, context):
+        self.m.last_register_metadata = list(context.invocation_metadata())
+        spec = request.spec
+        self.m.registered_domains.append(spec)
+        self.m._domain_store[(spec.id, spec.version)] = spec
+        return control_plane_pb2.RegisterDomainResponse(
+            domain=domain_pb2.DomainRef(id=spec.id, version=spec.version)
+        )
+
+    def UnregisterDomain(self, request, context):  # noqa: ARG002
+        self.m.unregister_calls.append(request.domain)
+        d = request.domain
+        if d.version:
+            self.m._domain_store.pop((d.id, d.version), None)
+        else:
+            for k in [k for k in self.m._domain_store if k[0] == d.id]:
+                self.m._domain_store.pop(k, None)
+        return control_plane_pb2.UnregisterDomainResponse()
+
+    def GetDomain(self, request, context):
+        self.m.get_domain_calls.append(request.domain)
+        d = request.domain
+        if d.version:
+            spec = self.m._domain_store.get((d.id, d.version))
+            if spec is None:
+                context.abort(
+                    grpc.StatusCode.NOT_FOUND,
+                    f"domain {d.id}@{d.version} not found",
+                )
+            return control_plane_pb2.GetDomainResponse(spec=spec)
+        versions = [v for (i, v) in self.m._domain_store if i == d.id]
+        if not versions:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"domain {d.id} not found")
+        return control_plane_pb2.GetDomainResponse(
+            spec=self.m._domain_store[(d.id, sorted(versions)[-1])]
+        )
+
+    def ListDomains(self, request, context):  # noqa: ARG002
+        self.m.list_domain_calls.append(request)
+        limit = request.limit if request.limit > 0 else 50
+        offset = request.offset if request.offset > 0 else 0
+        all_specs = list(self.m._domain_store.values())
+        return control_plane_pb2.ListDomainsResponse(
+            domains=all_specs[offset : offset + limit],
+            total=len(all_specs),
+        )
+
+    def ValidateDomain(self, request, context):  # noqa: ARG002
+        return control_plane_pb2.ValidateDomainResponse(valid=True)
 
 
 # ---------------------------------------------------------------------------
@@ -361,3 +433,178 @@ def test_observation_serializes_payload_dict() -> None:
     sent = proto.observations.observations[0]
     assert json.loads(sent.payload) == {"a": 1, "b": ["c", "d"], "e": {"f": True}}
     client.close()
+
+
+# ---------------------------------------------------------------------------
+# DomainRegistry — RegisterDomain / UnregisterDomain / GetDomain / ListDomains
+# ---------------------------------------------------------------------------
+
+
+def test_register_domain_accepts_dict(mock_plane: _MockControlPlane) -> None:
+    client = ControlPlaneClient(mock_plane.addr)
+    try:
+        ref = client.register_domain(
+            {
+                "id": "demo",
+                "version": "1.0.0",
+                "description": "from python",
+                "harness": {"agents": []},
+            }
+        )
+        assert isinstance(ref, DomainRef)
+        assert ref.id == "demo"
+        assert ref.version == "1.0.0"
+        assert len(mock_plane.registered_domains) == 1
+        assert mock_plane.registered_domains[0].id == "demo"
+    finally:
+        client.close()
+
+
+def test_register_domain_accepts_json_string(mock_plane: _MockControlPlane) -> None:
+    client = ControlPlaneClient(mock_plane.addr)
+    try:
+        ref = client.register_domain('{"id":"s","version":"0.1.0"}')
+        assert ref == DomainRef(id="s", version="0.1.0")
+    finally:
+        client.close()
+
+
+def test_register_domain_rejects_invalid_json(mock_plane: _MockControlPlane) -> None:
+    client = ControlPlaneClient(mock_plane.addr)
+    try:
+        with pytest.raises(ControlPlaneError, match="invalid JSON"):
+            client.register_domain("{not json")
+    finally:
+        client.close()
+
+
+def test_unregister_domain_specific_version(mock_plane: _MockControlPlane) -> None:
+    client = ControlPlaneClient(mock_plane.addr)
+    try:
+        client.register_domain({"id": "d", "version": "1.0.0"})
+        client.register_domain({"id": "d", "version": "2.0.0"})
+        client.unregister_domain("d", "1.0.0")
+        # only v2.0.0 should remain
+        assert ("d", "1.0.0") not in mock_plane._domain_store
+        assert ("d", "2.0.0") in mock_plane._domain_store
+        assert mock_plane.unregister_calls[-1] == domain_pb2.DomainRef(
+            id="d", version="1.0.0"
+        )
+    finally:
+        client.close()
+
+
+def test_unregister_domain_all_versions_when_no_version(
+    mock_plane: _MockControlPlane,
+) -> None:
+    client = ControlPlaneClient(mock_plane.addr)
+    try:
+        client.register_domain({"id": "d", "version": "1.0.0"})
+        client.register_domain({"id": "d", "version": "2.0.0"})
+        client.register_domain({"id": "other", "version": "1.0.0"})
+        client.unregister_domain("d")  # empty version → wipe all
+        assert all(k[0] != "d" for k in mock_plane._domain_store)
+        assert ("other", "1.0.0") in mock_plane._domain_store
+    finally:
+        client.close()
+
+
+def test_get_domain_returns_dict(mock_plane: _MockControlPlane) -> None:
+    client = ControlPlaneClient(mock_plane.addr)
+    try:
+        client.register_domain(
+            {
+                "id": "demo",
+                "version": "1.0.0",
+                "description": "hello",
+                "harness": {"agents": [{"id": "main"}]},
+            }
+        )
+        spec = client.get_domain("demo", "1.0.0")
+        assert spec["id"] == "demo"
+        assert spec["version"] == "1.0.0"
+        assert spec["description"] == "hello"
+        # MessageToDict preserves proto field names (snake_case in proto).
+        assert "agents" in spec["harness"]
+    finally:
+        client.close()
+
+
+def test_get_domain_latest_when_version_omitted(mock_plane: _MockControlPlane) -> None:
+    client = ControlPlaneClient(mock_plane.addr)
+    try:
+        client.register_domain({"id": "d", "version": "1.0.0"})
+        client.register_domain({"id": "d", "version": "2.0.0"})
+        spec = client.get_domain("d")  # no version
+        assert spec["version"] == "2.0.0"
+    finally:
+        client.close()
+
+
+def test_get_domain_not_found_raises(mock_plane: _MockControlPlane) -> None:
+    client = ControlPlaneClient(mock_plane.addr)
+    try:
+        with pytest.raises(ControlPlaneError, match="RPC failed"):
+            client.get_domain("does-not-exist")
+    finally:
+        client.close()
+
+
+def test_list_domains_returns_page(mock_plane: _MockControlPlane) -> None:
+    client = ControlPlaneClient(mock_plane.addr)
+    try:
+        for v in ["1.0.0", "2.0.0", "3.0.0"]:
+            client.register_domain({"id": "d", "version": v})
+        page = client.list_domains(limit=2, offset=0)
+        assert len(page) == 2
+        page2 = client.list_domains(limit=2, offset=2)
+        assert len(page2) == 1
+        # all 3 still came through, just paginated
+        all_three = page + page2
+        assert {s["version"] for s in all_three} == {"1.0.0", "2.0.0", "3.0.0"}
+    finally:
+        client.close()
+
+
+# ---------------------------------------------------------------------------
+# auth metadata interceptor
+# ---------------------------------------------------------------------------
+
+
+def test_tenant_id_and_api_key_sent_as_metadata(mock_plane: _MockControlPlane) -> None:
+    """``ControlPlaneClient(..., tenant_id=..., api_key=...)`` must inject
+    ``x-tenant-id`` and ``x-api-key`` on every outgoing RPC, including
+    DomainRegistry ones. The mock's servicer reads ``invocation_metadata()``
+    so we can assert the headers actually arrived.
+    """
+    client = ControlPlaneClient(
+        mock_plane.addr,
+        tenant_id="tenant-7",
+        api_key="key-abc",
+    )
+    try:
+        client.register_domain({"id": "x", "version": "0.1.0"})
+    finally:
+        client.close()
+    md = mock_plane.last_register_metadata
+    assert md is not None, "RegisterDomain RPC never reached the mock"
+    keys = {k: v for k, v in md}
+    assert keys.get("x-tenant-id") == "tenant-7"
+    assert keys.get("x-api-key") == "key-abc"
+
+
+def test_no_metadata_when_constructor_omits_credentials(
+    mock_plane: _MockControlPlane,
+) -> None:
+    """When neither tenant_id nor api_key is set, neither header is sent —
+    the interceptor must be a no-op (no empty entries leaking onto the wire).
+    """
+    client = ControlPlaneClient(mock_plane.addr)
+    try:
+        client.register_domain({"id": "x", "version": "0.1.0"})
+    finally:
+        client.close()
+    md = mock_plane.last_register_metadata
+    keys = {k for k, _ in (md or [])}
+    assert "x-tenant-id" not in keys
+    assert "x-api-key" not in keys

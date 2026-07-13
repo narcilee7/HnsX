@@ -21,10 +21,12 @@ from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
 import grpc
+from google.protobuf.json_format import MessageToDict, ParseDict
 
 from hnsx_worker.proto.gen.hnsx.v1 import (
     control_plane_pb2,
     control_plane_pb2_grpc,
+    domain_pb2,
     observation_pb2,
     worker_pb2,
     worker_pb2_grpc,
@@ -35,6 +37,7 @@ from .messages import (
     CancelCommand,
     ControlPlaneError,
     DomainInvalidation,
+    DomainRef,
     DrainCommand,
     HeartbeatRequest,
     HeartbeatResponse,
@@ -55,6 +58,43 @@ from .messages import (
 )
 
 log = logging.getLogger("hnsx_worker.proto_client")
+
+
+# ---------------------------------------------------------------------------
+# gRPC interceptor — inject static metadata (x-tenant-id, x-api-key) on every
+# outgoing RPC. Connect handlers on the server read tenant via metadata; the
+# REST/Connect auth split lives in pkg/auth (REST only). Once a Connect-side
+# auth interceptor lands server-side, the same `x-api-key` header will be
+# honored without further client changes.
+# ---------------------------------------------------------------------------
+
+
+class _MetadataClientInterceptor(
+    grpc.UnaryUnaryClientInterceptor,
+    grpc.UnaryStreamClientInterceptor,
+    grpc.StreamUnaryClientInterceptor,
+    grpc.StreamStreamClientInterceptor,
+):
+    """Inject a fixed set of ``(key, value)`` metadata pairs on every RPC."""
+
+    def __init__(self, static_metadata: tuple[tuple[str, str], ...] = ()):
+        self._static_metadata = static_metadata
+
+    def _inject(self, client_call_details):
+        existing = list(client_call_details.metadata or ())
+        return client_call_details._replace(metadata=existing + list(self._static_metadata))
+
+    def intercept_unary_unary(self, continuation, client_call_details, request):
+        return continuation(self._inject(client_call_details), request)
+
+    def intercept_unary_stream(self, continuation, client_call_details, request):
+        return continuation(self._inject(client_call_details), request)
+
+    def intercept_stream_unary(self, continuation, client_call_details, request_iterator):
+        return continuation(self._inject(client_call_details), request_iterator)
+
+    def intercept_stream_stream(self, continuation, client_call_details, request_iterator):
+        return continuation(self._inject(client_call_details), request_iterator)
 
 
 # Map our string health status → proto enum int.
@@ -85,10 +125,45 @@ class ControlPlaneClient:
             client.close()
     """
 
-    def __init__(self, server_addr: str, *, auth_token: str = "") -> None:
+    def __init__(
+        self,
+        server_addr: str,
+        *,
+        auth_token: str = "",
+        tenant_id: str = "",
+        api_key: str = "",
+    ) -> None:
+        """Connect to the control plane at ``server_addr``.
+
+        Args:
+            server_addr: ``host:port`` of the gRPC endpoint (not REST). Workers
+                historically use ``127.0.0.1:50061``.
+            auth_token: Legacy token field carried on ``WorkerService.Register``
+                payloads. New callers should prefer ``api_key`` (sent as
+                ``x-api-key`` metadata).
+            tenant_id: Sent as ``x-tenant-id`` metadata on every RPC. Connect
+                handlers scope reads/writes by tenant.
+            api_key: Sent as ``x-api-key`` metadata on every RPC. Not yet
+                enforced server-side on the Connect mux, but kept here so the
+                wire shape is ready when the Connect auth interceptor lands.
+        """
         self._server_addr = server_addr
         self._auth_token = auth_token
-        self._channel = grpc.insecure_channel(server_addr)
+
+        static_md: list[tuple[str, str]] = []
+        if tenant_id:
+            static_md.append(("x-tenant-id", tenant_id))
+        if api_key:
+            static_md.append(("x-api-key", api_key))
+
+        raw_channel = grpc.insecure_channel(server_addr)
+        if static_md:
+            self._channel = grpc.intercept_channel(
+                raw_channel, _MetadataClientInterceptor(tuple(static_md))
+            )
+        else:
+            self._channel = raw_channel
+
         self._worker = worker_pb2_grpc.WorkerServiceStub(self._channel)
         self._scheduler = worker_pb2_grpc.SchedulerServiceStub(self._channel)
         self._domain_registry = control_plane_pb2_grpc.DomainRegistryServiceStub(self._channel)
@@ -224,6 +299,133 @@ class ControlPlaneClient:
             return True, []
         return False, [f"{err.field}: {err.message}" for err in resp.errors]
 
+    # ------------------------------------------------------------------ DomainRegistry
+
+    def register_domain(
+        self,
+        spec: dict[str, Any] | str,
+        *,
+        timeout: float = 10.0,
+    ) -> DomainRef:
+        """DomainRegistryService.RegisterDomain.
+
+        Args:
+            spec: Authoring-format spec as a Python ``dict`` (will be
+                JSON-encoded here) or a raw JSON string. The dict shape
+                mirrors the YAML/JSON the CLI's ``hnsx domain apply`` accepts:
+                ``{id, version, description, harness:{...}, eval:{...}}``.
+
+        Returns:
+            ``DomainRef(id, version)`` as assigned by the server.
+
+        Raises:
+            ControlPlaneError: on RPC failure or invalid JSON.
+        """
+        if isinstance(spec, str):
+            try:
+                spec_dict = json.loads(spec)
+            except json.JSONDecodeError as exc:
+                raise ControlPlaneError(f"register_domain: invalid JSON: {exc}") from exc
+        else:
+            spec_dict = spec
+
+        # Translate the dict to the proto using the standard JSON mapping.
+        # This honors nested harness / eval fields automatically and stays in
+        # lockstep with the .proto definitions.
+        proto_spec = ParseDict(spec_dict, domain_pb2.DomainSpec(), ignore_unknown_fields=True)
+        proto_req = control_plane_pb2.RegisterDomainRequest(spec=proto_spec)
+
+        try:
+            resp = self._domain_registry.RegisterDomain(proto_req, timeout=timeout)
+        except grpc.RpcError as exc:
+            raise ControlPlaneError(
+                f"RegisterDomain RPC failed: {exc.code()}: {exc.details() or exc}"
+            ) from exc
+        return DomainRef(id=resp.domain.id, version=resp.domain.version)
+
+    def unregister_domain(
+        self,
+        domain_id: str,
+        version: str = "",
+        *,
+        timeout: float = 10.0,
+    ) -> None:
+        """DomainRegistryService.UnregisterDomain.
+
+        ``version`` is optional; pass ``""`` to unregister all versions of
+        the domain. The server interprets an empty version field as "any".
+        """
+        proto_req = control_plane_pb2.UnregisterDomainRequest(
+            domain=domain_pb2.DomainRef(id=domain_id, version=version)
+        )
+        try:
+            self._domain_registry.UnregisterDomain(proto_req, timeout=timeout)
+        except grpc.RpcError as exc:
+            raise ControlPlaneError(
+                f"UnregisterDomain RPC failed: {exc.code()}: {exc.details() or exc}"
+            ) from exc
+
+    def get_domain(
+        self,
+        domain_id: str,
+        version: str = "",
+        *,
+        timeout: float = 10.0,
+    ) -> dict[str, Any]:
+        """DomainRegistryService.GetDomain.
+
+        Returns the spec as a Python dict (parsed from the proto). ``version``
+        empty means "latest".
+        """
+        proto_req = control_plane_pb2.GetDomainRequest(
+            domain=domain_pb2.DomainRef(id=domain_id, version=version)
+        )
+        try:
+            resp = self._domain_registry.GetDomain(proto_req, timeout=timeout)
+        except grpc.RpcError as exc:
+            raise ControlPlaneError(
+                f"GetDomain RPC failed: {exc.code()}: {exc.details() or exc}"
+            ) from exc
+        spec = resp.spec
+        return {
+            "id": spec.id,
+            "version": spec.version,
+            "description": spec.description,
+            "harness": _harness_proto_to_dict(spec.harness),
+            "eval": _eval_proto_to_dict(spec.eval) if spec.HasField("eval") else {},
+        }
+
+    def list_domains(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        timeout: float = 10.0,
+    ) -> list[dict[str, Any]]:
+        """DomainRegistryService.ListDomains.
+
+        Returns the page of spec dicts. ``total`` is not returned — call again
+        with a higher ``offset`` until the response is shorter than ``limit``.
+        """
+        proto_req = control_plane_pb2.ListDomainsRequest(
+            limit=int(limit), offset=int(offset)
+        )
+        try:
+            resp = self._domain_registry.ListDomains(proto_req, timeout=timeout)
+        except grpc.RpcError as exc:
+            raise ControlPlaneError(
+                f"ListDomains RPC failed: {exc.code()}: {exc.details() or exc}"
+            ) from exc
+        return [
+            {
+                "id": s.id,
+                "version": s.version,
+                "description": s.description,
+                "harness": _harness_proto_to_dict(s.harness),
+            }
+            for s in resp.domains
+        ]
+
     # ------------------------------------------------------------------ bidi stream
 
     def open_stream(
@@ -305,6 +507,28 @@ def _to_proto_status(s: SessionStatusUpdate) -> worker_pb2.SessionStatusUpdate:
     )
 
 
+def _harness_proto_to_dict(harness_proto) -> dict[str, Any]:
+    """Convert a Harness proto to a plain dict via protobuf's standard helper.
+
+    We use ``MessageToDict`` rather than hand-rolling each nested type so we
+    stay in lockstep with the .proto definitions. ``including_default_value_fields``
+    is left off (default) to keep the dict readable — empty fields stay empty.
+    """
+    return MessageToDict(
+        harness_proto,
+        preserving_proto_field_name=True,
+        use_integers_for_enums=True,
+    )
+
+
+def _eval_proto_to_dict(eval_proto) -> dict[str, Any]:
+    return MessageToDict(
+        eval_proto,
+        preserving_proto_field_name=True,
+        use_integers_for_enums=True,
+    )
+
+
 def _to_proto_result(r: SessionFinalResult) -> worker_pb2.SessionFinalResult:
     return worker_pb2.SessionFinalResult(
         session_id=r.session_id,
@@ -378,6 +602,7 @@ __all__ = [
     "CancelCommand",
     "DrainCommand",
     "DomainInvalidation",
+    "DomainRef",
     "PingCommand",
 ]
 

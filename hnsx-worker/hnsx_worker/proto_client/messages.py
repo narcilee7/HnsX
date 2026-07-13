@@ -243,6 +243,23 @@ class ServerEvent:
 
 
 # ---------------------------------------------------------------------------
+# Domain registry
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class DomainRef:
+    """Reference to a registered Domain by ``(id, version)``.
+
+    Mirrors the ``hnsx.v1.DomainRef`` proto. ``version`` may be empty when
+    the caller doesn't care about a specific version (e.g. "unregister all").
+    """
+
+    id: str = ""
+    version: str = ""
+
+
+# ---------------------------------------------------------------------------
 # Errors
 # ---------------------------------------------------------------------------
 

@@ -25,7 +25,13 @@ from concurrent import futures
 
 import grpc
 
-from hnsx_worker.proto.gen.hnsx.v1 import control_plane_pb2, control_plane_pb2_grpc, worker_pb2, worker_pb2_grpc
+from hnsx_worker.proto.gen.hnsx.v1 import (
+    control_plane_pb2,
+    control_plane_pb2_grpc,
+    domain_pb2,
+    worker_pb2,
+    worker_pb2_grpc,
+)
 
 log = logging.getLogger("hnsx_worker.tests.mock_server")
 
@@ -154,6 +160,53 @@ class _SchedulerServicer(worker_pb2_grpc.SchedulerServiceServicer):
 class _DomainRegistryServicer(control_plane_pb2_grpc.DomainRegistryServiceServicer):
     def __init__(self, server: MockHnsXServer) -> None:
         self.server = server
+        # In-memory store of registered specs, keyed by (id, version).
+        self._store: dict[tuple[str, str], domain_pb2.DomainSpec] = {}
+
+    def RegisterDomain(self, request, context):  # noqa: ARG002
+        spec = request.spec
+        self._store[(spec.id, spec.version)] = spec
+        return control_plane_pb2.RegisterDomainResponse(
+            domain=domain_pb2.DomainRef(id=spec.id, version=spec.version)
+        )
+
+    def UnregisterDomain(self, request, context):
+        d = request.domain
+        if d.version:
+            self._store.pop((d.id, d.version), None)
+            return control_plane_pb2.UnregisterDomainResponse()
+        # empty version → unregister all versions of this id
+        for k in [k for k in self._store if k[0] == d.id]:
+            self._store.pop(k, None)
+        return control_plane_pb2.UnregisterDomainResponse()
+
+    def GetDomain(self, request, context):
+        d = request.domain
+        if d.version:
+            spec = self._store.get((d.id, d.version))
+            if spec is None:
+                context.abort(
+                    grpc.StatusCode.NOT_FOUND,
+                    f"domain {d.id}@{d.version} not found",
+                )
+            return control_plane_pb2.GetDomainResponse(spec=spec)
+        # empty version → return the highest-sorted version
+        versions = [v for (i, v) in self._store if i == d.id]
+        if not versions:
+            context.abort(grpc.StatusCode.NOT_FOUND, f"domain {d.id} not found")
+        latest = sorted(versions)[-1]
+        return control_plane_pb2.GetDomainResponse(
+            spec=self._store[(d.id, latest)]
+        )
+
+    def ListDomains(self, request, context):  # noqa: ARG002
+        limit = request.limit if request.limit > 0 else 50
+        offset = request.offset if request.offset > 0 else 0
+        all_specs = list(self._store.values())
+        page = all_specs[offset : offset + limit]
+        return control_plane_pb2.ListDomainsResponse(
+            domains=page, total=len(all_specs)
+        )
 
     def ValidateDomain(self, request, context):  # noqa: ARG002
         # The mock server trusts any spec the test hands it.
