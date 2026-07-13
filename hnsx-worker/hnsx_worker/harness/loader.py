@@ -4,13 +4,22 @@ W5 introduces supervisor / hierarchical / autonomous modes with explicit
 agent references and transition rules. This module validates those references
 at load time so the runner doesn't hit ``KeyError`` mid-session.
 
-Validated invariants:
+⚠️  W16+ DEPRECATED for rule validation. The rule validation in this
+module is a duplicate of ``pkg/domain/loader.go::Validate`` in the Go
+server. New rules MUST be added server-side; this Python module is
+kept only as a fast-fail mirror for cold-start sanity. The plan is to
+shrink it to a 30-line dataclass once the server's gRPC ValidateDomain
+is wired in at session startup.
+
+Validated invariants (mirror of pkg/domain/loader.go::Validate):
 
   - ``harness.agents`` is non-empty.
   - Every agent referenced by ``session.supervisor.agent`` exists.
   - Every ``to`` target in ``transitions`` / ``exit`` exists in agents.
   - No duplicate agent ids.
   - (Optional) referenced prompts exist in ``harness.prompts``.
+
+Authoritative server validator: ``pkg/domain/loader.go::Validate``.
 """
 
 from __future__ import annotations
