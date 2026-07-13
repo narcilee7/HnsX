@@ -43,7 +43,7 @@ func newUpdateCmd(cfg *Config) *cobra.Command {
 			if err != nil {
 				out.Line("⚠ could not check for updates: %v", err)
 				out.Line("  (this is expected in offline / sandboxed environments)")
-				out.Line("  install manually: curl -sSL hnsx.dev/install.sh | sh")
+				out.Line("  install manually: curl -sSL https://raw.githubusercontent.com/narcilee7/HnsX/main/scripts/install.sh | sh")
 				return nil
 			}
 			out.Line("latest:  %s", latest.TagName)
@@ -71,7 +71,7 @@ func newUpdateCmd(cfg *Config) *cobra.Command {
 			asset := pickAsset(latest, runtime.GOOS, runtime.GOARCH)
 			if asset == nil {
 				out.Line("⚠ no compatible asset for %s/%s in release %s", runtime.GOOS, runtime.GOARCH, latest.TagName)
-				out.Line("  manual install: curl -sSL hnsx.dev/install.sh | sh")
+				out.Line("  manual install: curl -sSL https://raw.githubusercontent.com/narcilee7/HnsX/main/scripts/install.sh | sh")
 				return nil
 			}
 			if err := downloadAndReplace(asset.URL, binaryPath); err != nil {
@@ -106,7 +106,7 @@ type releaseAsset struct {
 func fetchLatestRelease(_ string) (*releaseInfo, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	req, err := http.NewRequest(http.MethodGet,
-		"https://api.github.com/repos/hnsx-io/hnsx/releases/latest", nil)
+		"https://api.github.com/repos/narcilee7/HnsX/releases/latest", nil)
 	if err != nil {
 		return nil, err
 	}

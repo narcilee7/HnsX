@@ -7,7 +7,7 @@
 # installs them into $HOME/.local/bin (or $HNSX_INSTALL_DIR).
 #
 # Usage:
-#   curl -sSL hnsx.dev/install.sh | sh
+#   curl -sSL https://raw.githubusercontent.com/narcilee7/HnsX/main/scripts/install.sh | sh
 #   HNSX_INSTALL_DIR=/usr/local/bin ./scripts/install.sh
 
 set -euo pipefail
