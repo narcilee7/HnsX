@@ -121,10 +121,10 @@ func newDomainShowCmd(cfg *Config) *cobra.Command {
 				{"version", nonEmpty(d.Version, "-")},
 				{"status", nonEmpty(d.Status, "-")},
 				{"description", nonEmpty(d.Description, "-")},
-				{"created", nonEmpty(d.CreatedAt, "-")},
-				{"updated", nonEmpty(d.UpdatedAt, "-")},
+				{"created", formatTime(d.CreatedAt, "-")},
+				{"updated", formatTime(d.UpdatedAt, "-")},
 			})
-			if len(d.Harness) > 0 {
+			if d.Harness != nil {
 				o.Section("Harness")
 				o.Print(d.Harness)
 			}

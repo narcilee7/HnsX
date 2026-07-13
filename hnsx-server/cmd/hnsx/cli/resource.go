@@ -51,16 +51,9 @@ func parseSince(s string) (time.Time, error) {
 }
 
 // shortTime renders a timestamp as a compact relative string ("3s ago", "12m ago").
-func shortTime(iso string) string {
-	if iso == "" {
+func shortTime(t time.Time) string {
+	if t.IsZero() {
 		return "-"
-	}
-	t, err := time.Parse(time.RFC3339Nano, iso)
-	if err != nil {
-		t, err = time.Parse(time.RFC3339, iso)
-		if err != nil {
-			return iso
-		}
 	}
 	d := time.Since(t)
 	switch {
@@ -73,6 +66,30 @@ func shortTime(iso string) string {
 	default:
 		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	}
+}
+
+// shortTimePtr renders a pointer timestamp as a compact relative string.
+func shortTimePtr(t *time.Time) string {
+	if t == nil || t.IsZero() {
+		return "-"
+	}
+	return shortTime(*t)
+}
+
+// formatTime renders a timestamp as RFC3339 or def when zero.
+func formatTime(t time.Time, def string) string {
+	if t.IsZero() {
+		return def
+	}
+	return t.Format(time.RFC3339)
+}
+
+// formatTimePtr renders a pointer timestamp as RFC3339 or def when nil/zero.
+func formatTimePtr(t *time.Time, def string) string {
+	if t == nil || t.IsZero() {
+		return def
+	}
+	return t.Format(time.RFC3339)
 }
 
 // truncate shortens s to n runes, appending an ellipsis when truncated.

@@ -10,10 +10,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/secret/crypto"
 	secmodel "github.com/hnsx-io/hnsx/server/internal/secret/model"
 	secrepo "github.com/hnsx-io/hnsx/server/internal/secret/repository"
 	secservice "github.com/hnsx-io/hnsx/server/internal/secret/service"
+	"github.com/hnsx-io/hnsx/server/pkg/handler"
 )
 
 func newSecretTestServer(t *testing.T) (*Server, *secservice.Service) {
@@ -24,7 +26,8 @@ func newSecretTestServer(t *testing.T) (*Server, *secservice.Service) {
 		t.Fatalf("cipher: %v", err)
 	}
 	svc := secservice.NewService(secrepo.NewInMemoryRepository(), cipher)
-	return &Server{SecretService: svc}, svc
+	application := &app.Application{SecretService: svc}
+	return &Server{SecretService: svc, Handlers: handler.New(application, nil)}, svc
 }
 
 func TestSecrets_CRUD_NeverReturnsPlaintext(t *testing.T) {

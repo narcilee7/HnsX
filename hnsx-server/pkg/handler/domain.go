@@ -37,6 +37,11 @@ type RegisterDomainInput struct {
 	ContentType string
 }
 
+type RegisterDomainSpecInput struct {
+	TenantID tenant.ID
+	Spec     *domain.DomainSpec
+}
+
 type UpdateDomainInput struct {
 	TenantID    tenant.ID
 	ID          string
@@ -169,7 +174,8 @@ func (h *Handler) GetDomain(ctx context.Context, in GetDomainInput) (*GetDomainO
 	return &GetDomainOutput{Domain: h.toDomainDetail(d)}, nil
 }
 
-// RegisterDomain validates and persists a new domain spec.
+// RegisterDomain validates and persists a new domain spec decoded from the
+// request body.
 func (h *Handler) RegisterDomain(ctx context.Context, in RegisterDomainInput) (*RegisterDomainOutput, error) {
 	defer h.hook(ctx, "domain.register", zap.String("tenant_id", string(in.TenantID)))()
 
@@ -177,10 +183,23 @@ func (h *Handler) RegisterDomain(ctx context.Context, in RegisterDomainInput) (*
 	if err != nil {
 		return nil, err
 	}
+	return h.RegisterDomainSpec(ctx, RegisterDomainSpecInput{
+		TenantID: in.TenantID,
+		Spec:     ds,
+	})
+}
+
+// RegisterDomainSpec validates and persists an already-parsed domain spec.
+func (h *Handler) RegisterDomainSpec(ctx context.Context, in RegisterDomainSpecInput) (*RegisterDomainOutput, error) {
+	defer h.hook(ctx, "domain.register", zap.String("tenant_id", string(in.TenantID)))()
+
+	if in.Spec == nil {
+		return nil, domainmodel.ErrInvalidSpec
+	}
 	if h.App == nil || h.App.DomainService == nil {
 		return nil, domainmodel.ErrDomainNotFound
 	}
-	d, err := h.App.DomainService.Register(in.TenantID, ds)
+	d, err := h.App.DomainService.Register(in.TenantID, in.Spec)
 	if err != nil {
 		return nil, err
 	}

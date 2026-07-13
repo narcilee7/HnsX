@@ -198,7 +198,7 @@ func newEvalRunListCmd(cfg *Config) *cobra.Command {
 			}
 			rows := make([][]string, 0, len(runs))
 			for _, r := range runs {
-				rows = append(rows, []string{r.ID, r.State, nonEmpty(r.CreatedAt, "-")})
+				rows = append(rows, []string{r.ID, r.State, formatTime(r.CreatedAt, "-")})
 			}
 			o.Table([]string{"RUN", "STATE", "CREATED"}, rows)
 			return nil

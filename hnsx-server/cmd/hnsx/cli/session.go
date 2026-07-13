@@ -84,11 +84,8 @@ func newSessionListCmd(cfg *Config) *cobra.Command {
 				if state != "" && !strings.EqualFold(it.State, state) {
 					continue
 				}
-				if !sinceT.IsZero() && it.StartedAt != "" {
-					t, perr := parseRFC3339(it.StartedAt)
-					if perr == nil && t.Before(sinceT) {
-						continue
-					}
+				if !sinceT.IsZero() && it.StartedAt.Before(sinceT) {
+					continue
 				}
 				if !filterMatches(map[string]string{
 					"id":        it.ID,
@@ -122,7 +119,7 @@ func newSessionListCmd(cfg *Config) *cobra.Command {
 					s.DomainID,
 					nonEmpty(s.State, "-"),
 					shortTime(s.StartedAt),
-					shortTime(s.CompletedAt),
+					shortTimePtr(s.CompletedAt),
 				})
 			}
 			o.Table([]string{"", "ID", "DOMAIN", "STATE", "STARTED", "COMPLETED"}, rows)
@@ -163,8 +160,8 @@ func newSessionShowCmd(cfg *Config) *cobra.Command {
 				{"version", nonEmpty(s.DomainVersion, "-")},
 				{"state", s.State},
 				{"orchestration", nonEmpty(s.Orchestration, "-")},
-				{"started", nonEmpty(s.StartedAt, "-")},
-				{"completed", nonEmpty(s.CompletedAt, "-")},
+				{"started", formatTime(s.StartedAt, "-")},
+				{"completed", formatTimePtr(s.CompletedAt, "-")},
 			})
 			if len(s.Trigger) > 0 {
 				o.Section("Trigger")

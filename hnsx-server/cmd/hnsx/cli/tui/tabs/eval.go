@@ -316,7 +316,7 @@ func (d *evalDetail) diff() tea.Cmd {
 		// Sort by creation time descending (newest first) and diff the top two.
 		runs := append([]client.EvalRun(nil), d.runs...)
 		sort.Slice(runs, func(i, j int) bool {
-			return runs[i].CreatedAt > runs[j].CreatedAt
+			return runs[i].CreatedAt.After(runs[j].CreatedAt)
 		})
 		a, b := runs[0], runs[1]
 		return actionMsg{err: fmt.Errorf("diff %s vs %s not yet implemented in TUI", a.ID, b.ID), kind: "diff"}

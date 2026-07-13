@@ -2,6 +2,7 @@ package cli
 
 import (
 	"testing"
+	"time"
 )
 
 func TestParseSince(t *testing.T) {
@@ -60,11 +61,11 @@ func TestFilterMatches(t *testing.T) {
 }
 
 func TestShortTime(t *testing.T) {
-	if got := shortTime(""); got != "-" {
+	if got := shortTime(time.Time{}); got != "-" {
 		t.Fatalf("empty: got %q want -", got)
 	}
-	if got := shortTime("not-a-time"); got == "" {
-		t.Fatal("unparseable should echo input")
+	if got := shortTime(time.Now().Add(-30 * time.Second)); got == "" {
+		t.Fatal("recent should return non-empty")
 	}
 }
 

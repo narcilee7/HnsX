@@ -237,15 +237,11 @@ type actionMsg struct {
 	kind string
 }
 
-func age(started string) string {
-	if started == "" {
+func age(started time.Time) string {
+	if started.IsZero() {
 		return "-"
 	}
-	t, err := time.Parse(time.RFC3339, started)
-	if err != nil {
-		return started
-	}
-	d := time.Since(t)
+	d := time.Since(started)
 	if d < time.Minute {
 		return fmt.Sprintf("%ds", int(d.Seconds()))
 	}
