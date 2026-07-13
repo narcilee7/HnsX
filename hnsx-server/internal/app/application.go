@@ -92,17 +92,17 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 	if err != nil {
 		return nil, fmt.Errorf("db: open: %w", err)
 	}
-	if err := db.Migrate(ctx, store, cfg.MigrationsDir); err != nil {
-		// In daemon (SQLite) mode the existing /go/migrations target Postgres
-		// syntax (gen_random_uuid / JSONB / TIMESTAMPTZ) and will fail to
-		// parse. We log a warning and continue — the API still boots so the
-		// user can configure Postgres via HNSX_DATABASE_URL instead. Once
-		// v1.1 ports the migrations to ANSI SQL this warning goes away.
-		if cfg.SQLiteEnabled() {
-			log.Warn("migrations skipped under SQLite (v1.1 will port schema)", zap.Error(err))
-		} else {
-			return nil, fmt.Errorf("db: migrate: %w", err)
+	if cfg.SQLiteEnabled() {
+		// Apply the SQLite-specific minimum schema (tenants + domains +
+		// domain_versions) directly via Exec — the existing goose set is
+		// Postgres-only. Other repos stay Postgres-bound; v1.1 will port
+		// the remaining schema.
+		if err := db.EnsureSQLiteSchema(store); err != nil {
+			return nil, fmt.Errorf("db: sqlite schema: %w", err)
 		}
+		log.Info("sqlite schema applied (tenants + domains + domain_versions)")
+	} else if err := db.Migrate(ctx, store, cfg.MigrationsDir); err != nil {
+		return nil, fmt.Errorf("db: migrate: %w", err)
 	} else {
 		log.Info("migrations applied", zap.String("dir", cfg.MigrationsDir))
 	}
