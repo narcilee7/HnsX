@@ -19,11 +19,13 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	domainmodel "github.com/hnsx-io/hnsx/server/internal/domain/model"
+	"github.com/hnsx-io/hnsx/server/internal/obs"
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
 	evalrunner "github.com/hnsx-io/hnsx/server/internal/evaluation/runner"
 	sessionmodel "github.com/hnsx-io/hnsx/server/internal/session/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/internal/trace/model"
+	"go.uber.org/zap"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	"github.com/hnsx-io/hnsx/server/pkg/domain"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
@@ -33,6 +35,9 @@ import (
 // ConnectServer implements the 5 control_plane.proto services.
 type ConnectServer struct {
 	App *app.Application
+	// Logger is the request-scoped structured logger used by the
+	// per-RPC log interceptor. Nil-safe (no-op when nil, e.g. in tests).
+	Logger *zap.Logger
 }
 
 // NewConnectServer constructs a ConnectServer backed by app.
@@ -43,7 +48,10 @@ func NewConnectServer(app *app.Application) *ConnectServer {
 // Handler returns an http.Handler that serves all 5 control plane services.
 func (s *ConnectServer) Handler() http.Handler {
 	mux := http.NewServeMux()
-	interceptors := connect.WithInterceptors(tenantInterceptor())
+	interceptors := connect.WithInterceptors(
+		tenantInterceptor(),
+		obs.ConnectInterceptor(s.Logger), // W16+ Phase 5b: per-RPC log
+	)
 	_, h := v1connect.NewDomainRegistryServiceHandler(s, interceptors)
 	mux.Handle("/hnsx.v1.DomainRegistryService/", h)
 	_, h = v1connect.NewSessionSchedulerServiceHandler(s, interceptors)

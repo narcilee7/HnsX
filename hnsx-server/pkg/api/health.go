@@ -4,20 +4,13 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-
-	"github.com/hnsx-io/hnsx/server/internal/obs"
-	"github.com/hnsx-io/hnsx/server/internal/tenant"
 )
 
 // Health is the GET /healthz handler — process is alive.
 func (s *Server) Health(c *gin.Context) {
-	// W16+ demo: use the obs.HookFunc pattern. Nil-safe (works even
-	// when s.Logger is nil in tests).
-	defer obs.HookFunc(c.Request.Context(), "api.health", s.Logger,
-		zap.String("tenant_id", string(tenant.FromContext(c.Request.Context()))),
-	)()
-
+	// W16+ Phase 5b: per-request logging is now provided by
+	// obs.GinMiddleware registered in router.go. No per-handler
+	// hook needed.
 	writeJSON(c, http.StatusOK, map[string]any{
 		"status": "ok",
 		"build":  s.BuildInfo,

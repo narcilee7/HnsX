@@ -69,6 +69,7 @@ func NewServerFromArgs(args []string) (*Server, error) {
 	apiServer.TemplatesIndexPath = cfg.TemplatesIndexPath
 
 	connectSrv := controlplane.NewConnectServer(application)
+	connectSrv.Logger = log // W16+ Phase 5b: per-RPC interceptor
 	apiServer.WithConnectHandler(connectSrv.Handler())
 	// W16+ Phase 5: inject the request-scoped logger so handlers can
 	// emit structured logs via obs.HookFunc.
