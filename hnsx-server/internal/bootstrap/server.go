@@ -70,6 +70,9 @@ func NewServerFromArgs(args []string) (*Server, error) {
 
 	connectSrv := controlplane.NewConnectServer(application)
 	apiServer.WithConnectHandler(connectSrv.Handler())
+	// W16+ Phase 5: inject the request-scoped logger so handlers can
+	// emit structured logs via obs.HookFunc.
+	apiServer.Logger = log
 
 	if *seedFrom != "" {
 		seedFromDir(log, apiServer, *seedFrom)

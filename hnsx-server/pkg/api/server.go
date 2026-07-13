@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
@@ -46,6 +47,11 @@ type Server struct {
 	DB        *db.DB
 	Executor  *pkgexecutor.Executor
 	AppState  *app.State
+
+	// Logger is the structured logger. Nil-safe: every handler that uses
+	// it must guard with `if s.Logger != nil` or use obs.HookFunc.
+	// Bootstrap injects a real zap.Logger; tests may leave it nil.
+	Logger *zap.Logger
 
 	// PolicyService loads domain policy into the policy repository.
 	PolicyService *policyservice.Service
