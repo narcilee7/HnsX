@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	domainrepo "github.com/hnsx-io/hnsx/server/internal/domain/repository"
@@ -200,6 +202,21 @@ func newWorkerPoolTestDeps(t *testing.T) (*evalservice.Service, *sessionservice.
 	return evalSvc, sessionSvc, cmds, workerSvc
 }
 
+func newRun(t *testing.T, evalSvc *evalservice.Service, set *evalmodel.EvalSet) *evalmodel.EvalRun {
+	t.Helper()
+	run := &evalmodel.EvalRun{
+		ID:         uuid.NewString(),
+		EvalSetID:  set.ID,
+		DomainID:   set.DomainID,
+		State:      "running",
+		TotalCases: len(set.Cases),
+	}
+	if err := evalSvc.CreateRun(run); err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+	return run
+}
+
 // driveWorkerPool pulls sessions from the worker queue and completes them using
 // the supplied result factory. It stops when the channel is closed.
 func driveWorkerPool(t *testing.T, workerSvc *workerservice.Service, sessionSvc *sessionservice.Service, stop <-chan struct{}, factory func(map[string]any) *domain.Result) {
@@ -233,6 +250,5 @@ func driveWorkerPool(t *testing.T, workerSvc *workerservice.Service, sessionSvc 
 	}
 }
 
-// Ensure the interface is satisfied by both runner implementations.
-var _ EvalRunner = (*Runner)(nil)
+// Ensure the interface is satisfied by the worker pool runner.
 var _ EvalRunner = (*WorkerPoolRunner)(nil)

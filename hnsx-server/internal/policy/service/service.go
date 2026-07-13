@@ -7,7 +7,6 @@ package service
 import (
 	"github.com/hnsx-io/hnsx/server/internal/policy/model"
 	"github.com/hnsx-io/hnsx/server/internal/policy/repository"
-	"github.com/hnsx-io/hnsx/server/pkg/policy"
 	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
@@ -77,56 +76,10 @@ func (s *Service) BindDomain(policyID, domainID string) error {
 	return s.repo.BindDomain(policyID, domainID)
 }
 
-// SessionEngine returns a fresh, session-scoped policy.Engine for the named
-// domain. The sessionID is reserved for future per-session policy caches; the
-// current implementation returns a fresh engine per call.
-func (s *Service) SessionEngine(domainID, sessionID string) (*policy.Engine, error) {
-	return s.Engine(domainID)
-}
-
-// Engine returns a fresh policy.Engine for the named domain.
-func (s *Service) Engine(domainID string) (*policy.Engine, error) {
-	p, err := s.repo.ByDomain(domainID)
-	if err != nil {
-		// No policy configured -> permissive engine.
-		return policy.NewEngine(domain.PolicySpec{}), nil
-	}
-	return policy.NewEngine(domain.PolicySpec{
-		Budget: domain.BudgetSpec{
-			MaxCostUSD: p.Budget.MaxCostUSD,
-			MaxTurns:   p.Budget.MaxTurns,
-			MaxTokens:  p.Budget.MaxTokens,
-		},
-		Permissions: domain.PermissionSpec{
-			AllowFileWrite:  p.Permissions.AllowFileWrite,
-			AllowFileDelete: p.Permissions.AllowFileDelete,
-			AllowNetwork:    p.Permissions.AllowNetwork,
-			AllowShell:      p.Permissions.AllowShell,
-		},
-		Guardrails: convertSpecGuardrails(p.Guardrails),
-	}), nil
-}
-
 func convertGuardrails(in []domain.GuardrailSpec) []model.Guardrail {
 	out := make([]model.Guardrail, 0, len(in))
 	for _, g := range in {
 		out = append(out, model.Guardrail{
-			ID:      g.ID,
-			Type:    g.Type,
-			On:      g.On,
-			Action:  g.Action,
-			Schema:  g.Schema,
-			Message: g.Message,
-			Config:  g.Config,
-		})
-	}
-	return out
-}
-
-func convertSpecGuardrails(in []model.Guardrail) []domain.GuardrailSpec {
-	out := make([]domain.GuardrailSpec, 0, len(in))
-	for _, g := range in {
-		out = append(out, domain.GuardrailSpec{
 			ID:      g.ID,
 			Type:    g.Type,
 			On:      g.On,

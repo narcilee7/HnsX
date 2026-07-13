@@ -1,7 +1,6 @@
 package api
 
 import (
-	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -168,11 +167,6 @@ func (s *Server) TriggerDomain(c *gin.Context) {
 		body.Trigger = map[string]any{}
 	}
 	s.triggerSession(c, tenantFromGin(c), id, body.Trigger)
-}
-
-// readDomainBody is a small helper kept in this file for handler use.
-func readDomainBody(r io.Reader) ([]byte, error) {
-	return io.ReadAll(r)
 }
 
 // mapDomainError maps handler/domain errors to canonical APIError values.
