@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { DomainEditor, useDomainEditor } from '@/components/domain/DomainEditor'
 import { VersionsPanel } from '@/components/domain/VersionsPanel'
+import { DebugPanel } from '@/components/domain/DebugPanel'
 import { DomainNav } from '@/components/domain/DomainNav'
 import {
   useDomainYaml,
@@ -142,6 +143,7 @@ export default function DomainDetailPage() {
           <TabsTrigger value="editor">Editor</TabsTrigger>
           <TabsTrigger value="info">Info</TabsTrigger>
           <TabsTrigger value="versions">Versions</TabsTrigger>
+          <TabsTrigger value="debug">Debug</TabsTrigger>
         </TabsList>
         <TabsContent value="editor" className="space-y-4">
           <DomainEditor
@@ -168,6 +170,9 @@ export default function DomainDetailPage() {
             currentVersion={parsed.version}
             onRollback={refetch}
           />
+        </TabsContent>
+        <TabsContent value="debug">
+          <DebugPanel domainId={parsed.id} />
         </TabsContent>
       </Tabs>
     </div>

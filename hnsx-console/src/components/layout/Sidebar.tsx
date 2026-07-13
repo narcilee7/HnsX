@@ -12,6 +12,7 @@ import {
   Menu,
   FlaskConical,
   LayoutTemplate,
+  Radar,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -32,6 +33,7 @@ const navItems = [
   { label: 'Traces', href: '/traces', icon: Search },
   { label: 'Evals', href: '/evals', icon: CheckSquare },
   { label: 'Observability', href: '/observability', icon: Activity },
+  { label: 'Live Debug', href: '/observability/debug', icon: Radar },
   { label: 'Audit', href: '/audit', icon: Shield },
   { label: 'Approvals', href: '/approvals', icon: ClipboardList },
   { label: 'Settings', href: '/settings', icon: Settings },
