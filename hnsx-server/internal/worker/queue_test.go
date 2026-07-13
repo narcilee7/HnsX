@@ -110,11 +110,28 @@ func TestQueue_Remove(t *testing.T) {
 	}
 }
 
-func TestQueue_EnqueueIdempotent(t *testing.T) {
+func TestQueue_Recover(t *testing.T) {
 	q := NewSessionQueue()
 	q.Enqueue(&SessionRequest{SessionID: "s1", DomainID: "d"})
-	q.Enqueue(&SessionRequest{SessionID: "s1", DomainID: "d"})
-	if q.Len() != 1 {
-		t.Fatalf("Len = %d, want 1", q.Len())
+
+	err := q.Recover([]*SessionRequest{
+		{SessionID: "s1", DomainID: "d"}, // duplicate
+		{SessionID: "s2", DomainID: "d"},
+		{SessionID: "s3", DomainID: "d"},
+	})
+	if err != nil {
+		t.Fatalf("Recover error: %v", err)
+	}
+	if q.Len() != 3 {
+		t.Fatalf("Len = %d, want 3", q.Len())
+	}
+
+	// Order: existing s1 first, then recovered s2, s3.
+	ctx := context.Background()
+	for _, want := range []string{"s1", "s2", "s3"} {
+		got, ok := q.Dequeue(ctx, nil)
+		if !ok || got.SessionID != want {
+			t.Fatalf("dequeue = %v, %v, want %s", got, ok, want)
+		}
 	}
 }

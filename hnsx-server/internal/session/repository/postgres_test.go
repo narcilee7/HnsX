@@ -115,3 +115,65 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 	_ = repo.Delete(testTenant, "s-test-1")
 	_ = domainRepo.Delete(testTenant, "session-test-domain")
 }
+
+func TestPostgresSessionRepository_ListByState(t *testing.T) {
+	database := testutil.OpenTestDB(t)
+	defer database.Close()
+
+	domainRepo := domainrepo.NewPostgresRepository(database)
+	_ = domainRepo.Delete(testTenant, "session-state-domain")
+	ds := &domain.DomainSpec{
+		ID:      "session-state-domain",
+		Version: "1.0.0",
+		Harness: domain.HarnessSpec{
+			Agents: map[string]domain.AgentSpec{
+				"agent": {ID: "agent", Provider: "noop", Adapter: domain.AdapterConfig{Kind: "noop"}},
+			},
+			Session: domain.SessionSpec{Mode: domain.Single, Agent: "agent"},
+		},
+	}
+	if err := domainRepo.Save(testTenant, &model.RegisteredDomain{
+		ID:      ds.ID,
+		Version: ds.Version,
+		Spec:    ds,
+	}); err != nil {
+		t.Fatalf("seed domain: %v", err)
+	}
+
+	repo := NewPostgresRepository(database)
+	for _, id := range []string{"s-pending-1", "s-pending-2", "s-running-1"} {
+		_ = repo.Delete(testTenant, id)
+	}
+
+	now := time.Now().UTC()
+	for _, s := range []*internalsession.Session{
+		{ID: "s-pending-1", DomainID: "session-state-domain", DomainVersion: "1.0.0", State: internalsession.StatePending, StartedAt: now},
+		{ID: "s-pending-2", DomainID: "session-state-domain", DomainVersion: "1.0.0", State: internalsession.StatePending, StartedAt: now},
+		{ID: "s-running-1", DomainID: "session-state-domain", DomainVersion: "1.0.0", State: internalsession.StateRunning, StartedAt: now},
+	} {
+		if err := repo.Save(testTenant, s); err != nil {
+			t.Fatalf("save %s: %v", s.ID, err)
+		}
+	}
+
+	pending, err := repo.ListByState(testTenant, internalsession.StatePending)
+	if err != nil {
+		t.Fatalf("list pending: %v", err)
+	}
+	if len(pending) != 2 {
+		t.Fatalf("pending len = %d, want 2", len(pending))
+	}
+
+	running, err := repo.ListByState(testTenant, internalsession.StateRunning)
+	if err != nil {
+		t.Fatalf("list running: %v", err)
+	}
+	if len(running) != 1 {
+		t.Fatalf("running len = %d, want 1", len(running))
+	}
+
+	for _, id := range []string{"s-pending-1", "s-pending-2", "s-running-1"} {
+		_ = repo.Delete(testTenant, id)
+	}
+	_ = domainRepo.Delete(testTenant, "session-state-domain")
+}

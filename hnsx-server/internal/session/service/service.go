@@ -68,6 +68,11 @@ func (s *Service) ListByDomain(tenantID tenant.ID, domainID string) ([]*model.Se
 	return s.repo.ByDomain(tenantID, domainID)
 }
 
+// ListPending returns all pending sessions scoped to a tenant.
+func (s *Service) ListPending(tenantID tenant.ID) ([]*model.Session, error) {
+	return s.repo.ListByState(tenantID, model.StatePending)
+}
+
 // MarkRunning transitions a session from pending to running.
 func (s *Service) MarkRunning(tenantID tenant.ID, id string) (*model.Session, error) {
 	sess, err := s.repo.ByID(tenantID, id)

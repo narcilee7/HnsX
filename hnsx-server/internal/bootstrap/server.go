@@ -59,6 +59,10 @@ func NewServerFromArgs(args []string) (*Server, error) {
 		return nil, fmt.Errorf("application: %w", err)
 	}
 
+	if err := application.RecoverSchedulingState(ctx, log); err != nil {
+		log.Warn("failed to recover scheduling state", zap.Error(err))
+	}
+
 	build := api.BuildInfo{
 		Version:   version.Version,
 		Commit:    version.Commit,

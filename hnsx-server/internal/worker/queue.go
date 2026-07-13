@@ -37,6 +37,9 @@ type SessionQueue interface {
 	Remove(id string)
 	// Len returns the current pending count.
 	Len() int
+	// Recover bulk-loads pending sessions at startup. Implementations must
+	// be idempotent: sessions already queued are skipped.
+	Recover(items []*SessionRequest) error
 }
 
 // MemorySessionQueue is an in-memory FIFO with capability matching and
@@ -138,6 +141,27 @@ func (q *MemorySessionQueue) Len() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return len(q.pending)
+}
+
+// Recover bulk-loads pending sessions at startup. Skips duplicates.
+func (q *MemorySessionQueue) Recover(items []*SessionRequest) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for _, req := range items {
+		if req == nil || req.SessionID == "" {
+			continue
+		}
+		if _, exists := q.byID[req.SessionID]; exists {
+			continue
+		}
+		if req.EnqueuedAt.IsZero() {
+			req.EnqueuedAt = time.Now().UTC()
+		}
+		q.pending = append(q.pending, req)
+		q.byID[req.SessionID] = req
+	}
+	q.cond.Broadcast()
+	return nil
 }
 
 // matches returns true when every required capability is present in the
