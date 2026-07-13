@@ -12,7 +12,7 @@
 ## 1. 安装 CLI
 
 ```bash
-curl -sSL hnsx.dev/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/narcilee7/HnsX/main/scripts/install.sh | sh
 ```
 
 macOS 用户也可以：
