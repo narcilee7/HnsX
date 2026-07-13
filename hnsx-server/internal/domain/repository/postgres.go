@@ -11,7 +11,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // PostgresRepository persists RegisteredDomain aggregates to Postgres using GORM.
@@ -208,7 +208,7 @@ func (r *PostgresRepository) ListVersions(tenantID tenant.ID, id string) ([]Vers
 
 	out := make([]VersionRecord, len(rows))
 	for i, v := range rows {
-		var s spec.DomainSpec
+		var s domain.DomainSpec
 		if err := json.Unmarshal(v.JSONBody, &s); err != nil {
 			return nil, err
 		}
@@ -222,7 +222,7 @@ func (r *PostgresRepository) ListVersions(tenantID tenant.ID, id string) ([]Vers
 }
 
 // GetVersion implements Repository.
-func (r *PostgresRepository) GetVersion(tenantID tenant.ID, id, version string) (*spec.DomainSpec, error) {
+func (r *PostgresRepository) GetVersion(tenantID tenant.ID, id, version string) (*domain.DomainSpec, error) {
 	if r.db == nil {
 		return nil, model.ErrDomainNotFound
 	}
@@ -250,7 +250,7 @@ func (r *PostgresRepository) GetVersion(tenantID tenant.ID, id, version string) 
 		return nil, err
 	}
 
-	var s spec.DomainSpec
+	var s domain.DomainSpec
 	if err := json.Unmarshal(v.JSONBody, &s); err != nil {
 		return nil, err
 	}
@@ -268,7 +268,7 @@ func (r *PostgresRepository) toModel(tid string, rec DomainRecord) (*model.Regis
 		return nil, err
 	}
 
-	var s spec.DomainSpec
+	var s domain.DomainSpec
 	if err := json.Unmarshal(version.JSONBody, &s); err != nil {
 		return nil, err
 	}

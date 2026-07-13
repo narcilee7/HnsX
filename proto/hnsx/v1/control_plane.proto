@@ -12,6 +12,7 @@ service DomainRegistryService {
   rpc UnregisterDomain(UnregisterDomainRequest) returns (UnregisterDomainResponse);
   rpc GetDomain(GetDomainRequest) returns (GetDomainResponse);
   rpc ListDomains(ListDomainsRequest) returns (ListDomainsResponse);
+  rpc ValidateDomain(ValidateDomainRequest) returns (ValidateDomainResponse);
 }
 
 service SessionSchedulerService {
@@ -40,6 +41,22 @@ service EvalService {
   rpc RunEval(RunEvalRequest) returns (RunEvalResponse);
   rpc GetEvalRun(GetEvalRunRequest) returns (GetEvalRunResponse);
   rpc ListEvalRuns(ListEvalRunsRequest) returns (ListEvalRunsResponse);
+}
+
+message ValidateDomainRequest {
+  // Authoring-format JSON (maps for agents/prompts/skills, etc.). The server
+  // parses this with the same decoder used for REST registration.
+  string domain_spec_json = 1;
+}
+
+message ValidationError {
+  string field = 1;
+  string message = 2;
+}
+
+message ValidateDomainResponse {
+  bool valid = 1;
+  repeated ValidationError errors = 2;
 }
 
 message RegisterDomainRequest {

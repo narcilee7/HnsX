@@ -12,8 +12,7 @@ import (
 	"sync"
 
 	"github.com/hnsx-io/hnsx/server/internal/session/broadcaster"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // RegisteredDomain is the runtime view of a loaded DomainSpec.
@@ -25,7 +24,7 @@ type RegisteredDomain struct {
 	ID          string
 	Version     string
 	Description string
-	Spec        *spec.DomainSpec
+	Spec        *domain.DomainSpec
 	Harness     any
 	CreatedAt   string
 	UpdatedAt   string
@@ -43,7 +42,7 @@ type RegisteredSession struct {
 	Orchestration string
 	State         string
 	Trigger       map[string]any
-	Result        *runtime.Result
+	Result        *domain.Result
 	StartedAt     string
 	CompletedAt   *string
 }
@@ -88,7 +87,7 @@ func (s *State) DetachBroadcaster(sessionID string) {
 
 // PublishObservation forwards an observation into the named session's
 // broadcaster. Returns false if publishing fails.
-func (s *State) PublishObservation(sessionID string, obs runtime.Observation) bool {
+func (s *State) PublishObservation(sessionID string, obs domain.Observation) bool {
 	bc := s.AttachBroadcaster(sessionID)
 	ctx := context.Background()
 	if err := bc.Publish(ctx, obs); err != nil {

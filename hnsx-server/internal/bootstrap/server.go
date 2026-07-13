@@ -6,10 +6,8 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"os"
 	stdruntime "runtime"
 	"time"
 
@@ -22,8 +20,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/api"
 	"github.com/hnsx-io/hnsx/server/pkg/controlplane"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 	"github.com/hnsx-io/hnsx/server/pkg/version"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
@@ -62,6 +59,10 @@ func NewServerFromArgs(args []string) (*Server, error) {
 		return nil, fmt.Errorf("application: %w", err)
 	}
 
+	if err := application.RecoverSchedulingState(ctx, log); err != nil {
+		log.Warn("failed to recover scheduling state", zap.Error(err))
+	}
+
 	build := api.BuildInfo{
 		Version:   version.Version,
 		Commit:    version.Commit,
@@ -72,7 +73,11 @@ func NewServerFromArgs(args []string) (*Server, error) {
 	apiServer.TemplatesIndexPath = cfg.TemplatesIndexPath
 
 	connectSrv := controlplane.NewConnectServer(application)
+	connectSrv.Logger = log // W16+ Phase 5b: per-RPC interceptor
 	apiServer.WithConnectHandler(connectSrv.Handler())
+	// W16+ Phase 5: inject the request-scoped logger so handlers can
+	// emit structured logs via obs.HookFunc.
+	apiServer.Logger = log
 
 	if *seedFrom != "" {
 		seedFromDir(log, apiServer, *seedFrom)
@@ -97,7 +102,7 @@ func NewServerFromArgs(args []string) (*Server, error) {
 				if obs.GetMetadata() != "" {
 					_ = json.Unmarshal([]byte(obs.GetMetadata()), &metadata)
 				}
-				ro := runtime.Observation{
+				ro := domain.Observation{
 					Kind:      obs.GetKind(),
 					SessionID: obs.GetSessionId(),
 					DomainID:  obs.GetDomainId(),
@@ -112,9 +117,6 @@ func NewServerFromArgs(args []string) (*Server, error) {
 				apiServer.PublishObservation(sessionID, ro)
 				if apiServer.TraceService != nil {
 					_ = apiServer.TraceService.Record(context.Background(), ro)
-				}
-				if application.Executor != nil {
-					application.Executor.ForwardObservation(context.Background(), ro)
 				}
 			}
 			grpcSrv.Sched.OnSessionStatus = func(tid tenant.ID, sessionID, state string) {
@@ -223,47 +225,4 @@ func (s *Server) runStaleWorkerGC(stop <-chan struct{}) {
 			}
 		}
 	}
-}
-
-// seedFromDir walks the given directory and registers every v2 DomainSpec YAML
-// against the API server. It is an explicit operator action (--seed-from) so
-// production deployments never implicitly pull in development fixtures.
-func seedFromDir(log *zap.Logger, s *api.Server, dir string) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		log.Warn("seed cannot read directory", zap.String("dir", dir), zap.Error(err))
-		return
-	}
-	registered := 0
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		path := fmt.Sprintf("%s/%s/domain.yaml", dir, e.Name())
-		ds, err := spec.LoadFile(path)
-		if err != nil {
-			log.Warn("seed skip file", zap.String("path", path), zap.Error(err))
-			continue
-		}
-		s.RegisterBootstrapDomain(tenant.DefaultID, ds)
-		registered++
-	}
-	if registered > 0 {
-		log.Info("seed registered domains", zap.Int("count", registered), zap.String("dir", dir))
-	}
-}
-
-// CLIError wraps a non-zero exit reason. The thin main wrappers use it to
-// decide whether to print the error or treat it as a clean shutdown.
-type CLIError struct {
-	Code int
-	Err  error
-}
-
-func (e *CLIError) Error() string { return e.Err.Error() }
-
-// IsCleanShutdown reports whether an error returned by Run should be treated as
-// a normal exit (e.g. signal-initiated context cancellation).
-func IsCleanShutdown(err error) bool {
-	return err == nil || errors.Is(err, context.Canceled)
 }

@@ -25,12 +25,12 @@ func NewClient(serverURL string) *Client {
 
 // TraceListItem is a single row in the Traces tab.
 type TraceListItem struct {
-	ID         string  `json:"trace_id"`
-	SessionID  string  `json:"session_id"`
-	DomainID   string  `json:"domain_id"`
-	StartedAt  string  `json:"started_at"`
-	DurationMS int64   `json:"duration_ms"`
-	Cost       float64 `json:"total_cost_usd"`
+	ID         string    `json:"trace_id"`
+	SessionID  string    `json:"session_id"`
+	DomainID   string    `json:"domain_id"`
+	StartedAt  time.Time `json:"started_at"`
+	DurationMS int64     `json:"duration_ms"`
+	Cost       float64   `json:"total_cost_usd"`
 }
 
 // ListTraces fetches the trace list from the REST API.
@@ -113,11 +113,11 @@ func (c *Client) CancelSession(id string) (*client.Session, error) {
 
 // ApprovalItem is a single pending approval.
 type ApprovalItem struct {
-	ID        string `json:"id"`
-	SessionID string `json:"session_id"`
-	Risk      string `json:"risk"`
-	Reason    string `json:"reason"`
-	CreatedAt string `json:"created_at"`
+	ID        string    `json:"id"`
+	SessionID string    `json:"session_id"`
+	Risk      string    `json:"risk"`
+	Reason    string    `json:"reason"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // ListApprovals fetches pending approvals from the REST API.
@@ -132,12 +132,13 @@ func (c *Client) ListApprovals() ([]ApprovalItem, error) {
 	}
 	out := make([]ApprovalItem, 0, len(items))
 	for _, it := range items {
+		createdAt, _ := parseRFC3339(stringOr(it["created_at"], ""))
 		out = append(out, ApprovalItem{
 			ID:        stringOr(it["id"], ""),
 			SessionID: stringOr(it["session_id"], ""),
 			Risk:      stringOr(it["risk"], ""),
 			Reason:    stringOr(it["reason"], ""),
-			CreatedAt: stringOr(it["created_at"], ""),
+			CreatedAt: createdAt,
 		})
 	}
 	return out, nil
@@ -274,7 +275,7 @@ func (c *Client) DashboardSummary() (*DashboardSummary, error) {
 		if s.State == "running" {
 			summary.RunningSessions++
 		}
-		if t, err := time.Parse(time.RFC3339, s.StartedAt); err == nil && t.After(cutoff) {
+		if s.StartedAt.After(cutoff) {
 			summary.TotalSessions24h++
 			if s.State == "failed" {
 				failed++
@@ -282,7 +283,7 @@ func (c *Client) DashboardSummary() (*DashboardSummary, error) {
 		}
 	}
 	for _, tr := range traces {
-		if t, err := time.Parse(time.RFC3339, tr.StartedAt); err == nil && t.After(cutoff) {
+		if tr.StartedAt.After(cutoff) {
 			summary.Cost24h += tr.Cost
 		}
 	}
@@ -341,4 +342,14 @@ func stringOr(v any, def string) string {
 		return s
 	}
 	return def
+}
+
+func parseRFC3339(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, nil
+	}
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t, nil
+	}
+	return time.Parse(time.RFC3339, s)
 }

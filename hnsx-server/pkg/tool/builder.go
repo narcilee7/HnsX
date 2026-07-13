@@ -1,13 +1,13 @@
 package tool
 
 import (
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // BuildFromSpec creates a Tool Registry populated from the tools declared in
 // a DomainSpec. Phase 1 registers placeholder tools; real tool implementations
 // (http, sql, shell, python) are wired in during Phase 4 follow-ups.
-func BuildFromSpec(s *spec.DomainSpec) *Registry {
+func BuildFromSpec(s *domain.DomainSpec) *Registry {
 	r := NewRegistry()
 	if s == nil {
 		return r
@@ -19,7 +19,7 @@ func BuildFromSpec(s *spec.DomainSpec) *Registry {
 }
 
 // RequiredSecretNames returns the secret names referenced by tool configs.
-func RequiredSecretNames(s *spec.DomainSpec) []string {
+func RequiredSecretNames(s *domain.DomainSpec) []string {
 	if s == nil {
 		return nil
 	}

@@ -72,7 +72,7 @@ func newDomainListCmd(cfg *Config) *cobra.Command {
 			}
 			if cfg.Output == "quiet" {
 				for _, d := range out {
-					fmt.Println(d.ID)
+					o.Line("%s", d.ID)
 				}
 				return nil
 			}
@@ -113,7 +113,7 @@ func newDomainShowCmd(cfg *Config) *cobra.Command {
 				return nil
 			}
 			if cfg.Output == "quiet" {
-				fmt.Println(d.ID)
+				o.Line("%s", d.ID)
 				return nil
 			}
 			o.Card("Domain", [][2]string{
@@ -121,10 +121,10 @@ func newDomainShowCmd(cfg *Config) *cobra.Command {
 				{"version", nonEmpty(d.Version, "-")},
 				{"status", nonEmpty(d.Status, "-")},
 				{"description", nonEmpty(d.Description, "-")},
-				{"created", nonEmpty(d.CreatedAt, "-")},
-				{"updated", nonEmpty(d.UpdatedAt, "-")},
+				{"created", formatTime(d.CreatedAt, "-")},
+				{"updated", formatTime(d.UpdatedAt, "-")},
 			})
-			if len(d.Harness) > 0 {
+			if d.Harness != nil {
 				o.Section("Harness")
 				o.Print(d.Harness)
 			}
@@ -214,8 +214,9 @@ func newDomainExportCmd(cfg *Config) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			out := NewOutput(cfg.Output)
 			if outFile == "" {
-				fmt.Fprintf(os.Stdout, "%+v\n", d)
+				out.Line("%+v", d)
 				return nil
 			}
 			f, err := os.Create(outFile)

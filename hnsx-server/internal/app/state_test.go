@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 func TestState_AttachBroadcaster(t *testing.T) {
@@ -45,7 +45,7 @@ func TestState_PublishObservation(t *testing.T) {
 	ch, unsub := bc.Subscribe()
 	defer unsub()
 
-	obs := runtime.Observation{Kind: "state", SessionID: "sess-1", Payload: map[string]any{"state": "running"}}
+	obs := domain.Observation{Kind: "state", SessionID: "sess-1", Payload: map[string]any{"state": "running"}}
 	if !s.PublishObservation("sess-1", obs) {
 		t.Fatal("expected publish to succeed")
 	}

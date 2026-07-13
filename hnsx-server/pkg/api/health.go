@@ -8,6 +8,9 @@ import (
 
 // Health is the GET /healthz handler — process is alive.
 func (s *Server) Health(c *gin.Context) {
+	// W16+ Phase 5b: per-request logging is now provided by
+	// obs.GinMiddleware registered in router.go. No per-handler
+	// hook needed.
 	writeJSON(c, http.StatusOK, map[string]any{
 		"status": "ok",
 		"build":  s.BuildInfo,

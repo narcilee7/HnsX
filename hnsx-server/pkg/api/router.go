@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/hnsx-io/hnsx/server/internal/auth"
+	"github.com/hnsx-io/hnsx/server/internal/obs"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 )
 
@@ -22,6 +23,10 @@ func newRouter(s *Server) *gin.Engine {
 	r.Use(tenantMiddleware())
 	r.Use(metricsMiddleware())
 	r.Use(drainMiddleware(s))
+	// Phase 5b: emit a structured "name.completed" log for every
+	// request. Logs include method/path/status/duration_ms/tenant_id.
+	// nil-safe (no-op if s.Logger is nil in tests).
+	r.Use(obs.GinMiddleware(s.Logger))
 
 	// Health (no /api/v1 prefix per convention).
 	r.GET("/healthz", s.Health)

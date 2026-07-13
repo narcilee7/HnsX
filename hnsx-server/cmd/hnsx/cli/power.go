@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // newPowerCmd groups advanced developer commands (v0.7 Power): domain
@@ -48,11 +48,12 @@ func newDomainFormatCmd(cfg *Config) *cobra.Command {
 		Short: "Format DomainSpec YAMLs (sorted keys, normalised structure)",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := NewOutput(cfg.Output)
 			for _, path := range args {
-				if err := formatOne(path, inPlace); err != nil {
+				if err := formatOne(path, inPlace, out); err != nil {
 					return err
 				}
-				fmt.Printf("✓ %s\n", path)
+				out.Line("✓ %s", path)
 			}
 			return nil
 		},
@@ -61,12 +62,12 @@ func newDomainFormatCmd(cfg *Config) *cobra.Command {
 	return cmd
 }
 
-func formatOne(path string, inPlace bool) error {
+func formatOne(path string, inPlace bool, out *Output) error {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	if _, err := spec.Parse(b); err != nil {
+	if _, err := domain.Parse(b); err != nil {
 		return fmt.Errorf("parse: %w", err)
 	}
 	var node yaml.Node
@@ -74,14 +75,14 @@ func formatOne(path string, inPlace bool) error {
 		return fmt.Errorf("yaml decode: %w", err)
 	}
 	sortMapKeys(&node)
-	out, err := yaml.Marshal(&node)
+	outYAML, err := yaml.Marshal(&node)
 	if err != nil {
 		return fmt.Errorf("yaml encode: %w", err)
 	}
 	if inPlace {
-		return os.WriteFile(path, out, 0o644)
+		return os.WriteFile(path, outYAML, 0o644)
 	}
-	fmt.Println(string(out))
+	out.Line("%s", string(outYAML))
 	return nil
 }
 
@@ -136,11 +137,11 @@ func newDomainDiffCmd(cfg *Config) *cobra.Command {
 		Short: "Diff two DomainSpec YAMLs structurally",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := spec.LoadFile(args[0])
+			a, err := domain.LoadFile(args[0])
 			if err != nil {
 				return err
 			}
-			b, err := spec.LoadFile(args[1])
+			b, err := domain.LoadFile(args[1])
 			if err != nil {
 				return err
 			}

@@ -3,12 +3,10 @@ package cli
 import (
 	"bytes"
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
-func TestRunCmdMissingDomain(t *testing.T) {
+func TestRunCmdRemoved(t *testing.T) {
 	cfg := &Config{Output: "human"}
 	cmd := newRunCmd(cfg)
 	cmd.SetArgs([]string{})
@@ -17,44 +15,9 @@ func TestRunCmdMissingDomain(t *testing.T) {
 
 	err := cmd.ExecuteContext(context.Background())
 	if err == nil {
-		t.Fatal("expected error for missing --domain")
+		t.Fatal("expected error because hnsx run is removed")
 	}
-	if !contains(err.Error(), "--domain is required") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestRunCmdInvalidTrigger(t *testing.T) {
-	dir := t.TempDir()
-	domainPath := filepath.Join(dir, "domain.yaml")
-	body := []byte(`
-id: test-run
-version: 0.1.0
-harness:
-  session:
-    mode: single
-  agents:
-    a:
-      id: a
-      provider: noop
-      adapter:
-        kind: noop
-`)
-	if err := os.WriteFile(domainPath, body, 0o644); err != nil {
-		t.Fatalf("write temp domain: %v", err)
-	}
-
-	cfg := &Config{Output: "human"}
-	cmd := newRunCmd(cfg)
-	cmd.SetArgs([]string{"--domain", domainPath, "--trigger", "not-json"})
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&bytes.Buffer{})
-
-	err := cmd.ExecuteContext(context.Background())
-	if err == nil {
-		t.Fatal("expected error for invalid trigger")
-	}
-	if !contains(err.Error(), "parse trigger") {
+	if !contains(err.Error(), "removed") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -58,3 +58,5 @@ node_modules/
 
 # --- Build outputs ---
 bin/
+
+docs/

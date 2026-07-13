@@ -21,6 +21,156 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ValidateDomainRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Authoring-format JSON (maps for agents/prompts/skills, etc.). The server
+	// parses this with the same decoder used for REST registration.
+	DomainSpecJson string `protobuf:"bytes,1,opt,name=domain_spec_json,json=domainSpecJson,proto3" json:"domain_spec_json,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ValidateDomainRequest) Reset() {
+	*x = ValidateDomainRequest{}
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ValidateDomainRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidateDomainRequest) ProtoMessage() {}
+
+func (x *ValidateDomainRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidateDomainRequest.ProtoReflect.Descriptor instead.
+func (*ValidateDomainRequest) Descriptor() ([]byte, []int) {
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ValidateDomainRequest) GetDomainSpecJson() string {
+	if x != nil {
+		return x.DomainSpecJson
+	}
+	return ""
+}
+
+type ValidationError struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Field         string                 `protobuf:"bytes,1,opt,name=field,proto3" json:"field,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ValidationError) Reset() {
+	*x = ValidationError{}
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ValidationError) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidationError) ProtoMessage() {}
+
+func (x *ValidationError) ProtoReflect() protoreflect.Message {
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidationError.ProtoReflect.Descriptor instead.
+func (*ValidationError) Descriptor() ([]byte, []int) {
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ValidationError) GetField() string {
+	if x != nil {
+		return x.Field
+	}
+	return ""
+}
+
+func (x *ValidationError) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+type ValidateDomainResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Valid         bool                   `protobuf:"varint,1,opt,name=valid,proto3" json:"valid,omitempty"`
+	Errors        []*ValidationError     `protobuf:"bytes,2,rep,name=errors,proto3" json:"errors,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ValidateDomainResponse) Reset() {
+	*x = ValidateDomainResponse{}
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ValidateDomainResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidateDomainResponse) ProtoMessage() {}
+
+func (x *ValidateDomainResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidateDomainResponse.ProtoReflect.Descriptor instead.
+func (*ValidateDomainResponse) Descriptor() ([]byte, []int) {
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ValidateDomainResponse) GetValid() bool {
+	if x != nil {
+		return x.Valid
+	}
+	return false
+}
+
+func (x *ValidateDomainResponse) GetErrors() []*ValidationError {
+	if x != nil {
+		return x.Errors
+	}
+	return nil
+}
+
 type RegisterDomainRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Spec          *DomainSpec            `protobuf:"bytes,1,opt,name=spec,proto3" json:"spec,omitempty"`
@@ -30,7 +180,7 @@ type RegisterDomainRequest struct {
 
 func (x *RegisterDomainRequest) Reset() {
 	*x = RegisterDomainRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[0]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -42,7 +192,7 @@ func (x *RegisterDomainRequest) String() string {
 func (*RegisterDomainRequest) ProtoMessage() {}
 
 func (x *RegisterDomainRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[0]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +205,7 @@ func (x *RegisterDomainRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterDomainRequest.ProtoReflect.Descriptor instead.
 func (*RegisterDomainRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{0}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *RegisterDomainRequest) GetSpec() *DomainSpec {
@@ -74,7 +224,7 @@ type RegisterDomainResponse struct {
 
 func (x *RegisterDomainResponse) Reset() {
 	*x = RegisterDomainResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[1]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -86,7 +236,7 @@ func (x *RegisterDomainResponse) String() string {
 func (*RegisterDomainResponse) ProtoMessage() {}
 
 func (x *RegisterDomainResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[1]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -99,7 +249,7 @@ func (x *RegisterDomainResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterDomainResponse.ProtoReflect.Descriptor instead.
 func (*RegisterDomainResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{1}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RegisterDomainResponse) GetDomain() *DomainRef {
@@ -118,7 +268,7 @@ type UnregisterDomainRequest struct {
 
 func (x *UnregisterDomainRequest) Reset() {
 	*x = UnregisterDomainRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[2]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -130,7 +280,7 @@ func (x *UnregisterDomainRequest) String() string {
 func (*UnregisterDomainRequest) ProtoMessage() {}
 
 func (x *UnregisterDomainRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[2]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -143,7 +293,7 @@ func (x *UnregisterDomainRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnregisterDomainRequest.ProtoReflect.Descriptor instead.
 func (*UnregisterDomainRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{2}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *UnregisterDomainRequest) GetDomain() *DomainRef {
@@ -161,7 +311,7 @@ type UnregisterDomainResponse struct {
 
 func (x *UnregisterDomainResponse) Reset() {
 	*x = UnregisterDomainResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[3]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -173,7 +323,7 @@ func (x *UnregisterDomainResponse) String() string {
 func (*UnregisterDomainResponse) ProtoMessage() {}
 
 func (x *UnregisterDomainResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[3]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -186,7 +336,7 @@ func (x *UnregisterDomainResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnregisterDomainResponse.ProtoReflect.Descriptor instead.
 func (*UnregisterDomainResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{3}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{6}
 }
 
 type GetDomainRequest struct {
@@ -198,7 +348,7 @@ type GetDomainRequest struct {
 
 func (x *GetDomainRequest) Reset() {
 	*x = GetDomainRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[4]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -210,7 +360,7 @@ func (x *GetDomainRequest) String() string {
 func (*GetDomainRequest) ProtoMessage() {}
 
 func (x *GetDomainRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[4]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -223,7 +373,7 @@ func (x *GetDomainRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDomainRequest.ProtoReflect.Descriptor instead.
 func (*GetDomainRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{4}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetDomainRequest) GetDomain() *DomainRef {
@@ -242,7 +392,7 @@ type GetDomainResponse struct {
 
 func (x *GetDomainResponse) Reset() {
 	*x = GetDomainResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[5]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -254,7 +404,7 @@ func (x *GetDomainResponse) String() string {
 func (*GetDomainResponse) ProtoMessage() {}
 
 func (x *GetDomainResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[5]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -267,7 +417,7 @@ func (x *GetDomainResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDomainResponse.ProtoReflect.Descriptor instead.
 func (*GetDomainResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{5}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetDomainResponse) GetSpec() *DomainSpec {
@@ -287,7 +437,7 @@ type ListDomainsRequest struct {
 
 func (x *ListDomainsRequest) Reset() {
 	*x = ListDomainsRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[6]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -299,7 +449,7 @@ func (x *ListDomainsRequest) String() string {
 func (*ListDomainsRequest) ProtoMessage() {}
 
 func (x *ListDomainsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[6]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -312,7 +462,7 @@ func (x *ListDomainsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDomainsRequest.ProtoReflect.Descriptor instead.
 func (*ListDomainsRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{6}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListDomainsRequest) GetLimit() int32 {
@@ -339,7 +489,7 @@ type ListDomainsResponse struct {
 
 func (x *ListDomainsResponse) Reset() {
 	*x = ListDomainsResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[7]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -351,7 +501,7 @@ func (x *ListDomainsResponse) String() string {
 func (*ListDomainsResponse) ProtoMessage() {}
 
 func (x *ListDomainsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[7]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -364,7 +514,7 @@ func (x *ListDomainsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDomainsResponse.ProtoReflect.Descriptor instead.
 func (*ListDomainsResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{7}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ListDomainsResponse) GetDomains() []*DomainSpec {
@@ -392,7 +542,7 @@ type ScheduleSessionRequest struct {
 
 func (x *ScheduleSessionRequest) Reset() {
 	*x = ScheduleSessionRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[8]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -404,7 +554,7 @@ func (x *ScheduleSessionRequest) String() string {
 func (*ScheduleSessionRequest) ProtoMessage() {}
 
 func (x *ScheduleSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[8]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -417,7 +567,7 @@ func (x *ScheduleSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduleSessionRequest.ProtoReflect.Descriptor instead.
 func (*ScheduleSessionRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{8}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ScheduleSessionRequest) GetDomainId() string {
@@ -450,7 +600,7 @@ type ScheduleSessionResponse struct {
 
 func (x *ScheduleSessionResponse) Reset() {
 	*x = ScheduleSessionResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[9]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -462,7 +612,7 @@ func (x *ScheduleSessionResponse) String() string {
 func (*ScheduleSessionResponse) ProtoMessage() {}
 
 func (x *ScheduleSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[9]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -475,7 +625,7 @@ func (x *ScheduleSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduleSessionResponse.ProtoReflect.Descriptor instead.
 func (*ScheduleSessionResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{9}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ScheduleSessionResponse) GetSessionId() string {
@@ -494,7 +644,7 @@ type GetSessionRequest struct {
 
 func (x *GetSessionRequest) Reset() {
 	*x = GetSessionRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[10]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -506,7 +656,7 @@ func (x *GetSessionRequest) String() string {
 func (*GetSessionRequest) ProtoMessage() {}
 
 func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[10]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -519,7 +669,7 @@ func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionRequest.ProtoReflect.Descriptor instead.
 func (*GetSessionRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{10}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *GetSessionRequest) GetSessionId() string {
@@ -538,7 +688,7 @@ type GetSessionResponse struct {
 
 func (x *GetSessionResponse) Reset() {
 	*x = GetSessionResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[11]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -550,7 +700,7 @@ func (x *GetSessionResponse) String() string {
 func (*GetSessionResponse) ProtoMessage() {}
 
 func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[11]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -563,7 +713,7 @@ func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionResponse.ProtoReflect.Descriptor instead.
 func (*GetSessionResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{11}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GetSessionResponse) GetSession() *SessionStatus {
@@ -585,7 +735,7 @@ type ListSessionsRequest struct {
 
 func (x *ListSessionsRequest) Reset() {
 	*x = ListSessionsRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[12]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -597,7 +747,7 @@ func (x *ListSessionsRequest) String() string {
 func (*ListSessionsRequest) ProtoMessage() {}
 
 func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[12]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -610,7 +760,7 @@ func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{12}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ListSessionsRequest) GetDomainId() string {
@@ -651,7 +801,7 @@ type ListSessionsResponse struct {
 
 func (x *ListSessionsResponse) Reset() {
 	*x = ListSessionsResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[13]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -663,7 +813,7 @@ func (x *ListSessionsResponse) String() string {
 func (*ListSessionsResponse) ProtoMessage() {}
 
 func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[13]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -676,7 +826,7 @@ func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{13}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ListSessionsResponse) GetSessions() []*SessionStatus {
@@ -709,7 +859,7 @@ type SessionStatus struct {
 
 func (x *SessionStatus) Reset() {
 	*x = SessionStatus{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[14]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -721,7 +871,7 @@ func (x *SessionStatus) String() string {
 func (*SessionStatus) ProtoMessage() {}
 
 func (x *SessionStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[14]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -734,7 +884,7 @@ func (x *SessionStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionStatus.ProtoReflect.Descriptor instead.
 func (*SessionStatus) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{14}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SessionStatus) GetSessionId() string {
@@ -803,7 +953,7 @@ type DiscoverRuntimeRequest struct {
 
 func (x *DiscoverRuntimeRequest) Reset() {
 	*x = DiscoverRuntimeRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[15]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -815,7 +965,7 @@ func (x *DiscoverRuntimeRequest) String() string {
 func (*DiscoverRuntimeRequest) ProtoMessage() {}
 
 func (x *DiscoverRuntimeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[15]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -828,7 +978,7 @@ func (x *DiscoverRuntimeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscoverRuntimeRequest.ProtoReflect.Descriptor instead.
 func (*DiscoverRuntimeRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{15}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *DiscoverRuntimeRequest) GetCapabilities() []string {
@@ -854,7 +1004,7 @@ type DiscoverRuntimeResponse struct {
 
 func (x *DiscoverRuntimeResponse) Reset() {
 	*x = DiscoverRuntimeResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[16]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -866,7 +1016,7 @@ func (x *DiscoverRuntimeResponse) String() string {
 func (*DiscoverRuntimeResponse) ProtoMessage() {}
 
 func (x *DiscoverRuntimeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[16]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -879,7 +1029,7 @@ func (x *DiscoverRuntimeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscoverRuntimeResponse.ProtoReflect.Descriptor instead.
 func (*DiscoverRuntimeResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{16}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *DiscoverRuntimeResponse) GetRuntimes() []*RuntimeInfo {
@@ -901,7 +1051,7 @@ type RuntimeInfo struct {
 
 func (x *RuntimeInfo) Reset() {
 	*x = RuntimeInfo{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[17]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -913,7 +1063,7 @@ func (x *RuntimeInfo) String() string {
 func (*RuntimeInfo) ProtoMessage() {}
 
 func (x *RuntimeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[17]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -926,7 +1076,7 @@ func (x *RuntimeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuntimeInfo.ProtoReflect.Descriptor instead.
 func (*RuntimeInfo) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{17}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *RuntimeInfo) GetRuntimeId() string {
@@ -970,7 +1120,7 @@ type RecordTraceRequest struct {
 
 func (x *RecordTraceRequest) Reset() {
 	*x = RecordTraceRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[18]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -982,7 +1132,7 @@ func (x *RecordTraceRequest) String() string {
 func (*RecordTraceRequest) ProtoMessage() {}
 
 func (x *RecordTraceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[18]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -995,7 +1145,7 @@ func (x *RecordTraceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordTraceRequest.ProtoReflect.Descriptor instead.
 func (*RecordTraceRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{18}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *RecordTraceRequest) GetTraceId() string {
@@ -1041,7 +1191,7 @@ type RecordTraceResponse struct {
 
 func (x *RecordTraceResponse) Reset() {
 	*x = RecordTraceResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[19]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1053,7 +1203,7 @@ func (x *RecordTraceResponse) String() string {
 func (*RecordTraceResponse) ProtoMessage() {}
 
 func (x *RecordTraceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[19]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1066,7 +1216,7 @@ func (x *RecordTraceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordTraceResponse.ProtoReflect.Descriptor instead.
 func (*RecordTraceResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{19}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{22}
 }
 
 type QueryTracesRequest struct {
@@ -1081,7 +1231,7 @@ type QueryTracesRequest struct {
 
 func (x *QueryTracesRequest) Reset() {
 	*x = QueryTracesRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[20]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1093,7 +1243,7 @@ func (x *QueryTracesRequest) String() string {
 func (*QueryTracesRequest) ProtoMessage() {}
 
 func (x *QueryTracesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[20]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1106,7 +1256,7 @@ func (x *QueryTracesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryTracesRequest.ProtoReflect.Descriptor instead.
 func (*QueryTracesRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{20}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *QueryTracesRequest) GetDomainId() string {
@@ -1146,7 +1296,7 @@ type QueryTracesResponse struct {
 
 func (x *QueryTracesResponse) Reset() {
 	*x = QueryTracesResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[21]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1158,7 +1308,7 @@ func (x *QueryTracesResponse) String() string {
 func (*QueryTracesResponse) ProtoMessage() {}
 
 func (x *QueryTracesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[21]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1171,7 +1321,7 @@ func (x *QueryTracesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryTracesResponse.ProtoReflect.Descriptor instead.
 func (*QueryTracesResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{21}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *QueryTracesResponse) GetTraces() []*TraceRecord {
@@ -1194,7 +1344,7 @@ type TraceRecord struct {
 
 func (x *TraceRecord) Reset() {
 	*x = TraceRecord{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[22]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1206,7 +1356,7 @@ func (x *TraceRecord) String() string {
 func (*TraceRecord) ProtoMessage() {}
 
 func (x *TraceRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[22]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1219,7 +1369,7 @@ func (x *TraceRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraceRecord.ProtoReflect.Descriptor instead.
 func (*TraceRecord) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{22}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *TraceRecord) GetTraceId() string {
@@ -1272,7 +1422,7 @@ type RecordInvocationRequest struct {
 
 func (x *RecordInvocationRequest) Reset() {
 	*x = RecordInvocationRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[23]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1284,7 +1434,7 @@ func (x *RecordInvocationRequest) String() string {
 func (*RecordInvocationRequest) ProtoMessage() {}
 
 func (x *RecordInvocationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[23]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1297,7 +1447,7 @@ func (x *RecordInvocationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordInvocationRequest.ProtoReflect.Descriptor instead.
 func (*RecordInvocationRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{23}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RecordInvocationRequest) GetSessionId() string {
@@ -1357,7 +1507,7 @@ type RecordInvocationResponse struct {
 
 func (x *RecordInvocationResponse) Reset() {
 	*x = RecordInvocationResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[24]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1369,7 +1519,7 @@ func (x *RecordInvocationResponse) String() string {
 func (*RecordInvocationResponse) ProtoMessage() {}
 
 func (x *RecordInvocationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[24]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1382,7 +1532,7 @@ func (x *RecordInvocationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordInvocationResponse.ProtoReflect.Descriptor instead.
 func (*RecordInvocationResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{24}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{27}
 }
 
 type QueryInvocationMetricsRequest struct {
@@ -1394,7 +1544,7 @@ type QueryInvocationMetricsRequest struct {
 
 func (x *QueryInvocationMetricsRequest) Reset() {
 	*x = QueryInvocationMetricsRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[25]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1406,7 +1556,7 @@ func (x *QueryInvocationMetricsRequest) String() string {
 func (*QueryInvocationMetricsRequest) ProtoMessage() {}
 
 func (x *QueryInvocationMetricsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[25]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1419,7 +1569,7 @@ func (x *QueryInvocationMetricsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryInvocationMetricsRequest.ProtoReflect.Descriptor instead.
 func (*QueryInvocationMetricsRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{25}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *QueryInvocationMetricsRequest) GetDomainId() string {
@@ -1443,7 +1593,7 @@ type QueryInvocationMetricsResponse struct {
 
 func (x *QueryInvocationMetricsResponse) Reset() {
 	*x = QueryInvocationMetricsResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[26]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1455,7 +1605,7 @@ func (x *QueryInvocationMetricsResponse) String() string {
 func (*QueryInvocationMetricsResponse) ProtoMessage() {}
 
 func (x *QueryInvocationMetricsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[26]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1468,7 +1618,7 @@ func (x *QueryInvocationMetricsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryInvocationMetricsResponse.ProtoReflect.Descriptor instead.
 func (*QueryInvocationMetricsResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{26}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *QueryInvocationMetricsResponse) GetDomainId() string {
@@ -1526,7 +1676,7 @@ type RunEvalRequest struct {
 
 func (x *RunEvalRequest) Reset() {
 	*x = RunEvalRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[27]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1538,7 +1688,7 @@ func (x *RunEvalRequest) String() string {
 func (*RunEvalRequest) ProtoMessage() {}
 
 func (x *RunEvalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[27]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1551,7 +1701,7 @@ func (x *RunEvalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunEvalRequest.ProtoReflect.Descriptor instead.
 func (*RunEvalRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{27}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *RunEvalRequest) GetDomainId() string {
@@ -1598,7 +1748,7 @@ type RunEvalResponse struct {
 
 func (x *RunEvalResponse) Reset() {
 	*x = RunEvalResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[28]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1610,7 +1760,7 @@ func (x *RunEvalResponse) String() string {
 func (*RunEvalResponse) ProtoMessage() {}
 
 func (x *RunEvalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[28]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1623,7 +1773,7 @@ func (x *RunEvalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunEvalResponse.ProtoReflect.Descriptor instead.
 func (*RunEvalResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{28}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RunEvalResponse) GetEvalRunId() string {
@@ -1642,7 +1792,7 @@ type GetEvalRunRequest struct {
 
 func (x *GetEvalRunRequest) Reset() {
 	*x = GetEvalRunRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[29]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1654,7 +1804,7 @@ func (x *GetEvalRunRequest) String() string {
 func (*GetEvalRunRequest) ProtoMessage() {}
 
 func (x *GetEvalRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[29]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1667,7 +1817,7 @@ func (x *GetEvalRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEvalRunRequest.ProtoReflect.Descriptor instead.
 func (*GetEvalRunRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{29}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *GetEvalRunRequest) GetEvalRunId() string {
@@ -1686,7 +1836,7 @@ type GetEvalRunResponse struct {
 
 func (x *GetEvalRunResponse) Reset() {
 	*x = GetEvalRunResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[30]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1698,7 +1848,7 @@ func (x *GetEvalRunResponse) String() string {
 func (*GetEvalRunResponse) ProtoMessage() {}
 
 func (x *GetEvalRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[30]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1711,7 +1861,7 @@ func (x *GetEvalRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEvalRunResponse.ProtoReflect.Descriptor instead.
 func (*GetEvalRunResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{30}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *GetEvalRunResponse) GetResult() *EvalRunResult {
@@ -1733,7 +1883,7 @@ type ListEvalRunsRequest struct {
 
 func (x *ListEvalRunsRequest) Reset() {
 	*x = ListEvalRunsRequest{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[31]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1745,7 +1895,7 @@ func (x *ListEvalRunsRequest) String() string {
 func (*ListEvalRunsRequest) ProtoMessage() {}
 
 func (x *ListEvalRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[31]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1758,7 +1908,7 @@ func (x *ListEvalRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEvalRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListEvalRunsRequest) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{31}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ListEvalRunsRequest) GetDomainId() string {
@@ -1799,7 +1949,7 @@ type ListEvalRunsResponse struct {
 
 func (x *ListEvalRunsResponse) Reset() {
 	*x = ListEvalRunsResponse{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[32]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1811,7 +1961,7 @@ func (x *ListEvalRunsResponse) String() string {
 func (*ListEvalRunsResponse) ProtoMessage() {}
 
 func (x *ListEvalRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[32]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1824,7 +1974,7 @@ func (x *ListEvalRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEvalRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListEvalRunsResponse) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{32}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ListEvalRunsResponse) GetResults() []*EvalRunResult {
@@ -1860,7 +2010,7 @@ type EvalRunResult struct {
 
 func (x *EvalRunResult) Reset() {
 	*x = EvalRunResult{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[33]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1872,7 +2022,7 @@ func (x *EvalRunResult) String() string {
 func (*EvalRunResult) ProtoMessage() {}
 
 func (x *EvalRunResult) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[33]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1885,7 +2035,7 @@ func (x *EvalRunResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvalRunResult.ProtoReflect.Descriptor instead.
 func (*EvalRunResult) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{33}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *EvalRunResult) GetEvalRunId() string {
@@ -1979,7 +2129,7 @@ type EvalCaseResult struct {
 
 func (x *EvalCaseResult) Reset() {
 	*x = EvalCaseResult{}
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[34]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1991,7 +2141,7 @@ func (x *EvalCaseResult) String() string {
 func (*EvalCaseResult) ProtoMessage() {}
 
 func (x *EvalCaseResult) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_control_plane_proto_msgTypes[34]
+	mi := &file_hnsx_v1_control_plane_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2004,7 +2154,7 @@ func (x *EvalCaseResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvalCaseResult.ProtoReflect.Descriptor instead.
 func (*EvalCaseResult) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{34}
+	return file_hnsx_v1_control_plane_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *EvalCaseResult) GetCaseId() string {
@@ -2053,7 +2203,15 @@ var File_hnsx_v1_control_plane_proto protoreflect.FileDescriptor
 
 const file_hnsx_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
-	"\x1bhnsx/v1/control_plane.proto\x12\ahnsx.v1\x1a\x14hnsx/v1/domain.proto\x1a\x19hnsx/v1/observation.proto\"@\n" +
+	"\x1bhnsx/v1/control_plane.proto\x12\ahnsx.v1\x1a\x14hnsx/v1/domain.proto\x1a\x19hnsx/v1/observation.proto\"A\n" +
+	"\x15ValidateDomainRequest\x12(\n" +
+	"\x10domain_spec_json\x18\x01 \x01(\tR\x0edomainSpecJson\"A\n" +
+	"\x0fValidationError\x12\x14\n" +
+	"\x05field\x18\x01 \x01(\tR\x05field\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"`\n" +
+	"\x16ValidateDomainResponse\x12\x14\n" +
+	"\x05valid\x18\x01 \x01(\bR\x05valid\x120\n" +
+	"\x06errors\x18\x02 \x03(\v2\x18.hnsx.v1.ValidationErrorR\x06errors\"@\n" +
 	"\x15RegisterDomainRequest\x12'\n" +
 	"\x04spec\x18\x01 \x01(\v2\x13.hnsx.v1.DomainSpecR\x04spec\"D\n" +
 	"\x16RegisterDomainResponse\x12*\n" +
@@ -2196,12 +2354,13 @@ const file_hnsx_v1_control_plane_proto_rawDesc = "" +
 	"\x05score\x18\x03 \x01(\x01R\x05score\x12\x16\n" +
 	"\x06passed\x18\x04 \x01(\bR\x06passed\x12\x16\n" +
 	"\x06actual\x18\x05 \x01(\tR\x06actual\x12\x18\n" +
-	"\adetails\x18\x06 \x01(\tR\adetails2\xd1\x02\n" +
+	"\adetails\x18\x06 \x01(\tR\adetails2\xa4\x03\n" +
 	"\x15DomainRegistryService\x12Q\n" +
 	"\x0eRegisterDomain\x12\x1e.hnsx.v1.RegisterDomainRequest\x1a\x1f.hnsx.v1.RegisterDomainResponse\x12W\n" +
 	"\x10UnregisterDomain\x12 .hnsx.v1.UnregisterDomainRequest\x1a!.hnsx.v1.UnregisterDomainResponse\x12B\n" +
 	"\tGetDomain\x12\x19.hnsx.v1.GetDomainRequest\x1a\x1a.hnsx.v1.GetDomainResponse\x12H\n" +
-	"\vListDomains\x12\x1b.hnsx.v1.ListDomainsRequest\x1a\x1c.hnsx.v1.ListDomainsResponse2\x88\x02\n" +
+	"\vListDomains\x12\x1b.hnsx.v1.ListDomainsRequest\x1a\x1c.hnsx.v1.ListDomainsResponse\x12Q\n" +
+	"\x0eValidateDomain\x12\x1e.hnsx.v1.ValidateDomainRequest\x1a\x1f.hnsx.v1.ValidateDomainResponse2\x88\x02\n" +
 	"\x17SessionSchedulerService\x12Y\n" +
 	"\x0fScheduleSession\x12\x1f.hnsx.v1.ScheduleSessionRequest\x1a .hnsx.v1.ScheduleSessionResponse\"\x03\x88\x02\x01\x12E\n" +
 	"\n" +
@@ -2233,98 +2392,104 @@ func file_hnsx_v1_control_plane_proto_rawDescGZIP() []byte {
 	return file_hnsx_v1_control_plane_proto_rawDescData
 }
 
-var file_hnsx_v1_control_plane_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
+var file_hnsx_v1_control_plane_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
 var file_hnsx_v1_control_plane_proto_goTypes = []any{
-	(*RegisterDomainRequest)(nil),          // 0: hnsx.v1.RegisterDomainRequest
-	(*RegisterDomainResponse)(nil),         // 1: hnsx.v1.RegisterDomainResponse
-	(*UnregisterDomainRequest)(nil),        // 2: hnsx.v1.UnregisterDomainRequest
-	(*UnregisterDomainResponse)(nil),       // 3: hnsx.v1.UnregisterDomainResponse
-	(*GetDomainRequest)(nil),               // 4: hnsx.v1.GetDomainRequest
-	(*GetDomainResponse)(nil),              // 5: hnsx.v1.GetDomainResponse
-	(*ListDomainsRequest)(nil),             // 6: hnsx.v1.ListDomainsRequest
-	(*ListDomainsResponse)(nil),            // 7: hnsx.v1.ListDomainsResponse
-	(*ScheduleSessionRequest)(nil),         // 8: hnsx.v1.ScheduleSessionRequest
-	(*ScheduleSessionResponse)(nil),        // 9: hnsx.v1.ScheduleSessionResponse
-	(*GetSessionRequest)(nil),              // 10: hnsx.v1.GetSessionRequest
-	(*GetSessionResponse)(nil),             // 11: hnsx.v1.GetSessionResponse
-	(*ListSessionsRequest)(nil),            // 12: hnsx.v1.ListSessionsRequest
-	(*ListSessionsResponse)(nil),           // 13: hnsx.v1.ListSessionsResponse
-	(*SessionStatus)(nil),                  // 14: hnsx.v1.SessionStatus
-	(*DiscoverRuntimeRequest)(nil),         // 15: hnsx.v1.DiscoverRuntimeRequest
-	(*DiscoverRuntimeResponse)(nil),        // 16: hnsx.v1.DiscoverRuntimeResponse
-	(*RuntimeInfo)(nil),                    // 17: hnsx.v1.RuntimeInfo
-	(*RecordTraceRequest)(nil),             // 18: hnsx.v1.RecordTraceRequest
-	(*RecordTraceResponse)(nil),            // 19: hnsx.v1.RecordTraceResponse
-	(*QueryTracesRequest)(nil),             // 20: hnsx.v1.QueryTracesRequest
-	(*QueryTracesResponse)(nil),            // 21: hnsx.v1.QueryTracesResponse
-	(*TraceRecord)(nil),                    // 22: hnsx.v1.TraceRecord
-	(*RecordInvocationRequest)(nil),        // 23: hnsx.v1.RecordInvocationRequest
-	(*RecordInvocationResponse)(nil),       // 24: hnsx.v1.RecordInvocationResponse
-	(*QueryInvocationMetricsRequest)(nil),  // 25: hnsx.v1.QueryInvocationMetricsRequest
-	(*QueryInvocationMetricsResponse)(nil), // 26: hnsx.v1.QueryInvocationMetricsResponse
-	(*RunEvalRequest)(nil),                 // 27: hnsx.v1.RunEvalRequest
-	(*RunEvalResponse)(nil),                // 28: hnsx.v1.RunEvalResponse
-	(*GetEvalRunRequest)(nil),              // 29: hnsx.v1.GetEvalRunRequest
-	(*GetEvalRunResponse)(nil),             // 30: hnsx.v1.GetEvalRunResponse
-	(*ListEvalRunsRequest)(nil),            // 31: hnsx.v1.ListEvalRunsRequest
-	(*ListEvalRunsResponse)(nil),           // 32: hnsx.v1.ListEvalRunsResponse
-	(*EvalRunResult)(nil),                  // 33: hnsx.v1.EvalRunResult
-	(*EvalCaseResult)(nil),                 // 34: hnsx.v1.EvalCaseResult
-	(*DomainSpec)(nil),                     // 35: hnsx.v1.DomainSpec
-	(*DomainRef)(nil),                      // 36: hnsx.v1.DomainRef
-	(*Observation)(nil),                    // 37: hnsx.v1.Observation
+	(*ValidateDomainRequest)(nil),          // 0: hnsx.v1.ValidateDomainRequest
+	(*ValidationError)(nil),                // 1: hnsx.v1.ValidationError
+	(*ValidateDomainResponse)(nil),         // 2: hnsx.v1.ValidateDomainResponse
+	(*RegisterDomainRequest)(nil),          // 3: hnsx.v1.RegisterDomainRequest
+	(*RegisterDomainResponse)(nil),         // 4: hnsx.v1.RegisterDomainResponse
+	(*UnregisterDomainRequest)(nil),        // 5: hnsx.v1.UnregisterDomainRequest
+	(*UnregisterDomainResponse)(nil),       // 6: hnsx.v1.UnregisterDomainResponse
+	(*GetDomainRequest)(nil),               // 7: hnsx.v1.GetDomainRequest
+	(*GetDomainResponse)(nil),              // 8: hnsx.v1.GetDomainResponse
+	(*ListDomainsRequest)(nil),             // 9: hnsx.v1.ListDomainsRequest
+	(*ListDomainsResponse)(nil),            // 10: hnsx.v1.ListDomainsResponse
+	(*ScheduleSessionRequest)(nil),         // 11: hnsx.v1.ScheduleSessionRequest
+	(*ScheduleSessionResponse)(nil),        // 12: hnsx.v1.ScheduleSessionResponse
+	(*GetSessionRequest)(nil),              // 13: hnsx.v1.GetSessionRequest
+	(*GetSessionResponse)(nil),             // 14: hnsx.v1.GetSessionResponse
+	(*ListSessionsRequest)(nil),            // 15: hnsx.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),           // 16: hnsx.v1.ListSessionsResponse
+	(*SessionStatus)(nil),                  // 17: hnsx.v1.SessionStatus
+	(*DiscoverRuntimeRequest)(nil),         // 18: hnsx.v1.DiscoverRuntimeRequest
+	(*DiscoverRuntimeResponse)(nil),        // 19: hnsx.v1.DiscoverRuntimeResponse
+	(*RuntimeInfo)(nil),                    // 20: hnsx.v1.RuntimeInfo
+	(*RecordTraceRequest)(nil),             // 21: hnsx.v1.RecordTraceRequest
+	(*RecordTraceResponse)(nil),            // 22: hnsx.v1.RecordTraceResponse
+	(*QueryTracesRequest)(nil),             // 23: hnsx.v1.QueryTracesRequest
+	(*QueryTracesResponse)(nil),            // 24: hnsx.v1.QueryTracesResponse
+	(*TraceRecord)(nil),                    // 25: hnsx.v1.TraceRecord
+	(*RecordInvocationRequest)(nil),        // 26: hnsx.v1.RecordInvocationRequest
+	(*RecordInvocationResponse)(nil),       // 27: hnsx.v1.RecordInvocationResponse
+	(*QueryInvocationMetricsRequest)(nil),  // 28: hnsx.v1.QueryInvocationMetricsRequest
+	(*QueryInvocationMetricsResponse)(nil), // 29: hnsx.v1.QueryInvocationMetricsResponse
+	(*RunEvalRequest)(nil),                 // 30: hnsx.v1.RunEvalRequest
+	(*RunEvalResponse)(nil),                // 31: hnsx.v1.RunEvalResponse
+	(*GetEvalRunRequest)(nil),              // 32: hnsx.v1.GetEvalRunRequest
+	(*GetEvalRunResponse)(nil),             // 33: hnsx.v1.GetEvalRunResponse
+	(*ListEvalRunsRequest)(nil),            // 34: hnsx.v1.ListEvalRunsRequest
+	(*ListEvalRunsResponse)(nil),           // 35: hnsx.v1.ListEvalRunsResponse
+	(*EvalRunResult)(nil),                  // 36: hnsx.v1.EvalRunResult
+	(*EvalCaseResult)(nil),                 // 37: hnsx.v1.EvalCaseResult
+	(*DomainSpec)(nil),                     // 38: hnsx.v1.DomainSpec
+	(*DomainRef)(nil),                      // 39: hnsx.v1.DomainRef
+	(*Observation)(nil),                    // 40: hnsx.v1.Observation
 }
 var file_hnsx_v1_control_plane_proto_depIdxs = []int32{
-	35, // 0: hnsx.v1.RegisterDomainRequest.spec:type_name -> hnsx.v1.DomainSpec
-	36, // 1: hnsx.v1.RegisterDomainResponse.domain:type_name -> hnsx.v1.DomainRef
-	36, // 2: hnsx.v1.UnregisterDomainRequest.domain:type_name -> hnsx.v1.DomainRef
-	36, // 3: hnsx.v1.GetDomainRequest.domain:type_name -> hnsx.v1.DomainRef
-	35, // 4: hnsx.v1.GetDomainResponse.spec:type_name -> hnsx.v1.DomainSpec
-	35, // 5: hnsx.v1.ListDomainsResponse.domains:type_name -> hnsx.v1.DomainSpec
-	14, // 6: hnsx.v1.GetSessionResponse.session:type_name -> hnsx.v1.SessionStatus
-	14, // 7: hnsx.v1.ListSessionsResponse.sessions:type_name -> hnsx.v1.SessionStatus
-	17, // 8: hnsx.v1.DiscoverRuntimeResponse.runtimes:type_name -> hnsx.v1.RuntimeInfo
-	37, // 9: hnsx.v1.RecordTraceRequest.observations:type_name -> hnsx.v1.Observation
-	22, // 10: hnsx.v1.QueryTracesResponse.traces:type_name -> hnsx.v1.TraceRecord
-	37, // 11: hnsx.v1.TraceRecord.observations:type_name -> hnsx.v1.Observation
-	33, // 12: hnsx.v1.GetEvalRunResponse.result:type_name -> hnsx.v1.EvalRunResult
-	33, // 13: hnsx.v1.ListEvalRunsResponse.results:type_name -> hnsx.v1.EvalRunResult
-	34, // 14: hnsx.v1.EvalRunResult.cases:type_name -> hnsx.v1.EvalCaseResult
-	0,  // 15: hnsx.v1.DomainRegistryService.RegisterDomain:input_type -> hnsx.v1.RegisterDomainRequest
-	2,  // 16: hnsx.v1.DomainRegistryService.UnregisterDomain:input_type -> hnsx.v1.UnregisterDomainRequest
-	4,  // 17: hnsx.v1.DomainRegistryService.GetDomain:input_type -> hnsx.v1.GetDomainRequest
-	6,  // 18: hnsx.v1.DomainRegistryService.ListDomains:input_type -> hnsx.v1.ListDomainsRequest
-	8,  // 19: hnsx.v1.SessionSchedulerService.ScheduleSession:input_type -> hnsx.v1.ScheduleSessionRequest
-	10, // 20: hnsx.v1.SessionSchedulerService.GetSession:input_type -> hnsx.v1.GetSessionRequest
-	12, // 21: hnsx.v1.SessionSchedulerService.ListSessions:input_type -> hnsx.v1.ListSessionsRequest
-	15, // 22: hnsx.v1.RuntimeDiscoveryService.DiscoverRuntime:input_type -> hnsx.v1.DiscoverRuntimeRequest
-	18, // 23: hnsx.v1.TelemetryService.RecordTrace:input_type -> hnsx.v1.RecordTraceRequest
-	20, // 24: hnsx.v1.TelemetryService.QueryTraces:input_type -> hnsx.v1.QueryTracesRequest
-	23, // 25: hnsx.v1.TelemetryService.RecordInvocation:input_type -> hnsx.v1.RecordInvocationRequest
-	25, // 26: hnsx.v1.TelemetryService.QueryInvocationMetrics:input_type -> hnsx.v1.QueryInvocationMetricsRequest
-	27, // 27: hnsx.v1.EvalService.RunEval:input_type -> hnsx.v1.RunEvalRequest
-	29, // 28: hnsx.v1.EvalService.GetEvalRun:input_type -> hnsx.v1.GetEvalRunRequest
-	31, // 29: hnsx.v1.EvalService.ListEvalRuns:input_type -> hnsx.v1.ListEvalRunsRequest
-	1,  // 30: hnsx.v1.DomainRegistryService.RegisterDomain:output_type -> hnsx.v1.RegisterDomainResponse
-	3,  // 31: hnsx.v1.DomainRegistryService.UnregisterDomain:output_type -> hnsx.v1.UnregisterDomainResponse
-	5,  // 32: hnsx.v1.DomainRegistryService.GetDomain:output_type -> hnsx.v1.GetDomainResponse
-	7,  // 33: hnsx.v1.DomainRegistryService.ListDomains:output_type -> hnsx.v1.ListDomainsResponse
-	9,  // 34: hnsx.v1.SessionSchedulerService.ScheduleSession:output_type -> hnsx.v1.ScheduleSessionResponse
-	11, // 35: hnsx.v1.SessionSchedulerService.GetSession:output_type -> hnsx.v1.GetSessionResponse
-	13, // 36: hnsx.v1.SessionSchedulerService.ListSessions:output_type -> hnsx.v1.ListSessionsResponse
-	16, // 37: hnsx.v1.RuntimeDiscoveryService.DiscoverRuntime:output_type -> hnsx.v1.DiscoverRuntimeResponse
-	19, // 38: hnsx.v1.TelemetryService.RecordTrace:output_type -> hnsx.v1.RecordTraceResponse
-	21, // 39: hnsx.v1.TelemetryService.QueryTraces:output_type -> hnsx.v1.QueryTracesResponse
-	24, // 40: hnsx.v1.TelemetryService.RecordInvocation:output_type -> hnsx.v1.RecordInvocationResponse
-	26, // 41: hnsx.v1.TelemetryService.QueryInvocationMetrics:output_type -> hnsx.v1.QueryInvocationMetricsResponse
-	28, // 42: hnsx.v1.EvalService.RunEval:output_type -> hnsx.v1.RunEvalResponse
-	30, // 43: hnsx.v1.EvalService.GetEvalRun:output_type -> hnsx.v1.GetEvalRunResponse
-	32, // 44: hnsx.v1.EvalService.ListEvalRuns:output_type -> hnsx.v1.ListEvalRunsResponse
-	30, // [30:45] is the sub-list for method output_type
-	15, // [15:30] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	1,  // 0: hnsx.v1.ValidateDomainResponse.errors:type_name -> hnsx.v1.ValidationError
+	38, // 1: hnsx.v1.RegisterDomainRequest.spec:type_name -> hnsx.v1.DomainSpec
+	39, // 2: hnsx.v1.RegisterDomainResponse.domain:type_name -> hnsx.v1.DomainRef
+	39, // 3: hnsx.v1.UnregisterDomainRequest.domain:type_name -> hnsx.v1.DomainRef
+	39, // 4: hnsx.v1.GetDomainRequest.domain:type_name -> hnsx.v1.DomainRef
+	38, // 5: hnsx.v1.GetDomainResponse.spec:type_name -> hnsx.v1.DomainSpec
+	38, // 6: hnsx.v1.ListDomainsResponse.domains:type_name -> hnsx.v1.DomainSpec
+	17, // 7: hnsx.v1.GetSessionResponse.session:type_name -> hnsx.v1.SessionStatus
+	17, // 8: hnsx.v1.ListSessionsResponse.sessions:type_name -> hnsx.v1.SessionStatus
+	20, // 9: hnsx.v1.DiscoverRuntimeResponse.runtimes:type_name -> hnsx.v1.RuntimeInfo
+	40, // 10: hnsx.v1.RecordTraceRequest.observations:type_name -> hnsx.v1.Observation
+	25, // 11: hnsx.v1.QueryTracesResponse.traces:type_name -> hnsx.v1.TraceRecord
+	40, // 12: hnsx.v1.TraceRecord.observations:type_name -> hnsx.v1.Observation
+	36, // 13: hnsx.v1.GetEvalRunResponse.result:type_name -> hnsx.v1.EvalRunResult
+	36, // 14: hnsx.v1.ListEvalRunsResponse.results:type_name -> hnsx.v1.EvalRunResult
+	37, // 15: hnsx.v1.EvalRunResult.cases:type_name -> hnsx.v1.EvalCaseResult
+	3,  // 16: hnsx.v1.DomainRegistryService.RegisterDomain:input_type -> hnsx.v1.RegisterDomainRequest
+	5,  // 17: hnsx.v1.DomainRegistryService.UnregisterDomain:input_type -> hnsx.v1.UnregisterDomainRequest
+	7,  // 18: hnsx.v1.DomainRegistryService.GetDomain:input_type -> hnsx.v1.GetDomainRequest
+	9,  // 19: hnsx.v1.DomainRegistryService.ListDomains:input_type -> hnsx.v1.ListDomainsRequest
+	0,  // 20: hnsx.v1.DomainRegistryService.ValidateDomain:input_type -> hnsx.v1.ValidateDomainRequest
+	11, // 21: hnsx.v1.SessionSchedulerService.ScheduleSession:input_type -> hnsx.v1.ScheduleSessionRequest
+	13, // 22: hnsx.v1.SessionSchedulerService.GetSession:input_type -> hnsx.v1.GetSessionRequest
+	15, // 23: hnsx.v1.SessionSchedulerService.ListSessions:input_type -> hnsx.v1.ListSessionsRequest
+	18, // 24: hnsx.v1.RuntimeDiscoveryService.DiscoverRuntime:input_type -> hnsx.v1.DiscoverRuntimeRequest
+	21, // 25: hnsx.v1.TelemetryService.RecordTrace:input_type -> hnsx.v1.RecordTraceRequest
+	23, // 26: hnsx.v1.TelemetryService.QueryTraces:input_type -> hnsx.v1.QueryTracesRequest
+	26, // 27: hnsx.v1.TelemetryService.RecordInvocation:input_type -> hnsx.v1.RecordInvocationRequest
+	28, // 28: hnsx.v1.TelemetryService.QueryInvocationMetrics:input_type -> hnsx.v1.QueryInvocationMetricsRequest
+	30, // 29: hnsx.v1.EvalService.RunEval:input_type -> hnsx.v1.RunEvalRequest
+	32, // 30: hnsx.v1.EvalService.GetEvalRun:input_type -> hnsx.v1.GetEvalRunRequest
+	34, // 31: hnsx.v1.EvalService.ListEvalRuns:input_type -> hnsx.v1.ListEvalRunsRequest
+	4,  // 32: hnsx.v1.DomainRegistryService.RegisterDomain:output_type -> hnsx.v1.RegisterDomainResponse
+	6,  // 33: hnsx.v1.DomainRegistryService.UnregisterDomain:output_type -> hnsx.v1.UnregisterDomainResponse
+	8,  // 34: hnsx.v1.DomainRegistryService.GetDomain:output_type -> hnsx.v1.GetDomainResponse
+	10, // 35: hnsx.v1.DomainRegistryService.ListDomains:output_type -> hnsx.v1.ListDomainsResponse
+	2,  // 36: hnsx.v1.DomainRegistryService.ValidateDomain:output_type -> hnsx.v1.ValidateDomainResponse
+	12, // 37: hnsx.v1.SessionSchedulerService.ScheduleSession:output_type -> hnsx.v1.ScheduleSessionResponse
+	14, // 38: hnsx.v1.SessionSchedulerService.GetSession:output_type -> hnsx.v1.GetSessionResponse
+	16, // 39: hnsx.v1.SessionSchedulerService.ListSessions:output_type -> hnsx.v1.ListSessionsResponse
+	19, // 40: hnsx.v1.RuntimeDiscoveryService.DiscoverRuntime:output_type -> hnsx.v1.DiscoverRuntimeResponse
+	22, // 41: hnsx.v1.TelemetryService.RecordTrace:output_type -> hnsx.v1.RecordTraceResponse
+	24, // 42: hnsx.v1.TelemetryService.QueryTraces:output_type -> hnsx.v1.QueryTracesResponse
+	27, // 43: hnsx.v1.TelemetryService.RecordInvocation:output_type -> hnsx.v1.RecordInvocationResponse
+	29, // 44: hnsx.v1.TelemetryService.QueryInvocationMetrics:output_type -> hnsx.v1.QueryInvocationMetricsResponse
+	31, // 45: hnsx.v1.EvalService.RunEval:output_type -> hnsx.v1.RunEvalResponse
+	33, // 46: hnsx.v1.EvalService.GetEvalRun:output_type -> hnsx.v1.GetEvalRunResponse
+	35, // 47: hnsx.v1.EvalService.ListEvalRuns:output_type -> hnsx.v1.ListEvalRunsResponse
+	32, // [32:48] is the sub-list for method output_type
+	16, // [16:32] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_hnsx_v1_control_plane_proto_init() }
@@ -2340,7 +2505,7 @@ func file_hnsx_v1_control_plane_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_hnsx_v1_control_plane_proto_rawDesc), len(file_hnsx_v1_control_plane_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   35,
+			NumMessages:   38,
 			NumExtensions: 0,
 			NumServices:   5,
 		},

@@ -30,12 +30,12 @@ func newTraceCmd(cfg *Config) *cobra.Command {
 // returns "trace_id" and "session_id" rather than "id", so we use json tags
 // that match exactly.
 type traceListItem struct {
-	ID         string  `json:"trace_id"`
-	SessionID  string  `json:"session_id"`
-	DomainID   string  `json:"domain_id"`
-	StartedAt  string  `json:"started_at"`
-	DurationMS int64   `json:"duration_ms"`
-	Cost       float64 `json:"total_cost_usd"`
+	ID         string    `json:"trace_id"`
+	SessionID  string    `json:"session_id"`
+	DomainID   string    `json:"domain_id"`
+	StartedAt  time.Time `json:"started_at"`
+	DurationMS int64     `json:"duration_ms"`
+	Cost       float64   `json:"total_cost_usd"`
 }
 
 func newTraceListCmd(cfg *Config) *cobra.Command {
@@ -76,10 +76,8 @@ func newTraceListCmd(cfg *Config) *cobra.Command {
 						continue
 					}
 				}
-				if !sinceT.IsZero() && it.StartedAt != "" {
-					if t, perr := parseRFC3339(it.StartedAt); perr == nil && t.Before(sinceT) {
-						continue
-					}
+				if !sinceT.IsZero() && !it.StartedAt.IsZero() && it.StartedAt.Before(sinceT) {
+					continue
 				}
 				if !filterMatches(map[string]string{
 					"id":         it.ID,
@@ -100,7 +98,7 @@ func newTraceListCmd(cfg *Config) *cobra.Command {
 			}
 			if cfg.Output == "quiet" {
 				for _, t := range out {
-					fmt.Println(t.ID)
+					o.Line("%s", t.ID)
 				}
 				return nil
 			}
@@ -134,21 +132,22 @@ func newTraceShowCmd(cfg *Config) *cobra.Command {
 		Short: "Show a trace tree of observations",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			o := NewOutput(cfg.Output)
 			body, err := getJSON(cfg, "/api/v1/traces/"+args[0])
 			if err != nil {
 				return err
 			}
 			if cfg.Output == "json" {
-				fmt.Println(string(body))
+				o.Line("%s", string(body))
 				return nil
 			}
 			// Pretty-print indented JSON; observation tree details follow.
 			var pretty map[string]any
 			if err := json.Unmarshal(body, &pretty); err == nil {
 				out, _ := json.MarshalIndent(pretty, "", "  ")
-				fmt.Println(string(out))
+				o.Line("%s", string(out))
 			} else {
-				fmt.Println(string(body))
+				o.Line("%s", string(body))
 			}
 			return nil
 		},

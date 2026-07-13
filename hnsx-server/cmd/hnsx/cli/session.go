@@ -84,11 +84,8 @@ func newSessionListCmd(cfg *Config) *cobra.Command {
 				if state != "" && !strings.EqualFold(it.State, state) {
 					continue
 				}
-				if !sinceT.IsZero() && it.StartedAt != "" {
-					t, perr := parseRFC3339(it.StartedAt)
-					if perr == nil && t.Before(sinceT) {
-						continue
-					}
+				if !sinceT.IsZero() && it.StartedAt.Before(sinceT) {
+					continue
 				}
 				if !filterMatches(map[string]string{
 					"id":        it.ID,
@@ -110,7 +107,7 @@ func newSessionListCmd(cfg *Config) *cobra.Command {
 			}
 			if cfg.Output == "quiet" {
 				for _, s := range out {
-					fmt.Println(s.ID)
+					o.Line("%s", s.ID)
 				}
 				return nil
 			}
@@ -122,7 +119,7 @@ func newSessionListCmd(cfg *Config) *cobra.Command {
 					s.DomainID,
 					nonEmpty(s.State, "-"),
 					shortTime(s.StartedAt),
-					shortTime(s.CompletedAt),
+					shortTimePtr(s.CompletedAt),
 				})
 			}
 			o.Table([]string{"", "ID", "DOMAIN", "STATE", "STARTED", "COMPLETED"}, rows)
@@ -154,7 +151,7 @@ func newSessionShowCmd(cfg *Config) *cobra.Command {
 				return nil
 			}
 			if cfg.Output == "quiet" {
-				fmt.Println(s.ID)
+				o.Line("%s", s.ID)
 				return nil
 			}
 			o.Card("Session", [][2]string{
@@ -163,8 +160,8 @@ func newSessionShowCmd(cfg *Config) *cobra.Command {
 				{"version", nonEmpty(s.DomainVersion, "-")},
 				{"state", s.State},
 				{"orchestration", nonEmpty(s.Orchestration, "-")},
-				{"started", nonEmpty(s.StartedAt, "-")},
-				{"completed", nonEmpty(s.CompletedAt, "-")},
+				{"started", formatTime(s.StartedAt, "-")},
+				{"completed", formatTimePtr(s.CompletedAt, "-")},
 			})
 			if len(s.Trigger) > 0 {
 				o.Section("Trigger")
@@ -204,7 +201,7 @@ func newSessionTriggerCmd(cfg *Config) *cobra.Command {
 			}
 			o := NewOutput(cfg.Output)
 			if cfg.Output == "quiet" {
-				fmt.Println(s.ID)
+				o.Line("%s", s.ID)
 				return nil
 			}
 			o.Print(s)
@@ -292,13 +289,14 @@ func newSessionTailCmd(cfg *Config) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			out := NewOutput(cfg.Output)
 			for {
 				select {
 				case ev, ok := <-evs:
 					if !ok {
 						return nil
 					}
-					printEvent(ev.Name, ev.Payload)
+					printEvent(out, ev.Name, ev.Payload)
 				case err := <-errCh:
 					if err != nil && !errors.Is(err, io.EOF) {
 						return err
@@ -315,7 +313,7 @@ func newSessionTailCmd(cfg *Config) *cobra.Command {
 }
 
 // printEvent renders one SSE event to stdout with a colored prefix.
-func printEvent(name string, payload []byte) {
+func printEvent(out *Output, name string, payload []byte) {
 	prefix := "•"
 	switch name {
 	case "observation.created":
@@ -331,7 +329,7 @@ func printEvent(name string, payload []byte) {
 	case "session.failed":
 		prefix = "✗"
 	}
-	fmt.Printf("%s %s %s\n", prefix, name, truncate(string(payload), 200))
+	out.Line("%s %s %s", prefix, name, truncate(string(payload), 200))
 }
 
 func newSessionApproveCmd(cfg *Config) *cobra.Command {

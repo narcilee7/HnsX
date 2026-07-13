@@ -193,6 +193,71 @@ func (q *RedisSessionQueue) Len() int {
 	return int(n)
 }
 
+// Recover bulk-loads pending sessions into Redis. Skips sessions already
+// present in the idempotency set.
+func (q *RedisSessionQueue) Recover(items []*SessionRequest) error {
+	var filtered []*SessionRequest
+	for _, req := range items {
+		if req != nil && req.SessionID != "" {
+			filtered = append(filtered, req)
+		}
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+
+	ctx := context.Background()
+	const script = `
+		local setKey = KEYS[1]
+		local pendingKey = KEYS[2]
+		local prefix = ARGV[1]
+		local ttl = tonumber(ARGV[2])
+		local count = tonumber(ARGV[3])
+		local offset = 3
+		for i = 1, count do
+			local base = offset + (i - 1) * 9
+			local id = ARGV[base + 1]
+			if redis.call("SISMEMBER", setKey, id) == 0 then
+				redis.call("SADD", setKey, id)
+				redis.call("RPUSH", pendingKey, id)
+				local reqKey = prefix .. ":req:" .. id
+				redis.call("HSET", reqKey,
+					"session_id", id,
+					"domain_id", ARGV[base + 2],
+					"domain_version", ARGV[base + 3],
+					"domain_spec_json", ARGV[base + 4],
+					"trigger_payload_json", ARGV[base + 5],
+					"trace_id", ARGV[base + 6],
+					"required_capabilities", ARGV[base + 7],
+					"enqueued_at", ARGV[base + 8],
+					"correlation_id", ARGV[base + 9])
+				redis.call("EXPIRE", reqKey, ttl)
+			end
+		end
+		return count
+	`
+	args := []any{q.prefix, int64(q.ttl.Seconds()), len(filtered)}
+	for _, req := range filtered {
+		enqueuedAt := req.EnqueuedAt
+		if enqueuedAt.IsZero() {
+			enqueuedAt = time.Now().UTC()
+		}
+		args = append(args,
+			req.SessionID,
+			req.DomainID,
+			req.DomainVersion,
+			req.DomainSpecJSON,
+			req.TriggerPayloadJSON,
+			req.TraceID,
+			strings.Join(req.RequiredCapabilities, ","),
+			fmt.Sprintf("%d", enqueuedAt.UnixMilli()),
+			req.CorrelationID,
+		)
+	}
+	_, err := q.rdb.Eval(ctx, script, []string{q.keySet(), q.keyPending()}, args...).Result()
+	return err
+}
+
 func parseRedisHash(vals []interface{}) map[string]string {
 	m := make(map[string]string, len(vals)/2)
 	for i := 0; i+1 < len(vals); i += 2 {

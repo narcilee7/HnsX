@@ -20,7 +20,8 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
+	"github.com/hnsx-io/hnsx/server/pkg/handler/viewmodel"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 	"github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1/v1connect"
 )
@@ -42,50 +43,17 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-// DomainListItem mirrors the API list view.
-type DomainListItem struct {
-	ID          string `json:"id"`
-	Version     string `json:"version"`
-	Description string `json:"description"`
-	Status      string `json:"status"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
-}
+// DomainListItem is the API list view of a registered domain.
+type DomainListItem = viewmodel.DomainListItem
 
-// Domain mirrors the API detail view.
-type Domain struct {
-	ID          string         `json:"id"`
-	Version     string         `json:"version"`
-	Description string         `json:"description"`
-	Harness     map[string]any `json:"harness"`
-	Status      string         `json:"status"`
-	CreatedAt   string         `json:"created_at"`
-	UpdatedAt   string         `json:"updated_at"`
-}
+// Domain is the API detail view of a registered domain.
+type Domain = viewmodel.DomainDetail
 
-// SessionListItem mirrors the API list view.
-type SessionListItem struct {
-	ID            string `json:"id"`
-	DomainID      string `json:"domain_id"`
-	DomainVersion string `json:"domain_version"`
-	Orchestration string `json:"orchestration"`
-	State         string `json:"state"`
-	StartedAt     string `json:"started_at"`
-	CompletedAt   string `json:"completed_at"`
-}
+// SessionListItem is the API list view of a session.
+type SessionListItem = viewmodel.SessionListItem
 
-// Session mirrors the API detail view.
-type Session struct {
-	ID            string         `json:"id"`
-	DomainID      string         `json:"domain_id"`
-	DomainVersion string         `json:"domain_version"`
-	Orchestration string         `json:"orchestration"`
-	State         string         `json:"state"`
-	Trigger       map[string]any `json:"trigger"`
-	StartedAt     string         `json:"started_at"`
-	CompletedAt   string         `json:"completed_at"`
-	Result        map[string]any `json:"result"`
-}
+// Session is the API detail view of a session.
+type Session = viewmodel.SessionDetail
 
 // Event is one Server-Sent Event received from /sessions/:id/events.
 type Event struct {
@@ -182,17 +150,17 @@ func (c *Client) RegisterDomain(body io.Reader, contentType string) (*Domain, er
 	if err != nil {
 		return nil, fmt.Errorf("read body: %w", err)
 	}
-	var ds *spec.DomainSpec
+	var ds *domain.DomainSpec
 	if strings.Contains(contentType, "yaml") || strings.Contains(contentType, "yml") {
-		ds, err = spec.Parse(data)
+		ds, err = domain.Parse(data)
 	} else {
-		ds = new(spec.DomainSpec)
+		ds = new(domain.DomainSpec)
 		err = json.Unmarshal(data, ds)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("parse domain: %w", err)
 	}
-	pbSpec, err := spec.ToProto(ds)
+	pbSpec, err := domain.ToProto(ds)
 	if err != nil {
 		return nil, fmt.Errorf("convert domain: %w", err)
 	}
@@ -420,36 +388,51 @@ func domainFromProto(pbSpec *pb.DomainSpec) (*Domain, error) {
 	if pbSpec == nil {
 		return nil, fmt.Errorf("nil domain spec")
 	}
-	ds, err := spec.FromProto(pbSpec)
+	ds, err := domain.FromProto(pbSpec)
 	if err != nil {
 		return nil, err
 	}
-	harness := map[string]any{}
+	var harness any
 	if ds.Harness.Agents != nil {
-		b, _ := json.Marshal(ds.Harness)
-		_ = json.Unmarshal(b, &harness)
+		harness = ds.Harness
 	}
 	return &Domain{
 		ID:          ds.ID,
 		Version:     ds.Version,
 		Description: ds.Description,
 		Harness:     harness,
+		Spec:        ds,
 		Status:      "active",
 	}, nil
 }
 
 func sessionListItemFromProto(s *pb.SessionStatus) SessionListItem {
+	started := time.UnixMilli(s.GetStartedAtMs())
+	var completed *time.Time
+	if ms := s.GetCompletedAtMs(); ms > 0 {
+		t := time.UnixMilli(ms)
+		completed = &t
+	}
 	return SessionListItem{
 		ID:            s.GetSessionId(),
 		DomainID:      s.GetDomainId(),
 		DomainVersion: s.GetDomainVersion(),
+		Orchestration: "",
 		State:         s.GetState(),
+		StartedAt:     started,
+		CompletedAt:   completed,
 	}
 }
 
 func sessionFromProto(s *pb.SessionStatus) *Session {
 	if s == nil {
 		return nil
+	}
+	started := time.UnixMilli(s.GetStartedAtMs())
+	var completed *time.Time
+	if ms := s.GetCompletedAtMs(); ms > 0 {
+		t := time.UnixMilli(ms)
+		completed = &t
 	}
 	var result map[string]any
 	if s.GetResult() != "" {
@@ -459,68 +442,29 @@ func sessionFromProto(s *pb.SessionStatus) *Session {
 		ID:            s.GetSessionId(),
 		DomainID:      s.GetDomainId(),
 		DomainVersion: s.GetDomainVersion(),
+		Orchestration: "",
 		State:         s.GetState(),
+		Trigger:       nil,
+		StartedAt:     started,
+		CompletedAt:   completed,
 		Result:        result,
 	}
 }
 
-// EvalSet is a single evaluation set.
-type EvalSet struct {
-	ID          string     `json:"id"`
-	SetID       string     `json:"set_id"`
-	DomainID    string     `json:"domain_id"`
-	Description string     `json:"description"`
-	Cases       []EvalCase `json:"cases"`
-	CaseCount   int        `json:"case_count"`
-	CreatedAt   string     `json:"created_at"`
-	UpdatedAt   string     `json:"updated_at"`
-}
+// EvalSet is the API view of an evaluation set.
+type EvalSet = viewmodel.EvalSet
 
 // EvalCase is one test case inside an EvalSet.
-type EvalCase struct {
-	ID     string         `json:"id"`
-	Name   string         `json:"name"`
-	Input  map[string]any `json:"input"`
-	Expect map[string]any `json:"expect"`
-	Scorer EvalScorer     `json:"scorer"`
-}
+type EvalCase = viewmodel.EvalCase
 
 // EvalScorer defines how to score a case.
-type EvalScorer struct {
-	Type   string         `json:"type"`
-	Config map[string]any `json:"config"`
-}
+type EvalScorer = viewmodel.EvalScorer
 
-// EvalRun is a single execution of an EvalSet.
-type EvalRun struct {
-	ID            string           `json:"id"`
-	EvalSetID     string           `json:"eval_set_id"`
-	DomainID      string           `json:"domain_id"`
-	DomainVersion string           `json:"domain_version"`
-	Orchestration string           `json:"orchestration"`
-	State         string           `json:"state"`
-	Score         float64          `json:"score"`
-	TotalCases    int              `json:"total_cases"`
-	PassedCases   int              `json:"passed_cases"`
-	TotalCostUSD  float64          `json:"total_cost_usd"`
-	DurationMs    int64            `json:"duration_ms"`
-	BaselineRunID string           `json:"baseline_run_id,omitempty"`
-	Cases         []EvalCaseResult `json:"cases"`
-	CreatedAt     string           `json:"created_at"`
-	CompletedAt   string           `json:"completed_at"`
-}
+// EvalRun is the API view of an evaluation run.
+type EvalRun = viewmodel.EvalRun
 
 // EvalCaseResult is the outcome of one EvalCase within a run.
-type EvalCaseResult struct {
-	CaseID     string         `json:"case_id"`
-	SessionID  string         `json:"session_id"`
-	Score      float64        `json:"score"`
-	Passed     bool           `json:"passed"`
-	Actual     map[string]any `json:"actual"`
-	Details    map[string]any `json:"details"`
-	DurationMs int64          `json:"duration_ms"`
-	CostUSD    float64        `json:"cost_usd"`
-}
+type EvalCaseResult = viewmodel.EvalCaseResult
 
 // ListEvalSets returns all eval sets.
 func (c *Client) ListEvalSets() ([]EvalSet, error) {
@@ -688,6 +632,8 @@ func evalRunFromProto(r *pb.EvalRunResult) *EvalRun {
 		ID:            r.GetEvalRunId(),
 		EvalSetID:     r.GetSetId(),
 		DomainID:      r.GetDomainId(),
+		DomainVersion: "",
+		Orchestration: "",
 		State:         r.GetState(),
 		Score:         r.GetScore(),
 		TotalCases:    int(r.GetTotal()),

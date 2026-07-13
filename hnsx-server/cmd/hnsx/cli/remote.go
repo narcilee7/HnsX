@@ -178,7 +178,8 @@ func newRemoteSessions(cfg *Config) *cobra.Command {
 					if !ok {
 						return nil
 					}
-					fmt.Printf("event: %s\ndata: %s\n\n", evt.Name, string(evt.Payload))
+					out := NewOutput(cfg.Output)
+					out.Line("event: %s\ndata: %s\n", evt.Name, string(evt.Payload))
 				case err := <-errCh:
 					if err != nil {
 						return err

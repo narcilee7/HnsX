@@ -27,6 +27,9 @@ type Repository interface {
 	// ByDomain returns every session for a given domain ID scoped to a tenant.
 	ByDomain(tenantID tenant.ID, domainID string) ([]*model.Session, error)
 
+	// ListByState returns every session in the given state scoped to a tenant.
+	ListByState(tenantID tenant.ID, state model.State) ([]*model.Session, error)
+
 	// Delete removes a session by ID scoped to a tenant.
 	Delete(tenantID tenant.ID, id string) error
 }
@@ -87,6 +90,20 @@ func (r *InMemoryRepository) ByDomain(tenantID tenant.ID, domainID string) ([]*m
 	out := make([]*model.Session, 0)
 	for _, s := range r.sessions {
 		if s.DomainID == domainID {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+// ListByState implements Repository.
+func (r *InMemoryRepository) ListByState(tenantID tenant.ID, state model.State) ([]*model.Session, error) {
+	_ = tenantID
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]*model.Session, 0)
+	for _, s := range r.sessions {
+		if s.State == state {
 			out = append(out, s)
 		}
 	}

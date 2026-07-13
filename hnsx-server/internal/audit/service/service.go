@@ -10,7 +10,7 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/audit/model"
 	"github.com/hnsx-io/hnsx/server/internal/audit/repository"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // Service records and queries audit entries.
@@ -32,7 +32,7 @@ func (s *Service) Record(ctx context.Context, e *model.Entry) error {
 }
 
 // RecordObservation derives an audit entry from a runtime observation.
-func (s *Service) RecordObservation(ctx context.Context, obs runtime.Observation, decision, reason string) error {
+func (s *Service) RecordObservation(ctx context.Context, obs domain.Observation, decision, reason string) error {
 	return s.Record(ctx, &model.Entry{
 		SessionID: obs.SessionID,
 		DomainID:  obs.DomainID,

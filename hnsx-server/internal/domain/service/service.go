@@ -11,7 +11,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
 	"github.com/hnsx-io/hnsx/server/internal/domain/repository"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // Service implements the domain application use cases.
@@ -28,11 +28,11 @@ func NewService(repo repository.Repository) *Service {
 //
 // If a domain with the same ID already exists, model.ErrDomainExists is returned.
 // The spec is validated through the canonical loader before persistence.
-func (s *Service) Register(tenantID tenant.ID, ds *spec.DomainSpec) (*model.RegisteredDomain, error) {
+func (s *Service) Register(tenantID tenant.ID, ds *domain.DomainSpec) (*model.RegisteredDomain, error) {
 	if ds == nil {
 		return nil, model.ErrInvalidSpec
 	}
-	if err := spec.Validate(ds); err != nil {
+	if err := domain.Validate(ds); err != nil {
 		return nil, err
 	}
 	if exists, err := s.repo.Exists(tenantID, ds.ID); err != nil {
@@ -60,11 +60,11 @@ func (s *Service) Register(tenantID tenant.ID, ds *spec.DomainSpec) (*model.Regi
 //
 // The ID in the spec must match the URL/id parameter; mismatches return
 // model.ErrInvalidSpec.
-func (s *Service) Update(tenantID tenant.ID, id string, ds *spec.DomainSpec) (*model.RegisteredDomain, error) {
+func (s *Service) Update(tenantID tenant.ID, id string, ds *domain.DomainSpec) (*model.RegisteredDomain, error) {
 	if ds == nil || ds.ID != id {
 		return nil, model.ErrInvalidSpec
 	}
-	if err := spec.Validate(ds); err != nil {
+	if err := domain.Validate(ds); err != nil {
 		return nil, err
 	}
 	existing, err := s.repo.ByID(tenantID, id)
@@ -94,7 +94,7 @@ func (s *Service) ListVersions(tenantID tenant.ID, id string) ([]repository.Vers
 }
 
 // GetVersion returns the spec for a specific domain version.
-func (s *Service) GetVersion(tenantID tenant.ID, id, version string) (*spec.DomainSpec, error) {
+func (s *Service) GetVersion(tenantID tenant.ID, id, version string) (*domain.DomainSpec, error) {
 	return s.repo.GetVersion(tenantID, id, version)
 }
 
@@ -109,9 +109,9 @@ func (s *Service) Delete(tenantID tenant.ID, id string) error {
 }
 
 // ValidateSpec runs the canonical loader validation without persisting.
-func (s *Service) ValidateSpec(ds *spec.DomainSpec) error {
+func (s *Service) ValidateSpec(ds *domain.DomainSpec) error {
 	if ds == nil {
 		return model.ErrInvalidSpec
 	}
-	return spec.Validate(ds)
+	return domain.Validate(ds)
 }

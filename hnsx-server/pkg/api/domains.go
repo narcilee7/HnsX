@@ -1,64 +1,42 @@
 package api
 
 import (
-	"io"
 	"net/http"
-	"sort"
 
 	"github.com/gin-gonic/gin"
 	"gopkg.in/yaml.v3"
 
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
-	"github.com/hnsx-io/hnsx/server/internal/app/queries"
-	"github.com/hnsx-io/hnsx/server/pkg/local"
+	"github.com/hnsx-io/hnsx/server/pkg/handler"
 )
 
 // ListDomains handles GET /api/v1/domains.
 func (s *Server) ListDomains(c *gin.Context) {
-	items := s.Queries.ListDomains(tenantFromGin(c))
-	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
-
-	out := make([]map[string]any, 0, len(items))
-	for _, d := range items {
-		out = append(out, map[string]any{
-			"id":          d.ID,
-			"version":     d.Version,
-			"description": d.Description,
-			"status":      d.Status,
-			"created_at":  queries.FormatTimeValue(d.CreatedAt),
-			"updated_at":  queries.FormatTimeValue(d.UpdatedAt),
-		})
-	}
-	writeJSON(c, http.StatusOK, map[string]any{
-		"items":  out,
-		"total":  len(out),
-		"limit":  len(out),
-		"offset": 0,
+	out, err := s.Handlers.ListDomains(c.Request.Context(), handler.ListDomainsInput{
+		TenantID: tenantFromGin(c),
 	})
+	if err != nil {
+		writeError(c, mapDomainError(err))
+		return
+	}
+	writeJSON(c, http.StatusOK, out.Domains)
 }
 
 // GetDomain handles GET /api/v1/domains/:id.
 func (s *Server) GetDomain(c *gin.Context) {
-	id := c.Param("id")
-	item, d, ok := s.Queries.GetDomain(tenantFromGin(c), id)
-	if !ok {
-		writeError(c, NewDomainNotFound(id))
+	out, err := s.Handlers.GetDomain(c.Request.Context(), handler.GetDomainInput{
+		TenantID: tenantFromGin(c),
+		ID:       c.Param("id"),
+	})
+	if err != nil {
+		writeError(c, mapDomainError(err))
 		return
 	}
-	writeJSON(c, http.StatusOK, map[string]any{
-		"id":          item.ID,
-		"version":     item.Version,
-		"description": item.Description,
-		"harness":     d.Harness,
-		"status":      item.Status,
-		"created_at":  queries.FormatTimeValue(item.CreatedAt),
-		"updated_at":  queries.FormatTimeValue(item.UpdatedAt),
-	})
+	writeJSON(c, http.StatusOK, out.Domain)
 }
 
 // GetDomainYAML handles GET /api/v1/domains/:id/yaml.
 // Returns the canonical YAML representation of the registered domain spec.
-// This is used by the console editor to avoid the protobuf/JSON shape mismatch.
 func (s *Server) GetDomainYAML(c *gin.Context) {
 	id := c.Param("id")
 	_, d, ok := s.Queries.GetDomain(tenantFromGin(c), id)
@@ -77,63 +55,49 @@ func (s *Server) GetDomainYAML(c *gin.Context) {
 
 // RegisterDomain handles POST /api/v1/domains.
 func (s *Server) RegisterDomain(c *gin.Context) {
-	res, err := s.DomainCommands.Register(c.Request.Context(), tenantFromGin(c), c.Request.Body, c.ContentType())
+	out, err := s.Handlers.RegisterDomain(c.Request.Context(), handler.RegisterDomainInput{
+		TenantID:    tenantFromGin(c),
+		Body:        c.Request.Body,
+		ContentType: c.ContentType(),
+	})
 	if err != nil {
-		if err == commands.ErrDomainExists {
-			writeError(c, &APIError{
-				Code:    "DOMAIN_EXISTS",
-				Message: err.Error(),
-				Details: map[string]any{"domain_id": res.Domain.ID},
-			})
-			return
-		}
-		writeError(c, NewValidation(err))
+		writeError(c, mapDomainError(err))
 		return
 	}
 
-	_ = s.LoadDomainPolicy(c.Request.Context(), res.Domain.ID)
+	_ = s.LoadDomainPolicy(c.Request.Context(), out.Domain.ID)
 
-	c.Header("Location", commands.BuildDomainLocation(res.Domain.ID))
-	writeJSON(c, http.StatusCreated, map[string]any{
-		"id":         res.Domain.ID,
-		"version":    res.Domain.Version,
-		"created_at": queries.FormatTimeValue(res.CreatedAt),
-	})
+	c.Header("Location", commands.BuildDomainLocation(out.Domain.ID))
+	writeJSON(c, http.StatusCreated, out.Domain)
 }
 
 // UpdateDomain handles PUT /api/v1/domains/:id.
 func (s *Server) UpdateDomain(c *gin.Context) {
 	id := c.Param("id")
-	updated, err := s.DomainCommands.Update(c.Request.Context(), tenantFromGin(c), id, c.Request.Body, c.ContentType())
+	out, err := s.Handlers.UpdateDomain(c.Request.Context(), handler.UpdateDomainInput{
+		TenantID:    tenantFromGin(c),
+		ID:          id,
+		Body:        c.Request.Body,
+		ContentType: c.ContentType(),
+	})
 	if err != nil {
-		switch err {
-		case commands.ErrDomainNotFound:
-			writeError(c, NewDomainNotFound(id))
-		case commands.ErrIDMismatch:
-			writeError(c, &APIError{
-				Code:    "INVALID_REQUEST",
-				Message: "domain id in body does not match URL",
-			})
-		default:
-			writeError(c, NewValidation(err))
-		}
+		writeError(c, mapDomainError(err))
 		return
 	}
 
-	_ = s.LoadDomainPolicy(c.Request.Context(), updated.ID)
+	_ = s.LoadDomainPolicy(c.Request.Context(), out.Domain.ID)
 
-	writeJSON(c, http.StatusOK, map[string]any{
-		"id":         updated.ID,
-		"version":    updated.Version,
-		"updated_at": updated.UpdatedAt,
-	})
+	writeJSON(c, http.StatusOK, out.Domain)
 }
 
 // DeleteDomain handles DELETE /api/v1/domains/:id.
 func (s *Server) DeleteDomain(c *gin.Context) {
-	id := c.Param("id")
-	if err := s.DomainCommands.Delete(c.Request.Context(), tenantFromGin(c), id); err != nil {
-		writeError(c, NewDomainNotFound(id))
+	err := s.Handlers.DeleteDomain(c.Request.Context(), handler.DeleteDomainInput{
+		TenantID: tenantFromGin(c),
+		ID:       c.Param("id"),
+	})
+	if err != nil {
+		writeError(c, mapDomainError(err))
 		return
 	}
 	c.Status(http.StatusNoContent)
@@ -141,90 +105,56 @@ func (s *Server) DeleteDomain(c *gin.Context) {
 
 // ListDomainVersions handles GET /api/v1/domains/:id/versions.
 func (s *Server) ListDomainVersions(c *gin.Context) {
-	id := c.Param("id")
-	item, _, ok := s.Queries.GetDomain(tenantFromGin(c), id)
-	if !ok {
-		writeError(c, NewDomainNotFound(id))
-		return
-	}
-	versions, ok := s.Queries.ListDomainVersions(tenantFromGin(c), id)
-	if !ok {
-		writeError(c, NewDomainNotFound(id))
-		return
-	}
-
-	out := make([]map[string]any, 0, len(versions))
-	for _, v := range versions {
-		out = append(out, map[string]any{
-			"version":    v.Version,
-			"created_at": queries.FormatTimeValue(v.CreatedAt),
-			"is_current": v.Version == item.Version,
-		})
-	}
-	writeJSON(c, http.StatusOK, map[string]any{
-		"items":  out,
-		"total":  len(out),
-		"limit":  len(out),
-		"offset": 0,
+	out, err := s.Handlers.ListDomainVersions(c.Request.Context(), handler.ListDomainVersionsInput{
+		TenantID: tenantFromGin(c),
+		ID:       c.Param("id"),
 	})
+	if err != nil {
+		writeError(c, mapDomainError(err))
+		return
+	}
+	writeJSON(c, http.StatusOK, out.Versions)
 }
 
 // GetDomainVersion handles GET /api/v1/domains/:id/versions/:version.
 func (s *Server) GetDomainVersion(c *gin.Context) {
-	id := c.Param("id")
-	version := c.Param("version")
-	d, ok := s.Queries.GetDomainVersion(tenantFromGin(c), id, version)
-	if !ok {
-		writeError(c, NewDomainNotFound(id))
+	out, err := s.Handlers.GetDomainVersion(c.Request.Context(), handler.GetDomainVersionInput{
+		TenantID: tenantFromGin(c),
+		ID:       c.Param("id"),
+		Version:  c.Param("version"),
+	})
+	if err != nil {
+		writeError(c, mapDomainError(err))
 		return
 	}
-	writeJSON(c, http.StatusOK, map[string]any{
-		"id":          d.ID,
-		"version":     d.Version,
-		"description": d.Description,
-		"harness":     d.Harness,
-		"status":      "active",
-		"created_at":  d.CreatedAt,
-		"updated_at":  d.UpdatedAt,
-	})
+	writeJSON(c, http.StatusOK, out.Domain)
 }
 
 // GetDomainSchema handles GET /api/v1/domains/:id/schema.
-// Returns the workspace-oriented schema view (trigger/output schema, mode, agent).
 func (s *Server) GetDomainSchema(c *gin.Context) {
-	id := c.Param("id")
-	schema, ok := s.Queries.GetDomainSchema(tenantFromGin(c), id)
-	if !ok {
-		writeError(c, NewDomainNotFound(id))
+	out, err := s.Handlers.GetDomainSchema(c.Request.Context(), handler.GetDomainSchemaInput{
+		TenantID: tenantFromGin(c),
+		ID:       c.Param("id"),
+	})
+	if err != nil {
+		writeError(c, mapDomainError(err))
 		return
 	}
-	writeJSON(c, http.StatusOK, map[string]any{
-		"id":             schema.ID,
-		"version":        schema.Version,
-		"mode":           schema.Mode,
-		"agent":          schema.Agent,
-		"trigger_schema": schema.TriggerSchema,
-		"output_schema":  schema.OutputSchema,
-	})
+	writeJSON(c, http.StatusOK, out.Schema)
 }
 
 // ValidateDomain handles POST /api/v1/domains/:id/validate.
 func (s *Server) ValidateDomain(c *gin.Context) {
-	summary, err := local.ValidateDomain(c.Request.Body, c.ContentType())
+	out, err := s.Handlers.ValidateDomain(c.Request.Context(), handler.ValidateDomainInput{
+		Body:        c.Request.Body,
+		ContentType: c.ContentType(),
+	})
 	if err != nil {
 		writeError(c, NewValidation(err))
 		return
 	}
-
-	writeJSON(c, http.StatusOK, map[string]any{
-		"valid":       summary.Valid,
-		"id":          summary.ID,
-		"version":     summary.Version,
-		"mode":        summary.Mode,
-		"agent_count": summary.AgentCount,
-		"step_count":  summary.StepCount,
-		"tenant_id":   tenantFromGin(c),
-	})
+	out.Summary.TenantID = string(tenantFromGin(c))
+	writeJSON(c, http.StatusOK, out.Summary)
 }
 
 // TriggerDomain handles POST /api/v1/domains/:id/run.
@@ -239,7 +169,24 @@ func (s *Server) TriggerDomain(c *gin.Context) {
 	s.triggerSession(c, tenantFromGin(c), id, body.Trigger)
 }
 
-// readDomainBody is a small helper kept in this file for handler use.
-func readDomainBody(r io.Reader) ([]byte, error) {
-	return io.ReadAll(r)
+// mapDomainError maps handler/domain errors to canonical APIError values.
+func mapDomainError(err error) *APIError {
+	if err == nil {
+		return nil
+	}
+	if handler.IsDomainNotFound(err) {
+		// The actual ID is not preserved here; callers that need it construct
+		// the error themselves before calling writeError.
+		return NewDomainNotFound("")
+	}
+	if handler.IsDomainExists(err) {
+		return &APIError{Code: "DOMAIN_EXISTS", Message: err.Error()}
+	}
+	if handler.IsIDMismatch(err) {
+		return &APIError{Code: "INVALID_REQUEST", Message: "domain id in body does not match URL"}
+	}
+	if handler.IsInvalidSpec(err) {
+		return NewValidation(err)
+	}
+	return NewInternal(err)
 }

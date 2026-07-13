@@ -41,6 +41,12 @@ func FromContext(ctx context.Context) ID {
 	return DefaultID
 }
 
+// FromContextOK returns the tenant ID and true if one was explicitly attached.
+func FromContextOK(ctx context.Context) (ID, bool) {
+	id, ok := ctx.Value(contextKey{}).(ID)
+	return id, ok
+}
+
 // Middleware parses the tenant ID from the X-Tenant-ID header and attaches it
 // to the request context. Missing or empty headers default to DefaultID.
 func Middleware(next http.Handler) http.Handler {

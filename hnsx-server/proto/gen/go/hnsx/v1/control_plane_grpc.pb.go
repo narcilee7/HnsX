@@ -23,6 +23,7 @@ const (
 	DomainRegistryService_UnregisterDomain_FullMethodName = "/hnsx.v1.DomainRegistryService/UnregisterDomain"
 	DomainRegistryService_GetDomain_FullMethodName        = "/hnsx.v1.DomainRegistryService/GetDomain"
 	DomainRegistryService_ListDomains_FullMethodName      = "/hnsx.v1.DomainRegistryService/ListDomains"
+	DomainRegistryService_ValidateDomain_FullMethodName   = "/hnsx.v1.DomainRegistryService/ValidateDomain"
 )
 
 // DomainRegistryServiceClient is the client API for DomainRegistryService service.
@@ -33,6 +34,7 @@ type DomainRegistryServiceClient interface {
 	UnregisterDomain(ctx context.Context, in *UnregisterDomainRequest, opts ...grpc.CallOption) (*UnregisterDomainResponse, error)
 	GetDomain(ctx context.Context, in *GetDomainRequest, opts ...grpc.CallOption) (*GetDomainResponse, error)
 	ListDomains(ctx context.Context, in *ListDomainsRequest, opts ...grpc.CallOption) (*ListDomainsResponse, error)
+	ValidateDomain(ctx context.Context, in *ValidateDomainRequest, opts ...grpc.CallOption) (*ValidateDomainResponse, error)
 }
 
 type domainRegistryServiceClient struct {
@@ -83,6 +85,16 @@ func (c *domainRegistryServiceClient) ListDomains(ctx context.Context, in *ListD
 	return out, nil
 }
 
+func (c *domainRegistryServiceClient) ValidateDomain(ctx context.Context, in *ValidateDomainRequest, opts ...grpc.CallOption) (*ValidateDomainResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateDomainResponse)
+	err := c.cc.Invoke(ctx, DomainRegistryService_ValidateDomain_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DomainRegistryServiceServer is the server API for DomainRegistryService service.
 // All implementations must embed UnimplementedDomainRegistryServiceServer
 // for forward compatibility.
@@ -91,6 +103,7 @@ type DomainRegistryServiceServer interface {
 	UnregisterDomain(context.Context, *UnregisterDomainRequest) (*UnregisterDomainResponse, error)
 	GetDomain(context.Context, *GetDomainRequest) (*GetDomainResponse, error)
 	ListDomains(context.Context, *ListDomainsRequest) (*ListDomainsResponse, error)
+	ValidateDomain(context.Context, *ValidateDomainRequest) (*ValidateDomainResponse, error)
 	mustEmbedUnimplementedDomainRegistryServiceServer()
 }
 
@@ -112,6 +125,9 @@ func (UnimplementedDomainRegistryServiceServer) GetDomain(context.Context, *GetD
 }
 func (UnimplementedDomainRegistryServiceServer) ListDomains(context.Context, *ListDomainsRequest) (*ListDomainsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListDomains not implemented")
+}
+func (UnimplementedDomainRegistryServiceServer) ValidateDomain(context.Context, *ValidateDomainRequest) (*ValidateDomainResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateDomain not implemented")
 }
 func (UnimplementedDomainRegistryServiceServer) mustEmbedUnimplementedDomainRegistryServiceServer() {}
 func (UnimplementedDomainRegistryServiceServer) testEmbeddedByValue()                               {}
@@ -206,6 +222,24 @@ func _DomainRegistryService_ListDomains_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DomainRegistryService_ValidateDomain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateDomainRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DomainRegistryServiceServer).ValidateDomain(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DomainRegistryService_ValidateDomain_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DomainRegistryServiceServer).ValidateDomain(ctx, req.(*ValidateDomainRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DomainRegistryService_ServiceDesc is the grpc.ServiceDesc for DomainRegistryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -228,6 +262,10 @@ var DomainRegistryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListDomains",
 			Handler:    _DomainRegistryService_ListDomains_Handler,
+		},
+		{
+			MethodName: "ValidateDomain",
+			Handler:    _DomainRegistryService_ValidateDomain_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

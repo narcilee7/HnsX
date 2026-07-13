@@ -351,13 +351,7 @@ func (r *PostgresRepository) RunsBySet(setID string) ([]model.EvalRun, error) {
 }
 
 // SaveResults implements Repository. It replaces any existing per-case results
-// for the run with the supplied set.
-//
-// NOTE: this maps case_id -> eval_cases.id (UUID) via the run's set. It requires
-// eval_runs.id to be a UUID; run IDs are currently session-style slugs (see
-// runtime.NewSessionID), so on Postgres the run insert fails upstream and this
-// method is not yet reached. It is implemented so it works once run IDs are
-// reconciled to UUIDs.
+// for the run with the supplied set. Run IDs are UUIDs (see handler/eval.go).
 func (r *PostgresRepository) SaveResults(runID string, results []model.EvalResult) error {
 	if r.db == nil {
 		return errors.New("evaluation/postgres: no database configured")

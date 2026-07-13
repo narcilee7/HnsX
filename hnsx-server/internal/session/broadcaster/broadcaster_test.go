@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 func TestBroadcaster_PublishSubscribe(t *testing.T) {
@@ -14,7 +14,7 @@ func TestBroadcaster_PublishSubscribe(t *testing.T) {
 	ch, unsubscribe := b.Subscribe()
 	defer unsubscribe()
 
-	obs := runtime.Observation{Kind: "session_start", SessionID: "s1"}
+	obs := domain.Observation{Kind: "session_start", SessionID: "s1"}
 	if err := b.Publish(context.Background(), obs); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
@@ -33,8 +33,8 @@ func TestBroadcaster_ReplayBuffer_LateSubscribers(t *testing.T) {
 	ctx := context.Background()
 
 	// Two events go in BEFORE anyone subscribes.
-	_ = b.Publish(ctx, runtime.Observation{Kind: "session_start", SessionID: "s1"})
-	_ = b.Publish(ctx, runtime.Observation{Kind: "step_start", SessionID: "s1", AgentID: "triage"})
+	_ = b.Publish(ctx, domain.Observation{Kind: "session_start", SessionID: "s1"})
+	_ = b.Publish(ctx, domain.Observation{Kind: "step_start", SessionID: "s1", AgentID: "triage"})
 
 	// Now subscribe.
 	ch, unsub := b.Subscribe()
@@ -59,12 +59,12 @@ func TestBroadcaster_MultipleSubscribers_FanOut(t *testing.T) {
 
 	const N = 5
 	for i := 0; i < N; i++ {
-		_ = b.Publish(context.Background(), runtime.Observation{Kind: "tick"})
+		_ = b.Publish(context.Background(), domain.Observation{Kind: "tick"})
 	}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
-	collect := func(ch <-chan runtime.Observation, name string) {
+	collect := func(ch <-chan domain.Observation, name string) {
 		defer wg.Done()
 		count := 0
 		for e := range ch {
@@ -107,7 +107,7 @@ func TestBroadcaster_CloseUnsubscribes(t *testing.T) {
 func TestBroadcaster_PublishAfterClose_Noop(t *testing.T) {
 	b := NewBroadcaster()
 	b.Close()
-	if err := b.Publish(context.Background(), runtime.Observation{Kind: "after_close"}); err != nil {
+	if err := b.Publish(context.Background(), domain.Observation{Kind: "after_close"}); err != nil {
 		t.Fatalf("publish after close: %v", err)
 	}
 }

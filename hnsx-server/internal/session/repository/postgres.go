@@ -10,7 +10,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/session/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // PostgresRepository persists Session aggregates to Postgres using GORM.
@@ -164,6 +164,36 @@ func (r *PostgresRepository) ByDomain(tenantID tenant.ID, domainID string) ([]*m
 	return out, nil
 }
 
+// ListByState returns every session in the given state scoped to a tenant.
+// It joins with the domains table so recovered sessions can be rebuilt into
+// worker.SessionRequest without a separate lookup per row.
+func (r *PostgresRepository) ListByState(tenantID tenant.ID, state model.State) ([]*model.Session, error) {
+	if r.db == nil {
+		return nil, nil
+	}
+
+	tid := string(tenantID)
+	if tid == "" {
+		tid = string(tenant.DefaultID)
+	}
+
+	var records []SessionRecord
+	if err := r.db.Where("tenant_id = ? AND state = ?", tid, string(state)).
+		Find(&records).Error; err != nil {
+		return nil, err
+	}
+
+	out := make([]*model.Session, 0, len(records))
+	for _, rec := range records {
+		s, err := r.toModel(tid, rec)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, nil
+}
+
 // Delete implements Repository.
 func (r *PostgresRepository) Delete(tenantID tenant.ID, id string) error {
 	if r.db == nil {
@@ -207,9 +237,9 @@ func (r *PostgresRepository) toModel(tid string, rec SessionRecord) (*model.Sess
 		}
 	}
 
-	var result *runtime.Result
+	var result *domain.Result
 	if len(rec.ResultPayload) > 0 {
-		result = &runtime.Result{}
+		result = &domain.Result{}
 		if err := json.Unmarshal(rec.ResultPayload, result); err != nil {
 			return nil, err
 		}

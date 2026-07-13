@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/app/commands"
@@ -22,9 +23,8 @@ import (
 	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	pkgexecutor "github.com/hnsx-io/hnsx/server/pkg/session"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
+	"github.com/hnsx-io/hnsx/server/pkg/handler"
 )
 
 // BuildInfo describes this build of hnsx-server. Set by main at process start.
@@ -44,8 +44,12 @@ type Server struct {
 
 	BuildInfo BuildInfo
 	DB        *db.DB
-	Executor  *pkgexecutor.Executor
 	AppState  *app.State
+
+	// Logger is the structured logger. Nil-safe: every handler that uses
+	// it must guard with `if s.Logger != nil` or use obs.HookFunc.
+	// Bootstrap injects a real zap.Logger; tests may leave it nil.
+	Logger *zap.Logger
 
 	// PolicyService loads domain policy into the policy repository.
 	PolicyService *policyservice.Service
@@ -80,6 +84,9 @@ type Server struct {
 	// Queries exposes read-only application queries.
 	Queries *queries.Queries
 
+	// Handlers is the shared business kernel used by HTTP and gRPC transports.
+	Handlers *handler.Handler
+
 	// ConnectHandler serves the Connect-RPC control plane on /hnsx.v1.* paths.
 	// When nil the HTTP server exposes only the REST API.
 	ConnectHandler http.Handler
@@ -108,7 +115,6 @@ func NewServer(build BuildInfo, application *app.Application) *Server {
 		App:                application,
 		BuildInfo:          build,
 		DB:                 application.DB,
-		Executor:           application.Executor,
 		AppState:           application.State,
 		PolicyService:      application.PolicyService,
 		AuditService:       application.AuditService,
@@ -118,8 +124,9 @@ func NewServer(build BuildInfo, application *app.Application) *Server {
 		SecretService:      application.SecretService,
 		WorkerService:      application.WorkerService,
 		DomainCommands:     commands.NewDomainCommands(application.DomainService),
-		SessionCommands:    commands.NewSessionCommands(application.SessionService, application.DomainService, application.WorkerService, application.Executor, application.State),
+		SessionCommands:    commands.NewSessionCommands(application.SessionService, application.DomainService, application.WorkerService, application.State),
 		Queries:            queries.NewQueries(application.DomainService, application.SessionService),
+		Handlers:           handler.New(application, nil),
 		TemplatesIndexPath: "templates/index.yaml",
 	}
 }
@@ -204,16 +211,16 @@ func (s *Server) timeoutCtx(r *http.Request) (context.Context, context.CancelFun
 
 // PublishObservation forwards an observation into the named session's
 // broadcaster so SSE clients see it.
-func (s *Server) PublishObservation(sessionID string, obs runtime.Observation) bool {
+func (s *Server) PublishObservation(sessionID string, obs domain.Observation) bool {
 	if s.AppState == nil {
 		return false
 	}
 	return s.AppState.PublishObservation(sessionID, obs)
 }
 
-// RegisterBootstrapDomain inserts an already-validated *spec.DomainSpec
+// RegisterBootstrapDomain inserts an already-validated *domain.DomainSpec
 // into the domain registry. Intended for the `seed-from` path in main.
-func (s *Server) RegisterBootstrapDomain(tenantID tenant.ID, v *spec.DomainSpec) {
+func (s *Server) RegisterBootstrapDomain(tenantID tenant.ID, v *domain.DomainSpec) {
 	if s.App == nil || s.App.DomainService == nil {
 		return
 	}

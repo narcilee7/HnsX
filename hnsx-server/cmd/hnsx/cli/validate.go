@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // newValidateCmd preserves the original "validate" subcommand under cobra.
@@ -22,7 +22,7 @@ func newValidateCmd(cfg *Config) *cobra.Command {
 			if domainPath == "" {
 				return fmt.Errorf("--domain is required")
 			}
-			s, err := spec.LoadFile(domainPath)
+			s, err := domain.LoadFile(domainPath)
 			if err != nil {
 				if jsonOutput || cfg.Output == "json" {
 					out.Print(map[string]any{"valid": false, "error": err.Error()})
@@ -46,7 +46,7 @@ func newValidateCmd(cfg *Config) *cobra.Command {
 			}
 			if jsonOutput || cfg.Output == "json" {
 				b, _ := json.MarshalIndent(result, "", "  ")
-				fmt.Println(string(b))
+				out.Line("%s", string(b))
 			} else {
 				out.Line("✓ domain '%s' v%s is valid", s.ID, s.Version)
 				out.Line("  mode:    %s", s.Harness.Session.Mode)

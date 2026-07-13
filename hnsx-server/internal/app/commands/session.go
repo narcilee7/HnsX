@@ -15,9 +15,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/internal/worker"
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	pkgexecutor "github.com/hnsx-io/hnsx/server/pkg/session"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // broadcasterManager abstracts the in-process SSE fan-out index. It is
@@ -26,7 +24,7 @@ import (
 type broadcasterManager interface {
 	AttachBroadcaster(sessionID string) *broadcaster.Broadcaster
 	DetachBroadcaster(sessionID string)
-	PublishObservation(sessionID string, obs runtime.Observation) bool
+	PublishObservation(sessionID string, obs domain.Observation) bool
 }
 
 // SessionCommands exposes session lifecycle use cases.
@@ -34,7 +32,6 @@ type SessionCommands struct {
 	sessionSvc *sessionservice.Service
 	domainSvc  *service.Service
 	workerSvc  *workerservice.Service
-	executor   *pkgexecutor.Executor
 	bm         broadcasterManager
 }
 
@@ -43,14 +40,12 @@ func NewSessionCommands(
 	sessionSvc *sessionservice.Service,
 	domainSvc *service.Service,
 	workerSvc *workerservice.Service,
-	executor *pkgexecutor.Executor,
 	bm broadcasterManager,
 ) *SessionCommands {
 	return &SessionCommands{
 		sessionSvc: sessionSvc,
 		domainSvc:  domainSvc,
 		workerSvc:  workerSvc,
-		executor:   executor,
 		bm:         bm,
 	}
 }
@@ -58,19 +53,19 @@ func NewSessionCommands(
 // Start creates a session from a domain and dispatches it to either the worker
 // pool or the local executor. This is the single entry point for
 // "trigger + run" so the HTTP handler no longer chooses between the two paths.
-func (c *SessionCommands) Start(ctx context.Context, tenantID tenant.ID, domain *app.RegisteredDomain, trigger map[string]any) (*app.RegisteredSession, error) {
+func (c *SessionCommands) Start(ctx context.Context, tenantID tenant.ID, d *app.RegisteredDomain, trigger map[string]any) (*app.RegisteredSession, error) {
 	if c.sessionSvc == nil {
 		return nil, errors.New("nil session service")
 	}
-	if domain == nil || domain.Spec == nil {
+	if d == nil || d.Spec == nil {
 		return nil, errors.New("nil domain")
 	}
 
 	sess, err := c.sessionSvc.Create(tenantID, sessionservice.CreateParams{
-		SessionID:     runtime.NewSessionID(domain.ID),
-		DomainID:      domain.ID,
-		DomainVersion: domain.Version,
-		Orchestration: string(domain.Spec.Harness.Session.Mode),
+		SessionID:     domain.NewSessionID(d.ID),
+		DomainID:      d.ID,
+		DomainVersion: d.Version,
+		Orchestration: string(d.Spec.Harness.Session.Mode),
 		Trigger:       trigger,
 	})
 	if err != nil {
@@ -78,7 +73,7 @@ func (c *SessionCommands) Start(ctx context.Context, tenantID tenant.ID, domain 
 	}
 	registered := app.SessionFromModel(sess)
 
-	if err := c.dispatch(ctx, tenantID, registered, domain, trigger); err != nil {
+	if err := c.dispatch(ctx, tenantID, registered, d, trigger); err != nil {
 		return nil, err
 	}
 	return registered, nil
@@ -119,38 +114,35 @@ func (c *SessionCommands) Rerun(ctx context.Context, tenantID tenant.ID, prevID 
 // dispatch routes a freshly created session to the worker pool or the local
 // executor. It also attaches the session broadcaster so SSE clients see the
 // lifecycle events.
-func (c *SessionCommands) dispatch(ctx context.Context, tenantID tenant.ID, sess *app.RegisteredSession, domain *app.RegisteredDomain, trigger map[string]any) error {
+func (c *SessionCommands) dispatch(ctx context.Context, tenantID tenant.ID, sess *app.RegisteredSession, d *app.RegisteredDomain, trigger map[string]any) error {
 	_ = c.bm.AttachBroadcaster(sess.ID)
 
 	if c.workerSvc != nil {
-		req, err := c.buildWorkerRequest(sess, domain, trigger)
+		req, err := c.buildWorkerRequest(sess, d, trigger)
 		if err != nil {
 			return err
 		}
 		c.workerSvc.EnqueueSession(req)
-		c.bm.PublishObservation(sess.ID, runtime.Observation{
+		c.bm.PublishObservation(sess.ID, domain.Observation{
 			Kind:      "state",
 			SessionID: sess.ID,
-			DomainID:  domain.ID,
+			DomainID:  d.ID,
 			Payload:   map[string]any{"state": "pending", "worker_pool": true},
 			Timestamp: time.Now().UTC(),
 		})
 		return nil
 	}
 
-	if c.executor == nil {
-		return errors.New("executor not configured")
-	}
-
-	bc := c.bm.AttachBroadcaster(sess.ID)
-	go c.runLocal(context.Background(), tenantID, sess, domain, bc, trigger)
-	return nil
+	// Phase 3: removed local executor fallback. All sessions go through
+	// the worker pool (c.workerSvc). If workerSvc is nil, we fail loud
+	// — this is a deployment misconfiguration.
+	return errors.New("no worker pool configured; set HNSX_GRPC_ADDR or run a local hnsx-worker")
 }
 
 // buildWorkerRequest serializes the domain spec + trigger into the request the
 // worker queue consumes.
-func (c *SessionCommands) buildWorkerRequest(sess *app.RegisteredSession, domain *app.RegisteredDomain, trigger map[string]any) (*worker.SessionRequest, error) {
-	specJSON, err := json.Marshal(domain.Spec)
+func (c *SessionCommands) buildWorkerRequest(sess *app.RegisteredSession, d *app.RegisteredDomain, trigger map[string]any) (*worker.SessionRequest, error) {
+	specJSON, err := json.Marshal(d.Spec)
 	if err != nil {
 		return nil, fmt.Errorf("marshal domain spec: %w", err)
 	}
@@ -161,60 +153,49 @@ func (c *SessionCommands) buildWorkerRequest(sess *app.RegisteredSession, domain
 
 	req := &worker.SessionRequest{
 		SessionID:            sess.ID,
-		DomainID:             domain.ID,
-		DomainVersion:        domain.Version,
+		DomainID:             d.ID,
+		DomainVersion:        d.Version,
 		DomainSpecJSON:       string(specJSON),
 		TriggerPayloadJSON:   string(triggerJSON),
 		TraceID:              sess.ID,
 		CorrelationID:        sess.ID,
-		RequiredCapabilities: spec.DeriveCapabilities(domain.Spec),
+		RequiredCapabilities: domain.DeriveCapabilities(d.Spec),
 	}
 	return req, nil
 }
 
-// runLocal executes the session in-process via the executor.
-func (c *SessionCommands) runLocal(ctx context.Context, tenantID tenant.ID, sess *app.RegisteredSession, domain *app.RegisteredDomain, bc *broadcaster.Broadcaster, trigger map[string]any) {
-	_, _ = c.sessionSvc.MarkRunning(tenantID, sess.ID)
-	executor := c.executor.WithBroadcaster(bc)
-
-	execCtx := runtime.WithSessionID(ctx, sess.ID)
-
-	result, err := executor.Execute(execCtx, domain.Spec, trigger)
-	if result != nil {
-		_, _ = c.sessionSvc.MarkCompleted(tenantID, sess.ID, result)
-	}
-	if err != nil {
-		_, _ = c.sessionSvc.MarkFailed(tenantID, sess.ID)
-	}
-
-	stateSess, _ := c.sessionSvc.Get(tenantID, sess.ID)
-	payload := map[string]any{"state": string(stateSess.State)}
-	if result != nil {
-		payload["result"] = result
-	}
-	_ = bc.Publish(execCtx, runtime.Observation{
-		Kind:      "state",
-		SessionID: sess.ID,
-		DomainID:  sess.DomainID,
-		Payload:   payload,
-	})
+// runLocal was removed in W16+ Phase 3 (Executor gone). Local execution
+// goes through the Python worker; the Go side only orchestrates and
+// persists session state.
+//
+// This stub is kept so dispatch()'s call site still compiles. The
+// caller (dispatch) is also a no-op in W16+ — see the comment there.
+// All session work now goes through the worker pool.
+func (c *SessionCommands) runLocal(ctx context.Context, tenantID tenant.ID, sess *app.RegisteredSession, d *app.RegisteredDomain, bc *broadcaster.Broadcaster, trigger map[string]any) {
+	_ = ctx
+	_ = tenantID
+	_ = sess
+	_ = d
+	_ = bc
+	_ = trigger
+	// Intentionally empty: no in-process executor.
 }
 
 // Trigger is the low-level "create a session record" command. Prefer Start for
 // the full trigger+dispatch flow.
-func (c *SessionCommands) Trigger(ctx context.Context, tenantID tenant.ID, domain *app.RegisteredDomain, trigger map[string]any, newID func(string) string) (*app.RegisteredSession, error) {
+func (c *SessionCommands) Trigger(ctx context.Context, tenantID tenant.ID, d *app.RegisteredDomain, trigger map[string]any, newID func(string) string) (*app.RegisteredSession, error) {
 	if c.sessionSvc == nil {
 		return nil, errors.New("nil session service")
 	}
-	if domain == nil || domain.Spec == nil {
+	if d == nil || d.Spec == nil {
 		return nil, errors.New("nil domain")
 	}
 
 	sess, err := c.sessionSvc.Create(tenantID, sessionservice.CreateParams{
-		SessionID:     newID(domain.ID),
-		DomainID:      domain.ID,
-		DomainVersion: domain.Version,
-		Orchestration: string(domain.Spec.Harness.Session.Mode),
+		SessionID:     newID(d.ID),
+		DomainID:      d.ID,
+		DomainVersion: d.Version,
+		Orchestration: string(d.Spec.Harness.Session.Mode),
 		Trigger:       trigger,
 	})
 	if err != nil {
@@ -260,7 +241,7 @@ func (c *SessionCommands) MarkRunning(ctx context.Context, tenantID tenant.ID, i
 }
 
 // MarkCompleted stores the result and transitions to completed.
-func (c *SessionCommands) MarkCompleted(ctx context.Context, tenantID tenant.ID, id string, result *runtime.Result) (*app.RegisteredSession, error) {
+func (c *SessionCommands) MarkCompleted(ctx context.Context, tenantID tenant.ID, id string, result *domain.Result) (*app.RegisteredSession, error) {
 	if c.sessionSvc == nil {
 		return nil, errors.New("nil session service")
 	}

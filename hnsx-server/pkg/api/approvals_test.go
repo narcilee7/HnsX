@@ -13,16 +13,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/hnsx-io/hnsx/server/internal/app"
 	approvalmodel "github.com/hnsx-io/hnsx/server/internal/approval/model"
 	approvalrepo "github.com/hnsx-io/hnsx/server/internal/approval/repository"
 	approvalservice "github.com/hnsx-io/hnsx/server/internal/approval/service"
+	"github.com/hnsx-io/hnsx/server/pkg/handler"
 )
 
 func newApprovalTestServer(t *testing.T) (*Server, *approvalservice.Service) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	svc := approvalservice.NewService(approvalrepo.NewInMemoryRepository(), nil)
-	return &Server{ApprovalService: svc}, svc
+	application := &app.Application{ApprovalService: svc}
+	return &Server{ApprovalService: svc, Handlers: handler.New(application, nil)}, svc
 }
 
 func TestApprovals_ListFiltersByStatus(t *testing.T) {

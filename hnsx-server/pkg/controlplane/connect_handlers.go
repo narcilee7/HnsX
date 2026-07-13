@@ -11,21 +11,20 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
 
-	"github.com/google/uuid"
 	"github.com/hnsx-io/hnsx/server/internal/app"
-	"github.com/hnsx-io/hnsx/server/internal/app/commands"
 	domainmodel "github.com/hnsx-io/hnsx/server/internal/domain/model"
-	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
-	evalrunner "github.com/hnsx-io/hnsx/server/internal/evaluation/runner"
-	sessionmodel "github.com/hnsx-io/hnsx/server/internal/session/model"
+	"github.com/hnsx-io/hnsx/server/internal/obs"
+	tracemodel "github.com/hnsx-io/hnsx/server/internal/trace/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	"github.com/hnsx-io/hnsx/server/internal/trace/model"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"go.uber.org/zap"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
+	"github.com/hnsx-io/hnsx/server/pkg/handler"
+	"github.com/hnsx-io/hnsx/server/pkg/handler/viewmodel"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 	"github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1/v1connect"
 )
@@ -33,17 +32,25 @@ import (
 // ConnectServer implements the 5 control_plane.proto services.
 type ConnectServer struct {
 	App *app.Application
+	// Handlers is the shared business kernel used by both REST and Connect.
+	Handlers *handler.Handler
+	// Logger is the request-scoped structured logger used by the
+	// per-RPC log interceptor. Nil-safe (no-op when nil, e.g. in tests).
+	Logger *zap.Logger
 }
 
 // NewConnectServer constructs a ConnectServer backed by app.
 func NewConnectServer(app *app.Application) *ConnectServer {
-	return &ConnectServer{App: app}
+	return &ConnectServer{App: app, Handlers: handler.New(app, nil)}
 }
 
 // Handler returns an http.Handler that serves all 5 control plane services.
 func (s *ConnectServer) Handler() http.Handler {
 	mux := http.NewServeMux()
-	interceptors := connect.WithInterceptors(tenantInterceptor())
+	interceptors := connect.WithInterceptors(
+		tenantInterceptor(),
+		obs.ConnectInterceptor(s.Logger), // W16+ Phase 5b: per-RPC log
+	)
 	_, h := v1connect.NewDomainRegistryServiceHandler(s, interceptors)
 	mux.Handle("/hnsx.v1.DomainRegistryService/", h)
 	_, h = v1connect.NewSessionSchedulerServiceHandler(s, interceptors)
@@ -75,39 +82,42 @@ func (s *ConnectServer) RegisterDomain(ctx context.Context, req *connect.Request
 	if s.App == nil || s.App.DomainService == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("domain service unavailable"))
 	}
-	ds, err := spec.FromProto(req.Msg.GetSpec())
+	ds, err := domain.FromProto(req.Msg.GetSpec())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid domain spec: %w", err))
 	}
-	d, err := s.App.DomainService.Register(tenant.FromContext(ctx), ds)
+	out, err := s.Handlers.RegisterDomainSpec(ctx, handler.RegisterDomainSpecInput{
+		TenantID: tenant.FromContext(ctx),
+		Spec:     ds,
+	})
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
 	return connect.NewResponse(&pb.RegisterDomainResponse{
-		Domain: &pb.DomainRef{Id: d.ID, Version: d.Version},
+		Domain: &pb.DomainRef{Id: out.Domain.ID, Version: out.Domain.Version},
 	}), nil
 }
 
 func (s *ConnectServer) UnregisterDomain(ctx context.Context, req *connect.Request[pb.UnregisterDomainRequest]) (*connect.Response[pb.UnregisterDomainResponse], error) {
-	if s.App == nil || s.App.DomainService == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, errors.New("domain service unavailable"))
-	}
-	ref := req.Msg.GetDomain()
-	if err := s.App.DomainService.Delete(tenant.FromContext(ctx), ref.GetId()); err != nil {
+	err := s.Handlers.DeleteDomain(ctx, handler.DeleteDomainInput{
+		TenantID: tenant.FromContext(ctx),
+		ID:       req.Msg.GetDomain().GetId(),
+	})
+	if err != nil {
 		return nil, mapDomainError(err)
 	}
 	return connect.NewResponse(&pb.UnregisterDomainResponse{}), nil
 }
 
 func (s *ConnectServer) GetDomain(ctx context.Context, req *connect.Request[pb.GetDomainRequest]) (*connect.Response[pb.GetDomainResponse], error) {
-	if s.App == nil || s.App.DomainService == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, errors.New("domain service unavailable"))
-	}
-	d, err := s.App.DomainService.Get(tenant.FromContext(ctx), req.Msg.GetDomain().GetId())
+	out, err := s.Handlers.GetDomain(ctx, handler.GetDomainInput{
+		TenantID: tenant.FromContext(ctx),
+		ID:       req.Msg.GetDomain().GetId(),
+	})
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
-	pbSpec, err := spec.ToProto(d.Spec)
+	pbSpec, err := domain.ToProto(out.Domain.Spec)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("convert domain spec: %w", err))
 	}
@@ -115,22 +125,43 @@ func (s *ConnectServer) GetDomain(ctx context.Context, req *connect.Request[pb.G
 }
 
 func (s *ConnectServer) ListDomains(ctx context.Context, req *connect.Request[pb.ListDomainsRequest]) (*connect.Response[pb.ListDomainsResponse], error) {
-	if s.App == nil || s.App.DomainService == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, errors.New("domain service unavailable"))
-	}
-	items, err := s.App.DomainService.List(tenant.FromContext(ctx))
+	out, err := s.Handlers.ListDomains(ctx, handler.ListDomainsInput{
+		TenantID: tenant.FromContext(ctx),
+		Limit:    int(req.Msg.GetLimit()),
+		Offset:   int(req.Msg.GetOffset()),
+	})
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
-	resp := &pb.ListDomainsResponse{Total: int32(len(items))}
-	for _, d := range items {
-		pbSpec, err := spec.ToProto(d.Spec)
+	resp := &pb.ListDomainsResponse{Total: int32(out.Domains.Total)}
+	for _, item := range out.Domains.Items {
+		if item.Spec == nil {
+			continue
+		}
+		pbSpec, err := domain.ToProto(item.Spec)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("convert domain spec: %w", err))
 		}
 		resp.Domains = append(resp.Domains, pbSpec)
 	}
 	return connect.NewResponse(resp), nil
+}
+
+func (s *ConnectServer) ValidateDomain(ctx context.Context, req *connect.Request[pb.ValidateDomainRequest]) (*connect.Response[pb.ValidateDomainResponse], error) {
+	ds, err := domain.DecodeDomainSpec(strings.NewReader(req.Msg.GetDomainSpecJson()), "application/json")
+	if err != nil {
+		return connect.NewResponse(&pb.ValidateDomainResponse{
+			Valid: false,
+			Errors: []*pb.ValidationError{{Field: "", Message: err.Error()}},
+		}), nil
+	}
+	if err := domain.Validate(ds); err != nil {
+		return connect.NewResponse(&pb.ValidateDomainResponse{
+			Valid: false,
+			Errors: []*pb.ValidationError{{Field: "", Message: err.Error()}},
+		}), nil
+	}
+	return connect.NewResponse(&pb.ValidateDomainResponse{Valid: true}), nil
 }
 
 // SessionSchedulerServiceHandler implementation.
@@ -140,69 +171,52 @@ func (s *ConnectServer) ScheduleSession(ctx context.Context, req *connect.Reques
 }
 
 func (s *ConnectServer) GetSession(ctx context.Context, req *connect.Request[pb.GetSessionRequest]) (*connect.Response[pb.GetSessionResponse], error) {
-	if s.App == nil || s.App.SessionService == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, errors.New("session service unavailable"))
-	}
-	sess, err := s.App.SessionService.Get(tenant.FromContext(ctx), req.Msg.GetSessionId())
+	out, err := s.Handlers.GetSession(ctx, handler.GetSessionInput{
+		TenantID:  tenant.FromContext(ctx),
+		SessionID: req.Msg.GetSessionId(),
+	})
 	if err != nil {
 		return nil, mapSessionError(err)
 	}
-	return connect.NewResponse(&pb.GetSessionResponse{Session: sessionToProto(sess)}), nil
+	return connect.NewResponse(&pb.GetSessionResponse{Session: sessionDetailToProto(out.Session)}), nil
 }
 
 func (s *ConnectServer) ListSessions(ctx context.Context, req *connect.Request[pb.ListSessionsRequest]) (*connect.Response[pb.ListSessionsResponse], error) {
-	if s.App == nil || s.App.SessionService == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, errors.New("session service unavailable"))
-	}
-	tid := tenant.FromContext(ctx)
-	var items []*sessionmodel.Session
-	var err error
-	if req.Msg.GetDomainId() != "" {
-		items, err = s.App.SessionService.ListByDomain(tid, req.Msg.GetDomainId())
-	} else {
-		items, err = s.App.SessionService.List(tid)
-	}
+	out, err := s.Handlers.ListSessions(ctx, handler.ListSessionsInput{
+		TenantID: tenant.FromContext(ctx),
+		Filters: viewmodel.SessionFilters{
+			DomainID: req.Msg.GetDomainId(),
+			State:    req.Msg.GetState(),
+		},
+	})
 	if err != nil {
 		return nil, mapSessionError(err)
 	}
-	stateFilter := req.Msg.GetState()
-	resp := &pb.ListSessionsResponse{}
-	for _, sess := range items {
-		if stateFilter != "" && string(sess.State) != stateFilter {
-			continue
-		}
-		resp.Sessions = append(resp.Sessions, sessionToProto(sess))
+	resp := &pb.ListSessionsResponse{Total: int32(out.Sessions.Total)}
+	for _, sess := range out.Sessions.Items {
+		resp.Sessions = append(resp.Sessions, sessionListItemToProto(sess))
 	}
-	resp.Total = int32(len(resp.Sessions))
 	return connect.NewResponse(resp), nil
 }
 
 // RuntimeDiscoveryServiceHandler implementation.
 
 func (s *ConnectServer) DiscoverRuntime(ctx context.Context, req *connect.Request[pb.DiscoverRuntimeRequest]) (*connect.Response[pb.DiscoverRuntimeResponse], error) {
-	if s.App == nil || s.App.WorkerService == nil {
-		return connect.NewResponse(&pb.DiscoverRuntimeResponse{}), nil
+	out, err := s.Handlers.DiscoverRuntimes(ctx, handler.DiscoverRuntimesInput{
+		TenantID:     tenant.FromContext(ctx),
+		Capabilities: req.Msg.GetCapabilities(),
+		Region:       req.Msg.GetRegion(),
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	var runtimes []*pb.RuntimeInfo
-	required := req.Msg.GetCapabilities()
-	region := req.Msg.GetRegion()
-	for _, w := range s.App.WorkerService.List() {
-		info := w.Info
-		if info == nil {
-			continue
-		}
-		if region != "" && info.GetRegion() != region {
-			continue
-		}
-		caps := workerCapabilities(info)
-		if !hasAll(caps, required) {
-			continue
-		}
+	runtimes := make([]*pb.RuntimeInfo, 0, len(out.Runtimes))
+	for _, r := range out.Runtimes {
 		runtimes = append(runtimes, &pb.RuntimeInfo{
-			RuntimeId:    w.WorkerID,
-			Capabilities: caps,
-			Region:       info.GetRegion(),
-			Version:      info.GetVersion(),
+			RuntimeId:    r.RuntimeID,
+			Capabilities: r.Capabilities,
+			Region:       r.Region,
+			Version:      r.Version,
 		})
 	}
 	return connect.NewResponse(&pb.DiscoverRuntimeResponse{Runtimes: runtimes}), nil
@@ -214,46 +228,40 @@ func (s *ConnectServer) RecordTrace(ctx context.Context, req *connect.Request[pb
 	if s.App == nil || s.App.TraceService == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("trace service unavailable"))
 	}
-	for _, obs := range req.Msg.GetObservations() {
-		ro := observationToRuntime(obs)
-		if err := s.App.TraceService.Record(ctx, ro); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
+	obs := make([]domain.Observation, 0, len(req.Msg.GetObservations()))
+	for _, o := range req.Msg.GetObservations() {
+		obs = append(obs, observationToRuntime(o))
+	}
+	if err := s.Handlers.RecordTrace(ctx, handler.RecordTraceInput{
+		TenantID:      tenant.FromContext(ctx),
+		TraceID:       req.Msg.GetTraceId(),
+		SessionID:     req.Msg.GetSessionId(),
+		DomainID:      req.Msg.GetDomainId(),
+		DomainVersion: req.Msg.GetDomainVersion(),
+		Observations:  obs,
+	}); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&pb.RecordTraceResponse{}), nil
 }
 
 func (s *ConnectServer) QueryTraces(ctx context.Context, req *connect.Request[pb.QueryTracesRequest]) (*connect.Response[pb.QueryTracesResponse], error) {
-	if s.App == nil || s.App.TraceService == nil {
-		return connect.NewResponse(&pb.QueryTracesResponse{}), nil
-	}
-	resp := &pb.QueryTracesResponse{}
-	if req.Msg.GetTraceId() != "" {
-		detail, err := s.App.TraceService.Detail(req.Msg.GetTraceId())
-		if err != nil {
-			if errors.Is(err, model.ErrTraceNotFound) {
-				return connect.NewResponse(resp), nil
-			}
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-		resp.Traces = append(resp.Traces, traceDetailToProto(detail))
-		return connect.NewResponse(resp), nil
-	}
-	svc := s.App.TraceService
-	filter := model.TraceListFilter{
+	out, err := s.Handlers.QueryTraces(ctx, handler.QueryTracesInput{
+		TenantID:  tenant.FromContext(ctx),
+		TraceID:   req.Msg.GetTraceId(),
 		DomainID:  req.Msg.GetDomainId(),
 		SessionID: req.Msg.GetSessionId(),
 		Limit:     int(req.Msg.GetLimit()),
-	}
-	if filter.Limit <= 0 {
-		filter.Limit = 50
-	}
-	summaries, err := svc.ListSummaries(filter)
+	})
 	if err != nil {
+		if errors.Is(err, tracemodel.ErrTraceNotFound) {
+			return connect.NewResponse(&pb.QueryTracesResponse{}), nil
+		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	for _, sum := range summaries.Summaries {
-		resp.Traces = append(resp.Traces, traceSummaryToProto(sum))
+	resp := &pb.QueryTracesResponse{}
+	for _, d := range out.Traces {
+		resp.Traces = append(resp.Traces, traceDetailToProto(d))
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -263,162 +271,79 @@ func (s *ConnectServer) RecordInvocation(ctx context.Context, req *connect.Reque
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("trace service unavailable"))
 	}
 	inv := req.Msg
-	obs := runtime.Observation{
-		Kind:      "invocation",
-		SessionID: inv.GetSessionId(),
-		DomainID:  inv.GetDomainId(),
-		TraceID:   inv.GetSessionId(),
-		Timestamp: time.Now().UTC(),
-		Cost: &runtime.Cost{
-			CostUSD:          inv.GetTotalCostUsd(),
-			PromptTokens:     int(inv.GetPromptTokens()),
-			CompletionTokens: int(inv.GetCompletionTokens()),
-			LatencyMs:        inv.GetDurationMs(),
-		},
-	}
-	if err := s.App.TraceService.Record(ctx, obs); err != nil {
+	if err := s.Handlers.RecordInvocation(ctx, handler.RecordInvocationInput{
+		TenantID:         tenant.FromContext(ctx),
+		SessionID:        inv.GetSessionId(),
+		DomainID:         inv.GetDomainId(),
+		TotalCostUSD:     inv.GetTotalCostUsd(),
+		PromptTokens:     inv.GetPromptTokens(),
+		CompletionTokens: inv.GetCompletionTokens(),
+		DurationMs:       inv.GetDurationMs(),
+	}); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&pb.RecordInvocationResponse{}), nil
 }
 
 func (s *ConnectServer) QueryInvocationMetrics(ctx context.Context, req *connect.Request[pb.QueryInvocationMetricsRequest]) (*connect.Response[pb.QueryInvocationMetricsResponse], error) {
-	if s.App == nil || s.App.TraceService == nil {
-		return connect.NewResponse(&pb.QueryInvocationMetricsResponse{DomainId: req.Msg.GetDomainId()}), nil
-	}
-	tid := tenant.FromContext(ctx)
-	domainID := req.Msg.GetDomainId()
-	var sessionIDs []string
-	if domainID != "" && s.App.SessionService != nil {
-		sessions, err := s.App.SessionService.ListByDomain(tid, domainID)
-		if err == nil {
-			for _, sess := range sessions {
-				sessionIDs = append(sessionIDs, sess.ID)
-			}
-		}
-	}
-	agg, err := s.App.TraceService.Aggregate(sessionIDs)
+	out, err := s.Handlers.QueryInvocationMetrics(ctx, handler.QueryInvocationMetricsInput{
+		TenantID: tenant.FromContext(ctx),
+		DomainID: req.Msg.GetDomainId(),
+	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	var avgLatency float64
-	count := agg.AgentInvocations + agg.ToolInvocations
-	if count > 0 {
-		avgLatency = 0 // TODO: trace aggregate does not yet expose avg latency
-	}
 	return connect.NewResponse(&pb.QueryInvocationMetricsResponse{
-		DomainId:              domainID,
-		InvocationCount:       int64(count),
-		TotalCostUsd:          agg.TotalCostUSD,
-		TotalPromptTokens:     int64(agg.TotalPromptTokens),
-		TotalCompletionTokens: int64(agg.TotalCompletionTokens),
-		AvgLatencyMs:          avgLatency,
+		DomainId:              out.DomainID,
+		InvocationCount:       out.InvocationCount,
+		TotalCostUsd:          out.TotalCostUSD,
+		TotalPromptTokens:     out.TotalPromptTokens,
+		TotalCompletionTokens: out.TotalCompletionTokens,
+		AvgLatencyMs:          out.AvgLatencyMs,
 	}), nil
 }
 
 // EvalServiceHandler implementation.
 
 func (s *ConnectServer) RunEval(ctx context.Context, req *connect.Request[pb.RunEvalRequest]) (*connect.Response[pb.RunEvalResponse], error) {
-	if s.App == nil || s.App.EvalService == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, errors.New("eval service unavailable"))
-	}
-	if s.App.Executor == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, errors.New("eval runner requires the local executor"))
-	}
-	tid := tenant.FromContext(ctx)
-	set, err := s.App.EvalService.GetSet(req.Msg.GetSetId())
-	if err != nil {
-		if errors.Is(err, evalmodel.ErrEvalSetNotFound) {
-			return nil, connect.NewError(connect.CodeNotFound, err)
-		}
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	domainID := req.Msg.GetDomainId()
-	if domainID == "" {
-		domainID = set.DomainID
-	}
-	domain, err := s.App.DomainService.Get(tid, domainID)
-	if err != nil {
-		return nil, mapDomainError(err)
-	}
-	run := &evalmodel.EvalRun{
-		ID:            uuid.NewString(),
-		EvalSetID:     set.ID,
-		DomainID:      domainID,
+	out, err := s.Handlers.RunEval(ctx, handler.RunEvalInput{
+		TenantID:      tenant.FromContext(ctx),
+		SetID:         req.Msg.GetSetId(),
+		DomainID:      req.Msg.GetDomainId(),
 		DomainVersion: req.Msg.GetDomainVersion(),
 		Orchestration: req.Msg.GetOrchestration(),
 		BaselineRunID: req.Msg.GetBaselineRunId(),
-		State:         "running",
-		TotalCases:    len(set.Cases),
+	})
+	if err != nil {
+		return nil, mapEvalError(err)
 	}
-	if run.DomainVersion == "" {
-		run.DomainVersion = domain.Version
-	}
-	if run.Orchestration == "" && domain.Spec != nil {
-		run.Orchestration = string(domain.Spec.Harness.Session.Mode)
-	}
-	if err := s.App.EvalService.CreateRun(run); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-
-	budget := 0.0
-	if domain.Spec != nil {
-		budget = domain.Spec.Harness.Policy.Budget.MaxCostUSD
-	}
-	traceSvc := s.App.TraceService
-	costFn := func(sessionID string) float64 {
-		if traceSvc == nil {
-			return 0
-		}
-		agg, err := traceSvc.Aggregate([]string{sessionID})
-		if err != nil {
-			return 0
-		}
-		return agg.TotalCostUSD
-	}
-
-	var er evalrunner.EvalRunner
-	if s.App.WorkerService != nil {
-		sessionCmds := commands.NewSessionCommands(s.App.SessionService, s.App.DomainService, s.App.WorkerService, s.App.Executor, s.App.State)
-		er = evalrunner.NewWorkerPoolRunner(sessionCmds, s.App.SessionService, s.App.EvalService, costFn)
-	} else if s.App.Executor != nil {
-		er = evalrunner.New(s.App.Executor, s.App.EvalService, evalrunner.WithCostFunc(costFn))
-	} else {
-		return nil, connect.NewError(connect.CodeUnavailable, errors.New("eval runner requires a worker pool or local executor"))
-	}
-
-	go func() {
-		_ = er.Run(ctx, run, set, domain.Spec, budget)
-	}()
-
-	return connect.NewResponse(&pb.RunEvalResponse{EvalRunId: run.ID}), nil
+	return connect.NewResponse(&pb.RunEvalResponse{EvalRunId: out.Run.RunID}), nil
 }
 
 func (s *ConnectServer) GetEvalRun(ctx context.Context, req *connect.Request[pb.GetEvalRunRequest]) (*connect.Response[pb.GetEvalRunResponse], error) {
-	if s.App == nil || s.App.EvalService == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, errors.New("eval service unavailable"))
-	}
-	run, err := s.App.EvalService.GetRun(req.Msg.GetEvalRunId())
+	out, err := s.Handlers.GetEvalRun(ctx, handler.GetEvalRunInput{
+		TenantID: tenant.FromContext(ctx),
+		RunID:    req.Msg.GetEvalRunId(),
+	})
 	if err != nil {
-		if errors.Is(err, evalmodel.ErrEvalRunNotFound) {
-			return nil, connect.NewError(connect.CodeNotFound, err)
-		}
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, mapEvalError(err)
 	}
-	return connect.NewResponse(&pb.GetEvalRunResponse{Result: evalRunToProto(run)}), nil
+	return connect.NewResponse(&pb.GetEvalRunResponse{Result: evalRunDetailToProto(out.Run)}), nil
 }
 
 func (s *ConnectServer) ListEvalRuns(ctx context.Context, req *connect.Request[pb.ListEvalRunsRequest]) (*connect.Response[pb.ListEvalRunsResponse], error) {
-	if s.App == nil || s.App.EvalService == nil {
-		return nil, connect.NewError(connect.CodeUnavailable, errors.New("eval service unavailable"))
-	}
-	runs, err := s.App.EvalService.RunsBySet(req.Msg.GetSetId())
+	out, err := s.Handlers.ListEvalRuns(ctx, handler.ListEvalRunsInput{
+		TenantID: tenant.FromContext(ctx),
+		SetID:    req.Msg.GetSetId(),
+		Limit:    int(req.Msg.GetLimit()),
+		Offset:   int(req.Msg.GetOffset()),
+	})
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, mapEvalError(err)
 	}
-	resp := &pb.ListEvalRunsResponse{Total: int32(len(runs))}
-	for _, run := range runs {
-		resp.Results = append(resp.Results, evalRunToProto(&run))
+	resp := &pb.ListEvalRunsResponse{Total: int32(out.Runs.Total)}
+	for _, run := range out.Runs.Items {
+		resp.Results = append(resp.Results, evalRunItemToProto(run))
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -439,16 +364,16 @@ func mapDomainError(err error) error {
 }
 
 func mapSessionError(err error) error {
-	if errors.Is(err, sessionmodel.ErrSessionNotFound) {
+	if handler.IsSessionNotFound(err) {
 		return connect.NewError(connect.CodeNotFound, err)
 	}
-	if errors.Is(err, sessionmodel.ErrInvalidSession) {
+	if handler.IsInvalidSession(err) || handler.IsAlreadyTerminal(err) {
 		return connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	return connect.NewError(connect.CodeInternal, err)
 }
 
-func sessionToProto(sess *sessionmodel.Session) *pb.SessionStatus {
+func sessionDetailToProto(sess *viewmodel.SessionDetail) *pb.SessionStatus {
 	if sess == nil {
 		return nil
 	}
@@ -459,14 +384,14 @@ func sessionToProto(sess *sessionmodel.Session) *pb.SessionStatus {
 	}
 	var result string
 	if sess.Result != nil {
-		b, _ := json.Marshal(sess.Result.Output)
+		b, _ := json.Marshal(sess.Result)
 		result = string(b)
 	}
 	return &pb.SessionStatus{
 		SessionId:     sess.ID,
 		DomainId:      sess.DomainID,
 		DomainVersion: sess.DomainVersion,
-		State:         string(sess.State),
+		State:         sess.State,
 		Result:        result,
 		TraceId:       sess.ID,
 		StartedAtMs:   started,
@@ -474,32 +399,24 @@ func sessionToProto(sess *sessionmodel.Session) *pb.SessionStatus {
 	}
 }
 
-func workerCapabilities(info *pb.WorkerInfo) []string {
-	if info == nil || info.Capacity == nil {
-		return nil
+func sessionListItemToProto(sess viewmodel.SessionListItem) *pb.SessionStatus {
+	started := sess.StartedAt.UnixMilli()
+	var completed int64
+	if sess.CompletedAt != nil {
+		completed = sess.CompletedAt.UnixMilli()
 	}
-	c := info.Capacity
-	var caps []string
-	caps = append(caps, c.GetProviders()...)
-	caps = append(caps, c.GetModels()...)
-	caps = append(caps, c.GetSandboxRuntimes()...)
-	return caps
+	return &pb.SessionStatus{
+		SessionId:     sess.ID,
+		DomainId:      sess.DomainID,
+		DomainVersion: sess.DomainVersion,
+		State:         sess.State,
+		TraceId:       sess.ID,
+		StartedAtMs:   started,
+		CompletedAtMs: completed,
+	}
 }
 
-func hasAll(have, want []string) bool {
-	set := make(map[string]struct{}, len(have))
-	for _, h := range have {
-		set[h] = struct{}{}
-	}
-	for _, w := range want {
-		if _, ok := set[w]; !ok {
-			return false
-		}
-	}
-	return true
-}
-
-func observationToRuntime(obs *pb.Observation) runtime.Observation {
+func observationToRuntime(obs *pb.Observation) domain.Observation {
 	var payload, metadata map[string]any
 	if obs.GetPayload() != "" {
 		_ = json.Unmarshal([]byte(obs.GetPayload()), &payload)
@@ -507,7 +424,7 @@ func observationToRuntime(obs *pb.Observation) runtime.Observation {
 	if obs.GetMetadata() != "" {
 		_ = json.Unmarshal([]byte(obs.GetMetadata()), &metadata)
 	}
-	return runtime.Observation{
+	return domain.Observation{
 		Kind:      obs.GetKind(),
 		SessionID: obs.GetSessionId(),
 		DomainID:  obs.GetDomainId(),
@@ -521,24 +438,23 @@ func observationToRuntime(obs *pb.Observation) runtime.Observation {
 	}
 }
 
-func traceDetailToProto(d *model.TraceDetail) *pb.TraceRecord {
-	rec := traceSummaryToProto(d.TraceSummary)
+func traceDetailToProto(d *viewmodel.TraceDetail) *pb.TraceRecord {
+	if d == nil {
+		return nil
+	}
+	rec := &pb.TraceRecord{
+		TraceId:       d.TraceID,
+		SessionId:     d.SessionID,
+		DomainId:      d.DomainID,
+		DomainVersion: d.DomainVersion,
+	}
 	for _, o := range d.Observations {
-		rec.Observations = append(rec.Observations, observationRecordToProto(o))
+		rec.Observations = append(rec.Observations, observationItemToProto(o))
 	}
 	return rec
 }
 
-func traceSummaryToProto(s model.TraceSummary) *pb.TraceRecord {
-	return &pb.TraceRecord{
-		TraceId:       s.TraceID,
-		SessionId:     s.SessionID,
-		DomainId:      s.DomainID,
-		DomainVersion: s.DomainVersion,
-	}
-}
-
-func observationRecordToProto(o model.ObservationRecord) *pb.Observation {
+func observationItemToProto(o viewmodel.ObservationItem) *pb.Observation {
 	payload, _ := toJSONString(o.Payload)
 	metadata, _ := toJSONString(o.Metadata)
 	return &pb.Observation{
@@ -555,9 +471,27 @@ func observationRecordToProto(o model.ObservationRecord) *pb.Observation {
 	}
 }
 
-func evalRunToProto(run *evalmodel.EvalRun) *pb.EvalRunResult {
-	cases := make([]*pb.EvalCaseResult, 0, len(run.Results))
-	for _, r := range run.Results {
+func evalRunItemToProto(run viewmodel.EvalRunItem) *pb.EvalRunResult {
+	return &pb.EvalRunResult{
+		EvalRunId:     run.ID,
+		DomainId:      run.DomainID,
+		SetId:         run.EvalSetID,
+		State:         run.State,
+		Score:         run.Score,
+		Total:         int32(run.Total),
+		Passed:        int32(run.Passed),
+		TotalCostUsd:  run.TotalCostUSD,
+		DurationMs:    run.DurationMs,
+		BaselineRunId: run.BaselineRunID,
+	}
+}
+
+func evalRunDetailToProto(run *viewmodel.EvalRunDetail) *pb.EvalRunResult {
+	if run == nil {
+		return nil
+	}
+	cases := make([]*pb.EvalCaseResult, 0, len(run.Cases))
+	for _, r := range run.Cases {
 		actual, _ := toJSONString(r.Actual)
 		details, _ := toJSONString(r.Details)
 		cases = append(cases, &pb.EvalCaseResult{
@@ -575,13 +509,26 @@ func evalRunToProto(run *evalmodel.EvalRun) *pb.EvalRunResult {
 		SetId:         run.EvalSetID,
 		State:         run.State,
 		Score:         run.Score,
-		Total:         int32(run.TotalCases),
-		Passed:        int32(run.PassedCases),
+		Total:         int32(run.Total),
+		Passed:        int32(run.Passed),
 		TotalCostUsd:  run.TotalCostUSD,
 		DurationMs:    run.DurationMs,
 		BaselineRunId: run.BaselineRunID,
 		Cases:         cases,
 	}
+}
+
+func mapEvalError(err error) error {
+	if handler.IsEvalSetNotFound(err) {
+		return connect.NewError(connect.CodeNotFound, err)
+	}
+	if handler.IsEvalRunNotFound(err) {
+		return connect.NewError(connect.CodeNotFound, err)
+	}
+	if handler.IsDomainNotFound(err) {
+		return connect.NewError(connect.CodeNotFound, err)
+	}
+	return connect.NewError(connect.CodeInternal, err)
 }
 
 func toJSONString(v any) (string, error) {

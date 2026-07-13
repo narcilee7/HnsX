@@ -70,11 +70,12 @@ func newPolicyShowCmd(cfg *Config) *cobra.Command {
 		Short: "Show a policy",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := NewOutput(cfg.Output)
 			body, err := getJSON(cfg, "/api/v1/policies/"+args[0])
 			if err != nil {
 				return err
 			}
-			fmt.Println(string(body))
+			out.Line("%s", string(body))
 			return nil
 		},
 	}
@@ -101,7 +102,7 @@ func newPolicyApplyCmd(cfg *Config) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				fmt.Println(string(b))
+				out.Line("%s", string(b))
 				return nil
 			}
 			if !confirm {
@@ -182,11 +183,12 @@ func newSecretListCmd(cfg *Config) *cobra.Command {
 		Use:   "list",
 		Short: "List secrets (metadata only — values are never returned)",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := NewOutput(cfg.Output)
 			body, err := getJSON(cfg, "/api/v1/secrets")
 			if err != nil {
 				return err
 			}
-			fmt.Println(string(body))
+			out.Line("%s", string(body))
 			return nil
 		},
 	}
@@ -363,7 +365,7 @@ func newApprovalWatchCmd(cfg *Config) *cobra.Command {
 				}
 				body, err := getJSON(cfg, "/api/v1/approvals")
 				if err == nil {
-					fmt.Println(string(body))
+					out.Line("%s", string(body))
 				}
 				// 5s sleep with cancellation.
 				select {

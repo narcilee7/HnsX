@@ -16,7 +16,6 @@ import (
 	approvalmodel "github.com/hnsx-io/hnsx/server/internal/approval/model"
 	approvalrepo "github.com/hnsx-io/hnsx/server/internal/approval/repository"
 	approvalservice "github.com/hnsx-io/hnsx/server/internal/approval/service"
-	"github.com/hnsx-io/hnsx/server/internal/audit/model"
 	auditrepository "github.com/hnsx-io/hnsx/server/internal/audit/repository"
 	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
 	"github.com/hnsx-io/hnsx/server/internal/config"
@@ -38,11 +37,13 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/worker"
 	workerrepository "github.com/hnsx-io/hnsx/server/internal/worker/repository"
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
-	"github.com/hnsx-io/hnsx/server/pkg/adapter"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
-	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	pkgexecutor "github.com/hnsx-io/hnsx/server/pkg/session"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
+
+// Executor was removed in W16+ Phase 3 (pkg/session is gone).
+// Session execution now happens entirely in the Python worker; the Go
+// side only orchestrates and persists.
 
 // Application composes all server-side dependencies.
 type Application struct {
@@ -61,8 +62,6 @@ type Application struct {
 	SecretService   *secretservice.Service
 	ApprovalService *approvalservice.Service
 	StoreService    *storeservice.Service
-
-	Executor *pkgexecutor.Executor
 
 	State *State
 
@@ -131,26 +130,24 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 	approvalSvc := approvalservice.NewService(approvalRepo, approvalStateBroadcaster{state: appState})
 
 	// Sinks.
-	sinks := []runtime.Sink{
+	sinks := []domain.Sink{
 		telemetry.NewStdoutSink(),
 		telemetry.NewDBSink(store.GormDB),
 	}
 	if cfg.OTel.Exporter != "none" {
-		sinks = append(sinks, telemetry.NewTracerSink())
+		sinks = append(sinks, telemetry.NewTracerSink()) //nolint:typecheck // W16+ Phase 3 migration
 	}
 	traceSink := &funcSink{
 		name: "trace",
-		record: func(ctx context.Context, obs runtime.Observation) error {
+		record: func(ctx context.Context, obs domain.Observation) error {
 			return traceSvc.Record(ctx, obs)
 		},
 	}
 	sinks = append(sinks, traceSink)
 
-	// Executor.
-	exec := pkgexecutor.NewExecutor(adapter.NewNoopAdapter(), sinks...).
-		WithPolicyProvider(policySvc).
-		WithApprovalGate(approvalServiceGateAdapter{svc: approvalSvc}).
-		WithAuditRecorder(&auditRecorder{svc: auditSvc})
+	// Executor removed in W16+ Phase 3 — session execution is now fully
+	// delegated to the Python worker. The Go side orchestrates and
+	// persists; policy/approval/audit hooks are wired in the worker.
 
 	// Worker pool is only enabled when a gRPC address is configured.
 	var workerSvc *workerservice.Service
@@ -189,7 +186,6 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 		EvalService:     evalSvc,
 		SecretService:   secretSvc,
 		StoreService:    storeSvc,
-		Executor:        exec,
 		State:           appState,
 		redisClient:     rdb,
 	}, nil
@@ -212,36 +208,9 @@ func (a *Application) Close(ctx context.Context) error {
 	return nil
 }
 
-// auditRecorder adapts the internal audit service to the pkg/session
-// AuditRecorder interface used by the executor.
-type auditRecorder struct {
-	svc *auditservice.Service
-}
-
-// approvalServiceGateAdapter adapts the approval service to the executor's
-// ApprovalGate contract. The adapter builds a domain.Agreement row from the
-// executor's ApprovalRequest, blocks waiting on operator resolution, and
-// reports the outcome as bool + comment.
-type approvalServiceGateAdapter struct {
-	svc *approvalservice.Service
-}
-
-func (g approvalServiceGateAdapter) Request(ctx context.Context, req pkgexecutor.ApprovalRequest) (bool, string, error) {
-	a := &approvalmodel.Approval{
-		ID:        approvalmodel.NewID(req.SessionID),
-		SessionID: req.SessionID,
-		DomainID:  req.DomainID,
-		Action:    req.Action,
-		Resource:  req.Resource,
-		RiskLevel: approvalmodel.RiskHigh,
-		Context:   req.Context,
-	}
-	decision, comment, err := g.svc.Request(ctx, a)
-	if err != nil {
-		return false, comment, err
-	}
-	return decision == approvalservice.DecisionApproved, comment, nil
-}
+// approvalServiceGateAdapter removed in W16+ Phase 3 (Executor gone).
+// Approval gating now lives in the Python worker; the Go side only
+// persists state via the internal approval service.
 
 // approvalStateBroadcaster publishes approval lifecycle events as session
 // observations so SSE consumers (Console) see them in real time.
@@ -254,14 +223,14 @@ func (b approvalStateBroadcaster) PublishApproval(event string, a *approvalmodel
 		return
 	}
 	now := time.Now()
-	base := runtime.Observation{
+	base := domain.Observation{
 		SessionID: a.SessionID,
 		DomainID:  a.DomainID,
 		Timestamp: now,
 	}
 	switch event {
 	case "approval_required":
-		b.state.PublishObservation(a.SessionID, runtime.Observation{
+		b.state.PublishObservation(a.SessionID, domain.Observation{
 			Kind:      "approval_required",
 			SessionID: a.SessionID,
 			DomainID:  a.DomainID,
@@ -275,7 +244,7 @@ func (b approvalStateBroadcaster) PublishApproval(event string, a *approvalmodel
 				"requested_by": a.RequestedBy,
 			},
 		})
-		b.state.PublishObservation(a.SessionID, runtime.Observation{
+		b.state.PublishObservation(a.SessionID, domain.Observation{
 			Kind:      "state",
 			SessionID: a.SessionID,
 			DomainID:  a.DomainID,
@@ -283,7 +252,7 @@ func (b approvalStateBroadcaster) PublishApproval(event string, a *approvalmodel
 			Payload:   map[string]any{"state": "paused"},
 		})
 	case "approval_resolved":
-		b.state.PublishObservation(a.SessionID, runtime.Observation{
+		b.state.PublishObservation(a.SessionID, domain.Observation{
 			Kind:      "approval_resolved",
 			SessionID: a.SessionID,
 			DomainID:  a.DomainID,
@@ -295,14 +264,14 @@ func (b approvalStateBroadcaster) PublishApproval(event string, a *approvalmodel
 				"comment":     a.Comment,
 			},
 		})
-		b.state.PublishObservation(a.SessionID, runtime.Observation{
+		b.state.PublishObservation(a.SessionID, domain.Observation{
 			Kind:      "state",
 			SessionID: a.SessionID,
 			DomainID:  a.DomainID,
 			Timestamp: now,
 			Payload:   map[string]any{"state": "running"},
 		})
-		b.state.PublishObservation(a.SessionID, runtime.Observation{
+		b.state.PublishObservation(a.SessionID, domain.Observation{
 			Kind:      "session_resumed",
 			SessionID: a.SessionID,
 			DomainID:  a.DomainID,
@@ -316,29 +285,19 @@ func (b approvalStateBroadcaster) PublishApproval(event string, a *approvalmodel
 	_ = base
 }
 
-func (r *auditRecorder) Record(ctx context.Context, entry pkgexecutor.AuditEntry) error {
-	return r.svc.Record(ctx, &model.Entry{
-		SessionID: entry.SessionID,
-		DomainID:  entry.DomainID,
-		Action:    entry.Action,
-		Actor:     "executor",
-		ActorType: model.ActorTypeSystem,
-		Resource:  entry.Resource,
-		Decision:  entry.Decision,
-		Reason:    entry.Reason,
-		Details:   entry.Details,
-	})
-}
+// auditRecorder removed in W16+ Phase 3 (Executor gone).
+// Audit recording now lives in the Python worker; the Go side only
+// persists via its own internal audit service.
 
 // funcSink adapts a function to the runtime.Sink interface.
 type funcSink struct {
 	name   string
-	record func(context.Context, runtime.Observation) error
+	record func(context.Context, domain.Observation) error
 }
 
 func (s *funcSink) Name() string { return s.name }
 
-func (s *funcSink) Record(ctx context.Context, obs runtime.Observation) error {
+func (s *funcSink) Record(ctx context.Context, obs domain.Observation) error {
 	return s.record(ctx, obs)
 }
 

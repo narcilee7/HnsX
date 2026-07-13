@@ -209,3 +209,28 @@ func (s *Service) QueueLen() int {
 	}
 	return s.queue.Len()
 }
+
+// RecoverWorkers rebuilds the in-memory registry from the persisted worker
+// mirror. Workers that heartbeated recently are registered as healthy; stale
+// workers are left out and will be cleaned up by the stale-worker GC loop.
+func (s *Service) RecoverWorkers(ctx context.Context) error {
+	_ = ctx
+	if s.reg == nil || s.repo == nil {
+		return nil
+	}
+	workers, err := s.repo.All()
+	if err != nil {
+		return err
+	}
+	const maxAge = 60 * time.Second
+	now := time.Now().UTC()
+	for _, w := range workers {
+		if w == nil || w.Info == nil {
+			continue
+		}
+		if now.Sub(w.LastSeen) < maxAge {
+			_, _ = s.reg.Register(w.Info)
+		}
+	}
+	return nil
+}

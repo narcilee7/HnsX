@@ -9,16 +9,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/hnsx-io/hnsx/server/internal/app"
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
 	evalrepo "github.com/hnsx-io/hnsx/server/internal/evaluation/repository"
 	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
+	"github.com/hnsx-io/hnsx/server/pkg/handler"
 )
 
 func newEvalTestServer(t *testing.T) (*Server, *evalservice.Service) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	svc := evalservice.NewService(evalrepo.NewInMemoryRepository())
-	return &Server{EvalService: svc}, svc
+	application := &app.Application{EvalService: svc}
+	return &Server{EvalService: svc, Handlers: handler.New(application, nil)}, svc
 }
 
 func seedEvalSet(t *testing.T, svc *evalservice.Service) *evalmodel.EvalSet {

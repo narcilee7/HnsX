@@ -10,7 +10,7 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // Repository is the persistence contract for RegisteredDomain aggregates.
@@ -37,14 +37,14 @@ type Repository interface {
 	ListVersions(tenantID tenant.ID, id string) ([]VersionRecord, error)
 
 	// GetVersion returns the spec for a specific domain version.
-	GetVersion(tenantID tenant.ID, id, version string) (*spec.DomainSpec, error)
+	GetVersion(tenantID tenant.ID, id, version string) (*domain.DomainSpec, error)
 }
 
 // VersionRecord is a single persisted version of a DomainSpec.
 type VersionRecord struct {
 	Version   string
 	CreatedAt time.Time
-	Spec      *spec.DomainSpec
+	Spec      *domain.DomainSpec
 }
 
 // InMemoryRepository is a thread-safe in-memory implementation of Repository.
@@ -143,7 +143,7 @@ func (r *InMemoryRepository) ListVersions(tenantID tenant.ID, id string) ([]Vers
 }
 
 // GetVersion implements Repository.
-func (r *InMemoryRepository) GetVersion(tenantID tenant.ID, id, version string) (*spec.DomainSpec, error) {
+func (r *InMemoryRepository) GetVersion(tenantID tenant.ID, id, version string) (*domain.DomainSpec, error) {
 	_ = tenantID
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -155,7 +155,7 @@ func (r *InMemoryRepository) GetVersion(tenantID tenant.ID, id, version string) 
 	return nil, model.ErrDomainNotFound
 }
 
-func cloneSpec(s *spec.DomainSpec) *spec.DomainSpec {
+func cloneSpec(s *domain.DomainSpec) *domain.DomainSpec {
 	if s == nil {
 		return nil
 	}
@@ -163,7 +163,7 @@ func cloneSpec(s *spec.DomainSpec) *spec.DomainSpec {
 	if err != nil {
 		return nil
 	}
-	var out spec.DomainSpec
+	var out domain.DomainSpec
 	if err := json.Unmarshal(b, &out); err != nil {
 		return nil
 	}

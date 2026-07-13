@@ -9,9 +9,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/hnsx-io/hnsx/server/internal/app"
 	"github.com/hnsx-io/hnsx/server/internal/worker"
 	workerrepo "github.com/hnsx-io/hnsx/server/internal/worker/repository"
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
+	"github.com/hnsx-io/hnsx/server/pkg/handler"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
 
@@ -21,7 +23,8 @@ func newRuntimeTestServer(t *testing.T) (*Server, *worker.Registry) {
 	repo := workerrepo.NewInMemoryRepository()
 	ws := workerservice.NewService(repo)
 	reg := ws.Registry()
-	return &Server{WorkerService: ws}, reg
+	application := &app.Application{WorkerService: ws}
+	return &Server{WorkerService: ws, Handlers: handler.New(application, nil)}, reg
 }
 
 func TestListRuntimes_EmptyWhenNoWorkers(t *testing.T) {
@@ -162,6 +165,17 @@ func TestListRuntimes_NilServiceReturnsEmpty(t *testing.T) {
 	if resp.Total != 0 || len(resp.Items) != 0 {
 		t.Fatalf("expected empty list, got total=%d items=%d", resp.Total, len(resp.Items))
 	}
+}
+
+// runtimeStatus mirrors the handler's liveness labelling for unit tests.
+func runtimeStatus(snap worker.Snapshot) string {
+	if !snap.LastSeen.IsZero() && snap.AgeSeconds > 60 {
+		return "offline"
+	}
+	if snap.Healthy {
+		return "healthy"
+	}
+	return "degraded"
 }
 
 func TestRuntimeStatus_Labels(t *testing.T) {

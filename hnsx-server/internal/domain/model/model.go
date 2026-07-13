@@ -8,7 +8,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // Common errors returned by the domain service and repository.
@@ -27,7 +27,7 @@ type RegisteredDomain struct {
 	ID          string
 	Version     string
 	Description string
-	Spec        *spec.DomainSpec
+	Spec        *domain.DomainSpec
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }

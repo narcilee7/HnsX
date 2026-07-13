@@ -16,7 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // newDeployCmd implements `hnsx deploy [path]`.
@@ -365,7 +365,7 @@ func validateFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
 	}
-	if _, err := spec.Parse(data); err != nil {
+	if _, err := domain.Parse(data); err != nil {
 		return fmt.Errorf("parse %s: %w", path, err)
 	}
 	return nil

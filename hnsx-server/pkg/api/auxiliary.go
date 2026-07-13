@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,20 +10,13 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 
 	"github.com/hnsx-io/hnsx/server/internal/app/queries"
-	approvalmodel "github.com/hnsx-io/hnsx/server/internal/approval/model"
-	approvalrepo "github.com/hnsx-io/hnsx/server/internal/approval/repository"
-	auditmodel "github.com/hnsx-io/hnsx/server/internal/audit/model"
 	evalmodel "github.com/hnsx-io/hnsx/server/internal/evaluation/model"
-	evalrunner "github.com/hnsx-io/hnsx/server/internal/evaluation/runner"
 	policymodel "github.com/hnsx-io/hnsx/server/internal/policy/model"
-	secmodel "github.com/hnsx-io/hnsx/server/internal/secret/model"
-	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	tracemodel "github.com/hnsx-io/hnsx/server/internal/trace/model"
-	workerpkg "github.com/hnsx-io/hnsx/server/internal/worker"
+	"github.com/hnsx-io/hnsx/server/pkg/handler"
+	viewmodel "github.com/hnsx-io/hnsx/server/pkg/handler/viewmodel"
 )
 
 // TemplateIndex is the shape of the template market index YAML
@@ -167,8 +159,8 @@ func (s *Server) ListTraces(c *gin.Context) {
 	from, hasFrom := parseTimeQuery(c.Query("from"))
 	to, hasTo := parseTimeQuery(c.Query("to"))
 
-	filter := tracemodel.TraceListFilter{
-		TenantID:  string(tenantFromGin(c)),
+	in := handler.ListTracesInput{
+		TenantID:  tenantFromGin(c),
 		DomainID:  c.Query("domain"),
 		SessionID: c.Query("session"),
 		AgentID:   c.Query("agent"),
@@ -176,10 +168,10 @@ func (s *Server) ListTraces(c *gin.Context) {
 		Offset:    offset,
 	}
 	if hasFrom {
-		filter.From = from
+		in.From = from
 	}
 	if hasTo {
-		filter.To = to
+		in.To = to
 	}
 
 	if s.TraceService == nil {
@@ -191,20 +183,41 @@ func (s *Server) ListTraces(c *gin.Context) {
 		})
 		return
 	}
-	res, err := s.TraceService.ListSummaries(filter)
+	out, err := s.Handlers.ListTraces(c.Request.Context(), in)
 	if err != nil {
+		if handler.IsTraceNotFound(err) {
+			writeError(c, &APIError{Code: "TRACE_NOT_FOUND", Message: err.Error()})
+			return
+		}
 		writeError(c, NewInternal(err))
 		return
 	}
-	out := make([]map[string]any, 0, len(res.Summaries))
-	for _, sum := range res.Summaries {
-		out = append(out, traceSummaryToJSON(sum))
+
+	items := make([]map[string]any, 0, len(out.Traces.Items))
+	for _, sum := range out.Traces.Items {
+		items = append(items, map[string]any{
+			"trace_id":          sum.TraceID,
+			"session_id":        sum.SessionID,
+			"domain_id":         sum.DomainID,
+			"domain_version":    sum.DomainVersion,
+			"status":            sum.Status,
+			"started_at":        formatTimePtr(sum.StartedAt),
+			"completed_at":      formatTimePtr(sum.CompletedAt),
+			"duration_ms":       sum.DurationMs,
+			"observation_count": sum.ObservationCount,
+			"total_cost_usd":    sum.TotalCostUSD,
+			"prompt_tokens":     sum.TotalPromptTokens,
+			"completion_tokens": sum.TotalCompletionTokens,
+			"agent_invocations": sum.AgentInvocations,
+			"tool_invocations":  sum.ToolInvocations,
+			"created_at":        queries.FormatTimeValue(sum.CreatedAt),
+		})
 	}
 	writeJSON(c, http.StatusOK, map[string]any{
-		"items":  out,
-		"total":  res.Total,
-		"limit":  limit,
-		"offset": offset,
+		"items":  items,
+		"total":  out.Traces.Total,
+		"limit":  out.Traces.Limit,
+		"offset": out.Traces.Offset,
 	})
 }
 
@@ -213,16 +226,19 @@ func (s *Server) ListTraces(c *gin.Context) {
 // stable TRACE_NOT_FOUND code when the trace_id has no observations.
 func (s *Server) GetTrace(c *gin.Context) {
 	id := c.Param("traceId")
-	if s.TraceService == nil {
+	if s.TraceService == nil || s.Handlers == nil {
 		writeError(c, &APIError{
 			Code:    "TRACE_NOT_FOUND",
 			Message: fmt.Sprintf("trace '%s' not found", id),
 		})
 		return
 	}
-	detail, err := s.TraceService.Detail(id)
+	out, err := s.Handlers.GetTrace(c.Request.Context(), handler.GetTraceInput{
+		TenantID: tenantFromGin(c),
+		TraceID:  id,
+	})
 	if err != nil {
-		if errors.Is(err, tracemodel.ErrTraceNotFound) {
+		if handler.IsTraceNotFound(err) {
 			writeError(c, &APIError{
 				Code:    "TRACE_NOT_FOUND",
 				Message: fmt.Sprintf("trace '%s' not found", id),
@@ -233,6 +249,7 @@ func (s *Server) GetTrace(c *gin.Context) {
 		return
 	}
 
+	detail := out.Trace
 	observations := make([]map[string]any, 0, len(detail.Observations))
 	for _, rec := range detail.Observations {
 		observations = append(observations, observationToMap(rec))
@@ -257,26 +274,6 @@ func (s *Server) GetTrace(c *gin.Context) {
 	})
 }
 
-func traceSummaryToJSON(sum tracemodel.TraceSummary) map[string]any {
-	out := map[string]any{
-		"trace_id":          sum.TraceID,
-		"session_id":        sum.SessionID,
-		"domain_id":         sum.DomainID,
-		"domain_version":    sum.DomainVersion,
-		"status":            sum.Status,
-		"started_at":        formatTimePtr(sum.StartedAt),
-		"completed_at":      formatTimePtr(sum.CompletedAt),
-		"duration_ms":       sum.DurationMs,
-		"observation_count": sum.ObservationCount,
-		"total_cost_usd":    sum.TotalCostUSD,
-		"prompt_tokens":     sum.TotalPromptTokens,
-		"completion_tokens": sum.TotalCompletionTokens,
-		"agent_invocations": sum.AgentInvocations,
-		"tool_invocations":  sum.ToolInvocations,
-	}
-	return out
-}
-
 func formatTimePtr(t time.Time) any {
 	if t.IsZero() {
 		return nil
@@ -295,27 +292,17 @@ func (s *Server) ListApprovals(c *gin.Context) {
 		})
 		return
 	}
-	filter := approvalrepo.ListFilter{
+	out, err := s.Handlers.ListApprovals(c.Request.Context(), handler.ListApprovalsInput{
+		TenantID:  tenantFromGin(c),
 		DomainID:  c.Query("domain"),
 		SessionID: c.Query("session"),
 		Status:    c.Query("status"),
-	}
-	if filter.Status == "" {
-		filter.Status = string(approvalmodel.StatusPending)
-	}
-	items, err := s.ApprovalService.List(filter)
+	})
 	if err != nil {
-		writeError(c, NewInternal(err))
+		writeError(c, mapApprovalError(err))
 		return
 	}
-	out := make([]map[string]any, 0, len(items))
-	for _, it := range items {
-		out = append(out, approvalItemToJSON(it))
-	}
-	writeJSON(c, http.StatusOK, map[string]any{
-		"items": out,
-		"total": len(out),
-	})
+	writeJSON(c, http.StatusOK, out.Approvals)
 }
 
 // GetApproval handles GET /api/v1/approvals/:id — returns the full
@@ -328,19 +315,15 @@ func (s *Server) GetApproval(c *gin.Context) {
 		})
 		return
 	}
-	a, err := s.ApprovalService.Get(c.Param("id"))
+	out, err := s.Handlers.GetApproval(c.Request.Context(), handler.GetApprovalInput{
+		TenantID: tenantFromGin(c),
+		ID:       c.Param("id"),
+	})
 	if err != nil {
-		if errors.Is(err, approvalmodel.ErrApprovalNotFound) {
-			writeError(c, &APIError{
-				Code:    "APPROVAL_NOT_FOUND",
-				Message: err.Error(),
-			})
-			return
-		}
-		writeError(c, NewInternal(err))
+		writeError(c, mapApprovalError(err))
 		return
 	}
-	writeJSON(c, http.StatusOK, approvalToJSON(a))
+	writeJSON(c, http.StatusOK, out.Approval)
 }
 
 // ApproveApproval handles POST /api/v1/approvals/:id/approve.
@@ -352,23 +335,25 @@ func (s *Server) ApproveApproval(c *gin.Context) {
 		})
 		return
 	}
-	id := c.Param("id")
-	var body approvalDecisionBody
+	var body struct {
+		ReviewedBy string `json:"reviewed_by"`
+		Comment    string `json:"comment"`
+	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		writeError(c, NewInvalidRequest("invalid request body"))
 		return
 	}
-	reviewer := body.ReviewedBy
-	if reviewer == "" {
-		reviewer = "operator"
-	}
-	got, err := s.ApprovalService.Approve(id, reviewer, body.Comment)
+	out, err := s.Handlers.ApproveApproval(c.Request.Context(), handler.ApproveApprovalInput{
+		TenantID:   tenantFromGin(c),
+		ID:         c.Param("id"),
+		ReviewedBy: body.ReviewedBy,
+		Comment:    body.Comment,
+	})
 	if err != nil {
-		s.writeApprovalDecisionError(c, err)
+		writeError(c, mapApprovalError(err))
 		return
 	}
-	s.recordApprovalAudit(c, got, "approved", reviewer, body.Comment)
-	writeJSON(c, http.StatusOK, approvalToJSON(got))
+	writeJSON(c, http.StatusOK, out.Approval)
 }
 
 // RejectApproval handles POST /api/v1/approvals/:id/reject.
@@ -380,39 +365,25 @@ func (s *Server) RejectApproval(c *gin.Context) {
 		})
 		return
 	}
-	id := c.Param("id")
-	var body approvalDecisionBody
+	var body struct {
+		ReviewedBy string `json:"reviewed_by"`
+		Comment    string `json:"comment"`
+	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		writeError(c, NewInvalidRequest("invalid request body"))
 		return
 	}
-	reviewer := body.ReviewedBy
-	if reviewer == "" {
-		reviewer = "operator"
-	}
-	got, err := s.ApprovalService.Reject(id, reviewer, body.Comment)
+	out, err := s.Handlers.RejectApproval(c.Request.Context(), handler.RejectApprovalInput{
+		TenantID:   tenantFromGin(c),
+		ID:         c.Param("id"),
+		ReviewedBy: body.ReviewedBy,
+		Comment:    body.Comment,
+	})
 	if err != nil {
-		s.writeApprovalDecisionError(c, err)
+		writeError(c, mapApprovalError(err))
 		return
 	}
-	s.recordApprovalAudit(c, got, "rejected", reviewer, body.Comment)
-	writeJSON(c, http.StatusOK, approvalToJSON(got))
-}
-
-type approvalDecisionBody struct {
-	ReviewedBy string `json:"reviewed_by"`
-	Comment    string `json:"comment"`
-}
-
-type createApprovalBody struct {
-	ID          string         `json:"id"`
-	SessionID   string         `json:"session_id"`
-	DomainID    string         `json:"domain_id"`
-	Action      string         `json:"action"`
-	Resource    string         `json:"resource"`
-	RiskLevel   string         `json:"risk_level"`
-	Context     map[string]any `json:"context"`
-	RequestedBy string         `json:"requested_by"`
+	writeJSON(c, http.StatusOK, out.Approval)
 }
 
 // CreateApproval handles POST /api/v1/approvals.
@@ -425,119 +396,37 @@ func (s *Server) CreateApproval(c *gin.Context) {
 		})
 		return
 	}
-	var body createApprovalBody
+	var body struct {
+		ID          string         `json:"id"`
+		SessionID   string         `json:"session_id"`
+		DomainID    string         `json:"domain_id"`
+		Action      string         `json:"action"`
+		Resource    string         `json:"resource"`
+		RiskLevel   string         `json:"risk_level"`
+		Context     map[string]any `json:"context"`
+		RequestedBy string         `json:"requested_by"`
+	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		writeError(c, NewInvalidRequest("invalid request body"))
 		return
 	}
-	if body.ID == "" {
-		body.ID = approvalmodel.NewID(body.SessionID)
-	}
-	risk := approvalmodel.RiskLevel(body.RiskLevel)
-	if risk == "" {
-		risk = approvalmodel.RiskHigh
-	}
-	a := &approvalmodel.Approval{
+	out, err := s.Handlers.CreateApproval(c.Request.Context(), handler.CreateApprovalInput{
+		TenantID:    tenantFromGin(c),
 		ID:          body.ID,
 		SessionID:   body.SessionID,
 		DomainID:    body.DomainID,
 		Action:      body.Action,
 		Resource:    body.Resource,
-		RiskLevel:   risk,
+		RiskLevel:   body.RiskLevel,
 		Context:     body.Context,
 		RequestedBy: body.RequestedBy,
-	}
-	if err := s.ApprovalService.Create(a); err != nil {
-		writeError(c, NewInternal(err))
+	})
+	if err != nil {
+		writeError(c, mapApprovalError(err))
 		return
 	}
-	c.Header("Location", "/api/v1/approvals/"+a.ID)
-	writeJSON(c, http.StatusCreated, approvalToJSON(a))
-}
-
-// writeApprovalDecisionError centralizes the 404 / 409 mapping so the
-// approve and reject handlers stay symmetric.
-func (s *Server) writeApprovalDecisionError(c *gin.Context, err error) {
-	if errors.Is(err, approvalmodel.ErrApprovalNotFound) {
-		writeError(c, &APIError{
-			Code:    "APPROVAL_NOT_FOUND",
-			Message: err.Error(),
-		})
-		return
-	}
-	if errors.Is(err, approvalmodel.ErrAlreadyResolved) {
-		writeError(c, &APIError{
-			Code:    "APPROVAL_ALREADY_RESOLVED",
-			Message: err.Error(),
-		})
-		return
-	}
-	writeError(c, NewInternal(err))
-}
-
-// recordApprovalAudit writes an immutable audit row alongside each
-// approval decision so the AuditLog can attribute human-gate changes.
-func (s *Server) recordApprovalAudit(c *gin.Context, a *approvalmodel.Approval, decision, reviewer, comment string) {
-	if s.AuditService == nil {
-		return
-	}
-	entry := auditmodel.Entry{
-		SessionID: a.SessionID,
-		DomainID:  a.DomainID,
-		Action:    "approval_decision",
-		Actor:     reviewer,
-		ActorType: auditmodel.ActorTypeUser,
-		Resource:  "approval:" + a.ID,
-		Decision:  decision,
-		Reason:    comment,
-		Details: map[string]any{
-			"approval_id": a.ID,
-			"action":      a.Action,
-			"resource":    a.Resource,
-			"risk_level":  a.RiskLevel,
-		},
-	}
-	_ = s.AuditService.Record(c.Request.Context(), &entry)
-}
-
-func approvalItemToJSON(it approvalmodel.ListItem) map[string]any {
-	return map[string]any{
-		"id":           it.ID,
-		"session_id":   it.SessionID,
-		"domain_id":    it.DomainID,
-		"action":       it.Action,
-		"resource":     it.Resource,
-		"risk_level":   it.RiskLevel,
-		"status":       it.Status,
-		"requested_by": it.RequestedBy,
-		"created_at":   it.CreatedAt,
-		"updated_at":   it.UpdatedAt,
-	}
-}
-
-func approvalToJSON(a *approvalmodel.Approval) map[string]any {
-	if a == nil {
-		return nil
-	}
-	out := map[string]any{
-		"id":           a.ID,
-		"session_id":   a.SessionID,
-		"domain_id":    a.DomainID,
-		"action":       a.Action,
-		"resource":     a.Resource,
-		"risk_level":   a.RiskLevel,
-		"context":      a.Context,
-		"status":       a.Status,
-		"requested_by": a.RequestedBy,
-		"reviewed_by":  a.ReviewedBy,
-		"comment":      a.Comment,
-		"created_at":   a.CreatedAt,
-		"updated_at":   a.UpdatedAt,
-	}
-	if a.ResolvedAt != nil {
-		out["resolved_at"] = *a.ResolvedAt
-	}
-	return out
+	c.Header("Location", out.Location)
+	writeJSON(c, http.StatusCreated, out.Approval)
 }
 
 // ListEvalSets handles GET /api/v1/evals.
@@ -783,13 +672,19 @@ func (s *Server) ListEvalRuns(c *gin.Context) {
 		return
 	}
 
-	runs, err := s.EvalService.RunsBySet(id)
+	out, err := s.Handlers.ListEvalRuns(c.Request.Context(), handler.ListEvalRunsInput{
+		TenantID: tenantFromGin(c),
+		SetID:    id,
+		Limit:    limit,
+		Offset:   offset,
+	})
 	if err != nil {
-		writeError(c, NewInternal(err))
+		writeError(c, mapEvalError(err))
 		return
 	}
 
-	total := len(runs)
+	total := out.Runs.Total
+	items := out.Runs.Items
 	if offset > total {
 		offset = total
 	}
@@ -797,29 +692,14 @@ func (s *Server) ListEvalRuns(c *gin.Context) {
 	if end > total {
 		end = total
 	}
-	runs = runs[offset:end]
-
-	out := make([]map[string]any, 0, len(runs))
-	for _, r := range runs {
-		out = append(out, map[string]any{
-			"id":             r.ID,
-			"eval_set_id":    r.EvalSetID,
-			"domain_id":      r.DomainID,
-			"domain_version": r.DomainVersion,
-			"orchestration":  r.Orchestration,
-			"state":          r.State,
-			"score":          r.Score,
-			"total_cases":    r.TotalCases,
-			"passed_cases":   r.PassedCases,
-			"total_cost_usd": r.TotalCostUSD,
-			"duration_ms":    r.DurationMs,
-			"created_at":     queries.FormatTimeValue(r.CreatedAt),
-			"completed_at":   queries.FormatTime(r.CompletedAt),
-		})
+	if offset < len(items) {
+		items = items[offset:end]
+	} else {
+		items = nil
 	}
 
 	writeJSON(c, http.StatusOK, map[string]any{
-		"items":  out,
+		"items":  items,
 		"total":  total,
 		"limit":  limit,
 		"offset": offset,
@@ -837,8 +717,7 @@ func (s *Server) RunEval(c *gin.Context) {
 		return
 	}
 
-	set, err := s.EvalService.GetSet(id)
-	if err != nil {
+	if _, err := s.EvalService.GetSet(id); err != nil {
 		if errors.Is(err, evalmodel.ErrEvalSetNotFound) {
 			writeError(c, &APIError{
 				Code:    "EVAL_SET_NOT_FOUND",
@@ -850,68 +729,19 @@ func (s *Server) RunEval(c *gin.Context) {
 		return
 	}
 
-	_, domain, ok := s.Queries.GetDomain(tenantFromGin(c), set.DomainID)
-	if !ok {
-		writeError(c, NewDomainNotFound(set.DomainID))
+	out, err := s.Handlers.RunEval(c.Request.Context(), handler.RunEvalInput{
+		TenantID: tenantFromGin(c),
+		SetID:    id,
+	})
+	if err != nil {
+		writeError(c, mapEvalError(err))
 		return
 	}
 
-	run := &evalmodel.EvalRun{
-		ID:            uuid.NewString(),
-		EvalSetID:     set.ID,
-		DomainID:      set.DomainID,
-		DomainVersion: domain.Version,
-		Orchestration: string(domain.Spec.Harness.Session.Mode),
-		State:         "running",
-		TotalCases:    len(set.Cases),
-	}
-	if err := s.EvalService.CreateRun(run); err != nil {
-		writeError(c, NewInternal(err))
-		return
-	}
-
-	// The eval runner dispatches each case as a session. Prefer the worker pool
-	// when available; fall back to the local executor for single-process tests.
-	specForRun := domain.Spec
-	budget := 0.0
-	if specForRun != nil {
-		budget = specForRun.Harness.Policy.Budget.MaxCostUSD
-	}
-	traceSvc := s.TraceService
-	costFn := func(sessionID string) float64 {
-		if traceSvc == nil {
-			return 0
-		}
-		agg, err := traceSvc.Aggregate([]string{sessionID})
-		if err != nil {
-			return 0
-		}
-		return agg.TotalCostUSD
-	}
-
-	var er evalrunner.EvalRunner
-	if s.WorkerService != nil && s.SessionCommands != nil {
-		er = evalrunner.NewWorkerPoolRunner(s.SessionCommands, s.App.SessionService, s.EvalService, costFn)
-	} else if s.Executor != nil {
-		er = evalrunner.New(s.Executor, s.EvalService, evalrunner.WithCostFunc(costFn))
-	} else {
-		writeError(c, &APIError{
-			Code:    "ADAPTER_NOT_IMPLEMENTED",
-			Message: "eval runner requires a worker pool or local executor",
-		})
-		return
-	}
-
-	tenantID := tenantFromGin(c)
-	go func() {
-		ctx := tenant.NewContext(context.Background(), tenantID)
-		_ = er.Run(ctx, run, set, specForRun, budget)
-	}()
-
-	c.Header("Location", fmt.Sprintf("/api/v1/evals/%s/runs/%s", set.ID, run.ID))
+	c.Header("Location", fmt.Sprintf("/api/v1/evals/%s/runs/%s", id, out.Run.RunID))
 	writeJSON(c, http.StatusAccepted, map[string]any{
-		"run_id": run.ID,
-		"state":  "running",
+		"run_id": out.Run.RunID,
+		"state":  out.Run.State,
 	})
 }
 
@@ -926,48 +756,44 @@ func (s *Server) GetEvalRun(c *gin.Context) {
 		return
 	}
 
-	run, err := s.EvalService.GetRun(runID)
+	out, err := s.Handlers.GetEvalRun(c.Request.Context(), handler.GetEvalRunInput{
+		TenantID: tenantFromGin(c),
+		RunID:    runID,
+	})
 	if err != nil {
-		if errors.Is(err, evalmodel.ErrEvalRunNotFound) {
-			writeError(c, &APIError{
-				Code:    "EVAL_RUN_NOT_FOUND",
-				Message: err.Error(),
-			})
-			return
-		}
-		writeError(c, NewInternal(err))
+		writeError(c, mapEvalError(err))
 		return
 	}
 
-	cases := make([]map[string]any, 0, len(run.Results))
-	for _, res := range run.Results {
+	run := out.Run
+	cases := make([]map[string]any, 0, len(run.Cases))
+	for _, res := range run.Cases {
 		cases = append(cases, map[string]any{
-			"case_id":     res.CaseID,
-			"session_id":  res.SessionID,
-			"score":       res.Score,
-			"passed":      res.Passed,
-			"actual":      res.Actual,
-			"details":     res.Details,
-			"duration_ms": res.DurationMs,
-			"cost_usd":    res.CostUSD,
+			"case_id":    res.CaseID,
+			"session_id": res.SessionID,
+			"score":      res.Score,
+			"passed":     res.Passed,
+			"actual":     res.Actual,
+			"details":    res.Details,
 		})
 	}
 
 	writeJSON(c, http.StatusOK, map[string]any{
-		"id":             run.ID,
-		"eval_set_id":    run.EvalSetID,
-		"domain_id":      run.DomainID,
-		"domain_version": run.DomainVersion,
-		"orchestration":  run.Orchestration,
-		"state":          run.State,
-		"score":          run.Score,
-		"total_cases":    run.TotalCases,
-		"passed_cases":   run.PassedCases,
-		"total_cost_usd": run.TotalCostUSD,
-		"duration_ms":    run.DurationMs,
-		"cases":          cases,
-		"created_at":     queries.FormatTimeValue(run.CreatedAt),
-		"completed_at":   queries.FormatTime(run.CompletedAt),
+		"id":              run.ID,
+		"eval_set_id":     run.EvalSetID,
+		"domain_id":       run.DomainID,
+		"domain_version":  run.DomainVersion,
+		"orchestration":   "",
+		"state":           run.State,
+		"score":           run.Score,
+		"total_cases":     run.Total,
+		"passed_cases":    run.Passed,
+		"total_cost_usd":  run.TotalCostUSD,
+		"duration_ms":     run.DurationMs,
+		"baseline_run_id": run.BaselineRunID,
+		"cases":           cases,
+		"created_at":      queries.FormatTimeValue(time.Time{}),
+		"completed_at":    "",
 	})
 }
 
@@ -989,15 +815,19 @@ func (s *Server) ListAudit(c *gin.Context) {
 		return
 	}
 
-	entries, total, err := s.AuditService.List(limit, offset)
+	out, err := s.Handlers.ListAudit(c.Request.Context(), handler.ListAuditInput{
+		TenantID: tenantFromGin(c),
+		Limit:    limit,
+		Offset:   offset,
+	})
 	if err != nil {
-		writeError(c, NewInternal(err))
+		writeError(c, mapAuditError(err))
 		return
 	}
 
-	out := make([]map[string]any, 0, len(entries))
-	for _, e := range entries {
-		out = append(out, map[string]any{
+	items := make([]map[string]any, 0, len(out.Entries.Items))
+	for _, e := range out.Entries.Items {
+		items = append(items, map[string]any{
 			"id":            e.ID,
 			"session_id":    e.SessionID,
 			"domain_id":     e.DomainID,
@@ -1014,60 +844,24 @@ func (s *Server) ListAudit(c *gin.Context) {
 	}
 
 	writeJSON(c, http.StatusOK, map[string]any{
-		"items":  out,
-		"total":  total,
-		"limit":  limit,
-		"offset": offset,
+		"items":  items,
+		"total":  out.Entries.Total,
+		"limit":  out.Entries.Limit,
+		"offset": out.Entries.Offset,
 	})
 }
 
 // GetMetrics handles GET /api/v1/metrics.
 func (s *Server) GetMetrics(c *gin.Context) {
-	domainFilter := c.Query("domain")
-	sessions := s.Queries.ListSessions(tenantFromGin(c))
-
-	total := 0
-	completed := 0
-	failed := 0
-	var totalDurationMs uint64
-	var sessionIDs []string
-	for _, sess := range sessions {
-		if domainFilter != "" && sess.DomainID != domainFilter {
-			continue
-		}
-		total++
-		switch sess.State {
-		case "completed":
-			completed++
-		case "failed":
-			failed++
-		}
-		totalDurationMs += durationMs(sess)
-		sessionIDs = append(sessionIDs, sess.ID)
-	}
-
-	var agg tracemodel.Aggregate
-	if s.TraceService != nil {
-		var err error
-		agg, err = s.TraceService.Aggregate(sessionIDs)
-		if err != nil {
-			writeError(c, NewInternal(err))
-			return
-		}
-	}
-
-	writeJSON(c, http.StatusOK, map[string]any{
-		"domain_id":          domainFilter,
-		"total_sessions":     total,
-		"completed_sessions": completed,
-		"failed_sessions":    failed,
-		"total_cost_usd":     agg.TotalCostUSD,
-		"avg_duration_ms":    avgDurationMs(totalDurationMs, total),
-		"agent_invocations":  agg.AgentInvocations,
-		"tool_invocations":   agg.ToolInvocations,
-		"prompt_tokens":      agg.TotalPromptTokens,
-		"completion_tokens":  agg.TotalCompletionTokens,
+	out, err := s.Handlers.GetMetrics(c.Request.Context(), handler.GetMetricsInput{
+		TenantID: tenantFromGin(c),
+		DomainID: c.Query("domain"),
 	})
+	if err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+	writeJSON(c, http.StatusOK, out.Metrics)
 }
 
 // ListRuntimes handles GET /api/v1/runtimes — returns every live runtime
@@ -1084,10 +878,16 @@ func (s *Server) ListRuntimes(c *gin.Context) {
 		})
 		return
 	}
-	snaps := s.WorkerService.List()
-	items := make([]map[string]any, 0, len(snaps))
-	for _, snap := range snaps {
-		items = append(items, runtimeSnapshotToJSON(snap))
+	out, err := s.Handlers.ListRuntimes(c.Request.Context(), handler.ListRuntimesInput{
+		TenantID: tenantFromGin(c),
+	})
+	if err != nil {
+		writeError(c, NewInternal(err))
+		return
+	}
+	items := make([]map[string]any, 0, len(out.Runtimes.Items))
+	for _, it := range out.Runtimes.Items {
+		items = append(items, runtimeItemToJSON(it))
 	}
 	writeJSON(c, http.StatusOK, map[string]any{
 		"items": items,
@@ -1095,69 +895,46 @@ func (s *Server) ListRuntimes(c *gin.Context) {
 	})
 }
 
-func runtimeSnapshotToJSON(snap workerpkg.Snapshot) map[string]any {
+func runtimeItemToJSON(it viewmodel.RuntimeListItem) map[string]any {
 	out := map[string]any{
-		"runtime_id":        snap.WorkerID,
-		"status":            runtimeStatus(snap),
-		"last_heartbeat_at": snap.LastSeen.UTC().Format(time.RFC3339Nano),
-		"age_seconds":       snap.AgeSeconds,
-		"healthy":           snap.Healthy,
+		"runtime_id":        it.RuntimeID,
+		"status":            it.Status,
+		"last_heartbeat_at": it.LastHeartbeatAt.UTC().Format(time.RFC3339Nano),
+		"age_seconds":       it.AgeSeconds,
+		"healthy":           it.Healthy,
 	}
-	if snap.Info == nil {
-		return out
+	if it.Version != "" {
+		out["version"] = it.Version
 	}
-	if snap.Info.Version != "" {
-		out["version"] = snap.Info.Version
+	if it.Region != "" {
+		out["region"] = it.Region
 	}
-	if snap.Info.Region != "" {
-		out["region"] = snap.Info.Region
+	if it.Hostname != "" {
+		out["hostname"] = it.Hostname
 	}
-	if snap.Info.Hostname != "" {
-		out["hostname"] = snap.Info.Hostname
+	if it.Pid != "" {
+		out["pid"] = it.Pid
 	}
-	if snap.Info.Pid != "" {
-		out["pid"] = snap.Info.Pid
+	if it.Capacity > 0 {
+		out["capacity"] = it.Capacity
 	}
-	if snap.Info.Capacity != nil {
-		if snap.Info.Capacity.MaxConcurrentSessions > 0 {
-			out["capacity"] = snap.Info.Capacity.MaxConcurrentSessions
-		}
-		if len(snap.Info.Capacity.Providers) > 0 {
-			out["capabilities"] = append([]string(nil), snap.Info.Capacity.Providers...)
-		}
-		if len(snap.Info.Capacity.Models) > 0 {
-			out["models"] = append([]string(nil), snap.Info.Capacity.Models...)
-		}
-		if len(snap.Info.Capacity.SandboxRuntimes) > 0 {
-			out["sandbox_runtimes"] = append([]string(nil), snap.Info.Capacity.SandboxRuntimes...)
-		}
+	if len(it.Capabilities) > 0 {
+		out["capabilities"] = append([]string(nil), it.Capabilities...)
 	}
-	if len(snap.Info.Labels) > 0 {
-		labels := make(map[string]string, len(snap.Info.Labels))
-		for k, v := range snap.Info.Labels {
+	if len(it.Models) > 0 {
+		out["models"] = append([]string(nil), it.Models...)
+	}
+	if len(it.SandboxRuntimes) > 0 {
+		out["sandbox_runtimes"] = append([]string(nil), it.SandboxRuntimes...)
+	}
+	if len(it.Labels) > 0 {
+		labels := make(map[string]string, len(it.Labels))
+		for k, v := range it.Labels {
 			labels[k] = v
 		}
 		out["labels"] = labels
 	}
 	return out
-}
-
-// runtimeStatus maps the registry's liveness signal into the wire-level
-// status vocabulary that the UI expects:
-//   - healthy       : last heartbeat within 30s
-//   - degraded      : older but not yet evicted
-//   - offline       : beyond the soft-eviction threshold (60s)
-//
-// Note: the registry's EvictStale policy decides when a worker is
-// actually removed; this function only labels, it does not mutate state.
-func runtimeStatus(snap workerpkg.Snapshot) string {
-	if !snap.LastSeen.IsZero() && snap.AgeSeconds > 60 {
-		return "offline"
-	}
-	if snap.Healthy {
-		return "healthy"
-	}
-	return "degraded"
 }
 
 // ListSecrets handles GET /api/v1/secrets. The wire payload contains no
@@ -1171,14 +948,14 @@ func (s *Server) ListSecrets(c *gin.Context) {
 		})
 		return
 	}
-	items, err := s.SecretService.List()
+	out, err := s.Handlers.ListSecrets(c.Request.Context(), handler.ListSecretsInput{})
 	if err != nil {
-		writeError(c, NewInternal(err))
+		writeError(c, mapSecretError(err))
 		return
 	}
-	out := make([]map[string]any, 0, len(items))
-	for _, it := range items {
-		out = append(out, map[string]any{
+	items := make([]map[string]any, 0, len(out.Secrets.Items))
+	for _, it := range out.Secrets.Items {
+		items = append(items, map[string]any{
 			"name":        it.Name,
 			"description": it.Description,
 			"kind":        it.Kind,
@@ -1188,18 +965,28 @@ func (s *Server) ListSecrets(c *gin.Context) {
 		})
 	}
 	writeJSON(c, http.StatusOK, map[string]any{
-		"items": out,
-		"total": len(out),
+		"items": items,
+		"total": len(items),
 	})
 }
 
-// secretWriteBody is the request shape for Create / Update. Both calls
-// accept a fresh plaintext value; the response never echoes it back.
-type secretWriteBody struct {
-	Name        string `json:"name"`
-	Value       string `json:"value"`
-	Description string `json:"description"`
-	Kind        string `json:"kind"`
+// GetSecret handles GET /api/v1/secrets/:id.
+func (s *Server) GetSecret(c *gin.Context) {
+	if s.SecretService == nil {
+		writeError(c, &APIError{
+			Code:    "SECRETS_UNAVAILABLE",
+			Message: "secret store is not configured on this server",
+		})
+		return
+	}
+	out, err := s.Handlers.GetSecret(c.Request.Context(), handler.GetSecretInput{
+		Name: c.Param("id"),
+	})
+	if err != nil {
+		writeError(c, mapSecretError(err))
+		return
+	}
+	writeJSON(c, http.StatusOK, out.Secret)
 }
 
 // CreateSecret handles POST /api/v1/secrets. The plaintext Value is
@@ -1213,31 +1000,27 @@ func (s *Server) CreateSecret(c *gin.Context) {
 		})
 		return
 	}
-	var body secretWriteBody
+	var body struct {
+		Name        string `json:"name"`
+		Value       string `json:"value"`
+		Description string `json:"description"`
+		Kind        string `json:"kind"`
+	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		writeError(c, NewInvalidRequest("invalid request body"))
 		return
 	}
-	if body.Name == "" || body.Value == "" {
-		writeError(c, NewInvalidRequest("name and value are required"))
-		return
-	}
-	sec := &secmodel.Secret{
+	out, err := s.Handlers.CreateSecret(c.Request.Context(), handler.CreateSecretInput{
 		Name:        body.Name,
+		Value:       body.Value,
 		Description: body.Description,
 		Kind:        body.Kind,
-		PlainValue:  body.Value,
-	}
-	if err := s.SecretService.Save(sec); err != nil {
-		writeError(c, NewInternal(err))
+	})
+	if err != nil {
+		writeError(c, mapSecretError(err))
 		return
 	}
-	writeJSON(c, http.StatusCreated, map[string]any{
-		"name":        sec.Name,
-		"description": sec.Description,
-		"kind":        sec.Kind,
-		"fingerprint": sec.Fingerprint,
-	})
+	writeJSON(c, http.StatusCreated, out.Secret)
 }
 
 // UpdateSecret handles PUT /api/v1/secrets/:id — replaces the value +
@@ -1251,32 +1034,27 @@ func (s *Server) UpdateSecret(c *gin.Context) {
 		})
 		return
 	}
-	id := c.Param("id")
-	var body secretWriteBody
+	var body struct {
+		Name        string `json:"name"`
+		Value       string `json:"value"`
+		Description string `json:"description"`
+		Kind        string `json:"kind"`
+	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		writeError(c, NewInvalidRequest("invalid request body"))
 		return
 	}
-	if body.Value == "" {
-		writeError(c, NewInvalidRequest("value is required for update"))
-		return
-	}
-	sec := &secmodel.Secret{
-		Name:        id,
+	out, err := s.Handlers.UpdateSecret(c.Request.Context(), handler.UpdateSecretInput{
+		Name:        c.Param("id"),
+		Value:       body.Value,
 		Description: body.Description,
 		Kind:        body.Kind,
-		PlainValue:  body.Value,
-	}
-	if err := s.SecretService.Save(sec); err != nil {
-		writeError(c, NewInternal(err))
+	})
+	if err != nil {
+		writeError(c, mapSecretError(err))
 		return
 	}
-	writeJSON(c, http.StatusOK, map[string]any{
-		"name":        sec.Name,
-		"description": sec.Description,
-		"kind":        sec.Kind,
-		"fingerprint": sec.Fingerprint,
-	})
+	writeJSON(c, http.StatusOK, out.Secret)
 }
 
 // DeleteSecret handles DELETE /api/v1/secrets/:id.
@@ -1288,8 +1066,10 @@ func (s *Server) DeleteSecret(c *gin.Context) {
 		})
 		return
 	}
-	if err := s.SecretService.Delete(c.Param("id")); err != nil {
-		writeError(c, NewInternal(err))
+	if err := s.Handlers.DeleteSecret(c.Request.Context(), handler.DeleteSecretInput{
+		Name: c.Param("id"),
+	}); err != nil {
+		writeError(c, mapSecretError(err))
 		return
 	}
 	c.AbortWithStatus(http.StatusNoContent)
@@ -1304,18 +1084,28 @@ func (s *Server) ListPolicies(c *gin.Context) {
 		})
 		return
 	}
-	items, err := s.PolicyService.List()
+	out, err := s.Handlers.ListPolicies(c.Request.Context(), handler.ListPoliciesInput{})
 	if err != nil {
-		writeError(c, NewInternal(err))
+		writeError(c, mapPolicyError(err))
 		return
 	}
-	out := make([]map[string]any, 0, len(items))
-	for _, it := range items {
-		out = append(out, policyItemToJSON(it))
+	items := make([]map[string]any, 0, len(out.Policies.Items))
+	for _, it := range out.Policies.Items {
+		items = append(items, map[string]any{
+			"id":           it.ID,
+			"name":         it.Name,
+			"description":  it.Description,
+			"bound_domain": it.BoundDomain,
+			"budget":       it.Budget,
+			"permissions":  it.Permissions,
+			"guardrails":   it.Guardrails,
+			"created_at":   it.CreatedAt,
+			"updated_at":   it.UpdatedAt,
+		})
 	}
 	writeJSON(c, http.StatusOK, map[string]any{
-		"items": out,
-		"total": len(out),
+		"items": items,
+		"total": len(items),
 	})
 }
 
@@ -1344,26 +1134,19 @@ func (s *Server) CreatePolicy(c *gin.Context) {
 		writeError(c, NewInvalidRequest("invalid request body"))
 		return
 	}
-	if body.ID == "" {
-		writeError(c, NewInvalidRequest("id is required"))
-		return
-	}
-	if body.Name == "" {
-		body.Name = body.ID
-	}
-	policy := &policymodel.Policy{
+	out, err := s.Handlers.CreatePolicy(c.Request.Context(), handler.CreatePolicyInput{
 		ID:          body.ID,
 		Name:        body.Name,
 		Description: body.Description,
 		Budget:      body.Budget,
 		Permissions: body.Permissions,
 		Guardrails:  body.Guardrails,
-	}
-	if err := s.PolicyService.CreateOrUpdate(policy); err != nil {
-		writeError(c, NewInternal(err))
+	})
+	if err != nil {
+		writeError(c, mapPolicyError(err))
 		return
 	}
-	writeJSON(c, http.StatusCreated, policyToJSON(policy))
+	writeJSON(c, http.StatusCreated, out.Policy)
 }
 
 // UpdatePolicy handles PUT /api/v1/policies/:id. Same body as Create.
@@ -1375,32 +1158,25 @@ func (s *Server) UpdatePolicy(c *gin.Context) {
 		})
 		return
 	}
-	id := c.Param("id")
 	var body policyWriteBody
 	if err := c.ShouldBindJSON(&body); err != nil {
 		writeError(c, NewInvalidRequest("invalid request body"))
 		return
 	}
-	if body.ID != "" && body.ID != id {
-		writeError(c, NewInvalidRequest("id in body must match id in url"))
-		return
-	}
-	policy := &policymodel.Policy{
-		ID:          id,
+	out, err := s.Handlers.UpdatePolicy(c.Request.Context(), handler.UpdatePolicyInput{
+		ID:          c.Param("id"),
+		BodyID:      body.ID,
 		Name:        body.Name,
 		Description: body.Description,
 		Budget:      body.Budget,
 		Permissions: body.Permissions,
 		Guardrails:  body.Guardrails,
-	}
-	if policy.Name == "" {
-		policy.Name = id
-	}
-	if err := s.PolicyService.CreateOrUpdate(policy); err != nil {
-		writeError(c, NewInternal(err))
+	})
+	if err != nil {
+		writeError(c, mapPolicyError(err))
 		return
 	}
-	writeJSON(c, http.StatusOK, policyToJSON(policy))
+	writeJSON(c, http.StatusOK, out.Policy)
 }
 
 // DeletePolicy handles DELETE /api/v1/policies/:id.
@@ -1412,15 +1188,10 @@ func (s *Server) DeletePolicy(c *gin.Context) {
 		})
 		return
 	}
-	if err := s.PolicyService.Delete(c.Param("id")); err != nil {
-		if errors.Is(err, policymodel.ErrPolicyNotFound) {
-			writeError(c, &APIError{
-				Code:    "POLICY_NOT_FOUND",
-				Message: err.Error(),
-			})
-			return
-		}
-		writeError(c, NewInternal(err))
+	if err := s.Handlers.DeletePolicy(c.Request.Context(), handler.DeletePolicyInput{
+		ID: c.Param("id"),
+	}); err != nil {
+		writeError(c, mapPolicyError(err))
 		return
 	}
 	c.AbortWithStatus(http.StatusNoContent)
@@ -1446,25 +1217,15 @@ func (s *Server) BindPolicy(c *gin.Context) {
 		writeError(c, NewInvalidRequest("invalid request body"))
 		return
 	}
-	if body.PolicyID == "" {
-		writeError(c, NewInvalidRequest("policy_id is required"))
-		return
-	}
-	if err := s.PolicyService.BindDomain(body.PolicyID, domainID); err != nil {
-		if errors.Is(err, policymodel.ErrPolicyNotFound) {
-			writeError(c, &APIError{
-				Code:    "POLICY_NOT_FOUND",
-				Message: err.Error(),
-			})
-			return
-		}
-		writeError(c, NewInternal(err))
-		return
-	}
-	writeJSON(c, http.StatusOK, map[string]any{
-		"domain_id": domainID,
-		"policy_id": body.PolicyID,
+	out, err := s.Handlers.BindPolicy(c.Request.Context(), handler.BindPolicyInput{
+		DomainID: domainID,
+		PolicyID: body.PolicyID,
 	})
+	if err != nil {
+		writeError(c, mapPolicyError(err))
+		return
+	}
+	writeJSON(c, http.StatusOK, out.Bound)
 }
 
 type policyWriteBody struct {
@@ -1474,34 +1235,6 @@ type policyWriteBody struct {
 	Budget      policymodel.Budget      `json:"budget"`
 	Permissions policymodel.Permissions `json:"permissions"`
 	Guardrails  []policymodel.Guardrail `json:"guardrails"`
-}
-
-func policyItemToJSON(it policymodel.ListItem) map[string]any {
-	return map[string]any{
-		"id":           it.ID,
-		"name":         it.Name,
-		"description":  it.Description,
-		"bound_domain": it.BoundDomain,
-		"budget":       it.Budget,
-		"permissions":  it.Permissions,
-		"guardrails":   it.Guardrails,
-		"created_at":   it.CreatedAt,
-		"updated_at":   it.UpdatedAt,
-	}
-}
-
-func policyToJSON(p *policymodel.Policy) map[string]any {
-	return map[string]any{
-		"id":           p.ID,
-		"name":         p.Name,
-		"description":  p.Description,
-		"bound_domain": p.BoundDomain,
-		"budget":       p.Budget,
-		"permissions":  p.Permissions,
-		"guardrails":   p.Guardrails,
-		"created_at":   p.CreatedAt,
-		"updated_at":   p.UpdatedAt,
-	}
 }
 
 // ----------------------------------------------------------------------------
@@ -1523,24 +1256,6 @@ func intQueryGin(c *gin.Context, key string, def int) int {
 	return n
 }
 
-func durationMs(sess queries.SessionListItem) uint64 {
-	if sess.CompletedAt == nil {
-		return 0
-	}
-	delta := sess.CompletedAt.Sub(sess.StartedAt).Milliseconds()
-	if delta < 0 {
-		return 0
-	}
-	return uint64(delta)
-}
-
-func avgDurationMs(total uint64, n int) float64 {
-	if n == 0 {
-		return 0
-	}
-	return float64(total) / float64(n)
-}
-
 // parseTimeQuery parses an RFC3339 timestamp or a bare YYYY-MM-DD date. The
 // bool reports whether a usable value was parsed.
 func parseTimeQuery(v string) (time.Time, bool) {
@@ -1556,9 +1271,64 @@ func parseTimeQuery(v string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
+// mapEvalError maps evaluation handler errors to stable HTTP API error codes.
+func mapEvalError(err error) *APIError {
+	if err == nil {
+		return nil
+	}
+	switch {
+	case handler.IsEvalSetNotFound(err):
+		return &APIError{Code: "EVAL_SET_NOT_FOUND", Message: err.Error()}
+	case handler.IsEvalRunNotFound(err):
+		return &APIError{Code: "EVAL_RUN_NOT_FOUND", Message: err.Error()}
+	case handler.IsDomainNotFound(err):
+		return &APIError{Code: "DOMAIN_NOT_FOUND", Message: err.Error()}
+	}
+	return NewInternal(err)
+}
+
+func mapApprovalError(err error) *APIError {
+	switch {
+	case handler.IsApprovalNotFound(err):
+		return &APIError{Code: "APPROVAL_NOT_FOUND", Message: err.Error()}
+	case handler.IsApprovalAlreadyResolved(err):
+		return &APIError{Code: "APPROVAL_ALREADY_RESOLVED", Message: err.Error()}
+	}
+	return NewInternal(err)
+}
+
+func mapSecretError(err error) *APIError {
+	switch {
+	case handler.IsSecretNotFound(err):
+		return &APIError{Code: "SECRET_NOT_FOUND", Message: err.Error()}
+	case handler.IsSecretExists(err):
+		return &APIError{Code: "SECRET_EXISTS", Message: err.Error()}
+	case handler.IsInvalidSecretName(err):
+		return NewInvalidRequest(err.Error())
+	}
+	return NewInternal(err)
+}
+
+func mapPolicyError(err error) *APIError {
+	switch {
+	case handler.IsPolicyNotFound(err):
+		return &APIError{Code: "POLICY_NOT_FOUND", Message: err.Error()}
+	case handler.IsInvalidPolicyID(err):
+		return NewInvalidRequest(err.Error())
+	}
+	return NewInternal(err)
+}
+
+func mapAuditError(err error) *APIError {
+	if handler.IsAuditEntryNotFound(err) {
+		return &APIError{Code: "AUDIT_ENTRY_NOT_FOUND", Message: err.Error()}
+	}
+	return NewInternal(err)
+}
+
 // observationToMap renders a persisted observation record as the JSON shape used
 // by the trace endpoints.
-func observationToMap(rec tracemodel.ObservationRecord) map[string]any {
+func observationToMap(rec viewmodel.ObservationItem) map[string]any {
 	return map[string]any{
 		"kind":              rec.Kind,
 		"trace_id":          rec.TraceID,

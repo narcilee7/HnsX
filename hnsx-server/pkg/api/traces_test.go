@@ -9,9 +9,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/hnsx-io/hnsx/server/internal/app"
 	tracemodel "github.com/hnsx-io/hnsx/server/internal/trace/model"
 	tracerepo "github.com/hnsx-io/hnsx/server/internal/trace/repository"
 	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
+	"github.com/hnsx-io/hnsx/server/pkg/handler"
 )
 
 func newTraceTestServer(t *testing.T) (*Server, tracerepo.Repository) {
@@ -20,9 +22,11 @@ func newTraceTestServer(t *testing.T) (*Server, tracerepo.Repository) {
 
 	trRepo := tracerepo.NewInMemoryRepository()
 	trSvc := traceservice.NewService(trRepo)
+	application := &app.Application{TraceService: trSvc}
 
 	s := &Server{
 		TraceService: trSvc,
+		Handlers:     handler.New(application, nil),
 	}
 	return s, trRepo
 }

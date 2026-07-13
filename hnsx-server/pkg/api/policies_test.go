@@ -9,16 +9,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/hnsx-io/hnsx/server/internal/app"
 	policymodel "github.com/hnsx-io/hnsx/server/internal/policy/model"
 	policyrepo "github.com/hnsx-io/hnsx/server/internal/policy/repository"
 	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
+	"github.com/hnsx-io/hnsx/server/pkg/handler"
 )
 
 func newPolicyTestServer(t *testing.T) (*Server, *policyservice.Service) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	svc := policyservice.NewService(policyrepo.NewInMemoryRepository())
-	return &Server{PolicyService: svc}, svc
+	application := &app.Application{PolicyService: svc}
+	return &Server{PolicyService: svc, Handlers: handler.New(application, nil)}, svc
 }
 
 func doJSON(t *testing.T, method, path, body string, c *gin.Context, h gin.HandlerFunc) *httptest.ResponseRecorder {

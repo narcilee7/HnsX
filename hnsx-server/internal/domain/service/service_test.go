@@ -7,24 +7,24 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
 	"github.com/hnsx-io/hnsx/server/internal/domain/repository"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 var testTenant = tenant.DefaultID
 
-func minimalSpec(id, version string) *spec.DomainSpec {
-	return &spec.DomainSpec{
+func minimalSpec(id, version string) *domain.DomainSpec {
+	return &domain.DomainSpec{
 		ID:      id,
 		Version: version,
-		Harness: spec.HarnessSpec{
-			Agents: map[string]spec.AgentSpec{
+		Harness: domain.HarnessSpec{
+			Agents: map[string]domain.AgentSpec{
 				"agent": {
 					ID:       "agent",
 					Provider: "noop",
-					Adapter:  spec.AdapterConfig{Kind: "noop"},
+					Adapter:  domain.AdapterConfig{Kind: "noop"},
 				},
 			},
-			Session: spec.SessionSpec{Mode: spec.Single, Agent: "agent"},
+			Session: domain.SessionSpec{Mode: domain.Single, Agent: "agent"},
 		},
 	}
 }
@@ -120,10 +120,10 @@ func TestService_ListAndDelete(t *testing.T) {
 }
 
 func TestRegisteredDomain_Validate(t *testing.T) {
-	if err := (&model.RegisteredDomain{ID: "x", Spec: &spec.DomainSpec{}}).Validate(); err != nil {
+	if err := (&model.RegisteredDomain{ID: "x", Spec: &domain.DomainSpec{}}).Validate(); err != nil {
 		t.Fatalf("valid domain: %v", err)
 	}
-	if err := (&model.RegisteredDomain{ID: "", Spec: &spec.DomainSpec{}}).Validate(); err != model.ErrInvalidSpec {
+	if err := (&model.RegisteredDomain{ID: "", Spec: &domain.DomainSpec{}}).Validate(); err != model.ErrInvalidSpec {
 		t.Fatalf("expected ErrInvalidSpec for empty id, got %v", err)
 	}
 	if err := (&model.RegisteredDomain{ID: "x"}).Validate(); err != model.ErrInvalidSpec {
