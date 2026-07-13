@@ -6,12 +6,12 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/pkg/adapter"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // RunLocalSession executes a DomainSpec locally using the given adapter.
 // This is the shared backend for `hnsx run` and server-side local execution.
-func RunLocalSession(ctx context.Context, s *spec.DomainSpec, trigger map[string]any, a runtime.Adapter) (*runtime.Result, error) {
+func RunLocalSession(ctx context.Context, s *domain.DomainSpec, trigger map[string]any, a runtime.Adapter) (*runtime.Result, error) {
 	runner := runtime.NewRunner(a)
 	return runner.Run(ctx, s, trigger)
 }

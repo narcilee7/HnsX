@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/hnsx-io/hnsx/server/pkg/local"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // newRunCmd runs a single session locally through the embedded Python worker.
@@ -33,7 +33,7 @@ to override every agent to the same kind (e.g. noop or echo) for offline demos.`
 			if domainPath == "" {
 				return fmt.Errorf("--domain is required")
 			}
-			s, err := spec.LoadFile(domainPath)
+			s, err := domain.LoadFile(domainPath)
 			if err != nil {
 				return fmt.Errorf("load domain: %w", err)
 			}

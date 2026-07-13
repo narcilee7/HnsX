@@ -15,13 +15,13 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/evaluation/scorer"
 	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // Executor runs a single domain session synchronously and returns its result.
 // It is satisfied by *pkg/session.Executor.
 type Executor interface {
-	Execute(ctx context.Context, s *spec.DomainSpec, trigger map[string]any) (*runtime.Result, error)
+	Execute(ctx context.Context, s *domain.DomainSpec, trigger map[string]any) (*runtime.Result, error)
 }
 
 // CostFunc returns the accrued cost (USD) for a finished session. Optional;
@@ -31,7 +31,7 @@ type CostFunc func(sessionID string) float64
 // EvalRunner is the common surface implemented by the local Runner and the
 // worker-pool WorkerPoolRunner.
 type EvalRunner interface {
-	Run(ctx context.Context, run *evalmodel.EvalRun, set *evalmodel.EvalSet, domainSpec *spec.DomainSpec, budgetUSD float64) error
+	Run(ctx context.Context, run *evalmodel.EvalRun, set *evalmodel.EvalSet, domainSpec *domain.DomainSpec, budgetUSD float64) error
 }
 
 var _ EvalRunner = (*Runner)(nil)
@@ -76,7 +76,7 @@ func New(exec Executor, svc *evalservice.Service, opts ...Option) *Runner {
 // Run executes every case in set against s, scores it, persists per-case
 // results, and finalizes the run. budgetUSD <= 0 disables the budget guard.
 // Blocks until all cases finish or the budget is exceeded.
-func (r *Runner) Run(ctx context.Context, run *evalmodel.EvalRun, set *evalmodel.EvalSet, s *spec.DomainSpec, budgetUSD float64) error {
+func (r *Runner) Run(ctx context.Context, run *evalmodel.EvalRun, set *evalmodel.EvalSet, s *domain.DomainSpec, budgetUSD float64) error {
 	start := time.Now()
 	cases := set.Cases
 	results := make([]evalmodel.EvalResult, len(cases))
@@ -135,7 +135,7 @@ func (r *Runner) Run(ctx context.Context, run *evalmodel.EvalRun, set *evalmodel
 	return r.svc.FinishRun(run.ID, avg, passed, len(results), durationMs, totalCost)
 }
 
-func (r *Runner) runCase(ctx context.Context, s *spec.DomainSpec, ec evalmodel.EvalCase) evalmodel.EvalResult {
+func (r *Runner) runCase(ctx context.Context, s *domain.DomainSpec, ec evalmodel.EvalCase) evalmodel.EvalResult {
 	caseStart := time.Now()
 	sessID := runtime.NewSessionID(s.ID)
 	cctx := runtime.WithSessionID(ctx, sessID)

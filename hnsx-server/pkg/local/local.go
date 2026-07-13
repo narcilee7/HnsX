@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // DomainSummary is the output of ValidateDomain.
@@ -16,7 +16,7 @@ type DomainSummary struct {
 	Valid      bool
 	ID         string
 	Version    string
-	Mode       spec.HarnessSessionMode
+	Mode       domain.HarnessSessionMode
 	AgentCount int
 	StepCount  int
 }
@@ -45,13 +45,13 @@ func ValidateDomain(r io.Reader, contentType string) (*DomainSummary, error) {
 }
 
 // DecodeDomainSpec parses either YAML or JSON into a validated *DomainSpec.
-func DecodeDomainSpec(r io.Reader, contentType string) (*spec.DomainSpec, error) {
+func DecodeDomainSpec(r io.Reader, contentType string) (*domain.DomainSpec, error) {
 	body, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
 
-	var s spec.DomainSpec
+	var s domain.DomainSpec
 	if isYAMLContentType(contentType) || looksLikeYAML(body) {
 		if err := yaml.Unmarshal(body, &s); err != nil {
 			return nil, err
@@ -61,14 +61,14 @@ func DecodeDomainSpec(r io.Reader, contentType string) (*spec.DomainSpec, error)
 			return nil, err
 		}
 	}
-	if err := spec.Validate(&s); err != nil {
+	if err := domain.Validate(&s); err != nil {
 		return nil, err
 	}
 	return &s, nil
 }
 
 // decodeDomainSpec is kept as an alias for internal use within this package.
-func decodeDomainSpec(r io.Reader, contentType string) (*spec.DomainSpec, error) {
+func decodeDomainSpec(r io.Reader, contentType string) (*domain.DomainSpec, error) {
 	return DecodeDomainSpec(r, contentType)
 }
 

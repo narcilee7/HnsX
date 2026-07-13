@@ -1,4 +1,4 @@
-package spec
+package domain
 
 // PresetName is a named policy bundle that expands into concrete budget,
 // permission, approval and guardrail settings.

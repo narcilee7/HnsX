@@ -20,7 +20,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 	"github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1/v1connect"
 )
@@ -182,17 +182,17 @@ func (c *Client) RegisterDomain(body io.Reader, contentType string) (*Domain, er
 	if err != nil {
 		return nil, fmt.Errorf("read body: %w", err)
 	}
-	var ds *spec.DomainSpec
+	var ds *domain.DomainSpec
 	if strings.Contains(contentType, "yaml") || strings.Contains(contentType, "yml") {
-		ds, err = spec.Parse(data)
+		ds, err = domain.Parse(data)
 	} else {
-		ds = new(spec.DomainSpec)
+		ds = new(domain.DomainSpec)
 		err = json.Unmarshal(data, ds)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("parse domain: %w", err)
 	}
-	pbSpec, err := spec.ToProto(ds)
+	pbSpec, err := domain.ToProto(ds)
 	if err != nil {
 		return nil, fmt.Errorf("convert domain: %w", err)
 	}
@@ -420,7 +420,7 @@ func domainFromProto(pbSpec *pb.DomainSpec) (*Domain, error) {
 	if pbSpec == nil {
 		return nil, fmt.Errorf("nil domain spec")
 	}
-	ds, err := spec.FromProto(pbSpec)
+	ds, err := domain.FromProto(pbSpec)
 	if err != nil {
 		return nil, err
 	}

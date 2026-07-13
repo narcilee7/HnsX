@@ -6,22 +6,22 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/domain/repository"
 	"github.com/hnsx-io/hnsx/server/internal/domain/service"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
-func queryMinimalSpec(id, version string) *spec.DomainSpec {
-	return &spec.DomainSpec{
+func queryMinimalSpec(id, version string) *domain.DomainSpec {
+	return &domain.DomainSpec{
 		ID:      id,
 		Version: version,
-		Harness: spec.HarnessSpec{
-			Agents: map[string]spec.AgentSpec{
+		Harness: domain.HarnessSpec{
+			Agents: map[string]domain.AgentSpec{
 				"agent": {
 					ID:       "agent",
 					Provider: "noop",
-					Adapter:  spec.AdapterConfig{Kind: "noop"},
+					Adapter:  domain.AdapterConfig{Kind: "noop"},
 				},
 			},
-			Session: spec.SessionSpec{Mode: spec.Single, Agent: "agent"},
+			Session: domain.SessionSpec{Mode: domain.Single, Agent: "agent"},
 		},
 	}
 }

@@ -3,7 +3,7 @@
 // This package is the source of truth for the shape of a Domain. It is kept
 // intentionally free of infrastructure dependencies (no HTTP, no DB, no gRPC)
 // so it can be imported by both the CLI and the server.
-package spec
+package domain
 
 // DomainSpec is the top-level unit of business definition.
 type DomainSpec struct {

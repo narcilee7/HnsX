@@ -7,7 +7,7 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/store"
 	"github.com/hnsx-io/hnsx/server/pkg/db"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // Service builds and caches store backends per domain.
@@ -25,7 +25,7 @@ func NewService(db *db.DB) *Service {
 // When the server has a Postgres connection and the domain requests the
 // "postgres" backend, a PostgresBackend is returned; otherwise it falls back to
 // an in-memory backend.
-func (s *Service) BackendFor(ctx context.Context, cfg *spec.StoreConfig) (store.Backend, error) {
+func (s *Service) BackendFor(ctx context.Context, cfg *domain.StoreConfig) (store.Backend, error) {
 	// Default to in-memory when no DB is configured.
 	if s.db == nil || s.db.IsNoDB() {
 		return store.NewBackendFromSpec(cfg)
@@ -45,11 +45,11 @@ func (s *Service) BackendFor(ctx context.Context, cfg *spec.StoreConfig) (store.
 	return store.NewBackendFromSpec(cfg)
 }
 
-func requestedBackend(cfg *spec.StoreConfig) string {
+func requestedBackend(cfg *domain.StoreConfig) string {
 	if cfg == nil {
 		return ""
 	}
-	for _, nsCfg := range []spec.StoreNamespaceConfig{cfg.Context, cfg.Knowledge, cfg.Ephemeral} {
+	for _, nsCfg := range []domain.StoreNamespaceConfig{cfg.Context, cfg.Knowledge, cfg.Ephemeral} {
 		if nsCfg.Backend == "postgres" {
 			return "postgres"
 		}

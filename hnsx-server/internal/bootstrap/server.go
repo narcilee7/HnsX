@@ -6,10 +6,8 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"os"
 	stdruntime "runtime"
 	"time"
 
@@ -23,7 +21,6 @@ import (
 	"github.com/hnsx-io/hnsx/server/pkg/api"
 	"github.com/hnsx-io/hnsx/server/pkg/controlplane"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
 	"github.com/hnsx-io/hnsx/server/pkg/version"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
@@ -223,47 +220,4 @@ func (s *Server) runStaleWorkerGC(stop <-chan struct{}) {
 			}
 		}
 	}
-}
-
-// seedFromDir walks the given directory and registers every v2 DomainSpec YAML
-// against the API server. It is an explicit operator action (--seed-from) so
-// production deployments never implicitly pull in development fixtures.
-func seedFromDir(log *zap.Logger, s *api.Server, dir string) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		log.Warn("seed cannot read directory", zap.String("dir", dir), zap.Error(err))
-		return
-	}
-	registered := 0
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		path := fmt.Sprintf("%s/%s/domain.yaml", dir, e.Name())
-		ds, err := spec.LoadFile(path)
-		if err != nil {
-			log.Warn("seed skip file", zap.String("path", path), zap.Error(err))
-			continue
-		}
-		s.RegisterBootstrapDomain(tenant.DefaultID, ds)
-		registered++
-	}
-	if registered > 0 {
-		log.Info("seed registered domains", zap.Int("count", registered), zap.String("dir", dir))
-	}
-}
-
-// CLIError wraps a non-zero exit reason. The thin main wrappers use it to
-// decide whether to print the error or treat it as a clean shutdown.
-type CLIError struct {
-	Code int
-	Err  error
-}
-
-func (e *CLIError) Error() string { return e.Err.Error() }
-
-// IsCleanShutdown reports whether an error returned by Run should be treated as
-// a normal exit (e.g. signal-initiated context cancellation).
-func IsCleanShutdown(err error) bool {
-	return err == nil || errors.Is(err, context.Canceled)
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/internal/testutil"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 var testTenant = tenant.DefaultID
@@ -22,14 +22,14 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 	// Ensure a domain exists so the FK constraint is satisfied.
 	domainRepo := domainrepo.NewPostgresRepository(database)
 	_ = domainRepo.Delete(testTenant, "session-test-domain")
-	ds := &spec.DomainSpec{
+	ds := &domain.DomainSpec{
 		ID:      "session-test-domain",
 		Version: "1.0.0",
-		Harness: spec.HarnessSpec{
-			Agents: map[string]spec.AgentSpec{
-				"agent": {ID: "agent", Provider: "noop", Adapter: spec.AdapterConfig{Kind: "noop"}},
+		Harness: domain.HarnessSpec{
+			Agents: map[string]domain.AgentSpec{
+				"agent": {ID: "agent", Provider: "noop", Adapter: domain.AdapterConfig{Kind: "noop"}},
 			},
-			Session: spec.SessionSpec{Mode: spec.Single, Agent: "agent"},
+			Session: domain.SessionSpec{Mode: domain.Single, Agent: "agent"},
 		},
 	}
 	if err := domainRepo.Save(testTenant, &model.RegisteredDomain{
@@ -72,7 +72,7 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 
 	// Update to completed with result.
 	sess.State = internalsession.StateCompleted
-	sess.Result = &runtime.Result{Mode: spec.Single}
+	sess.Result = &runtime.Result{Mode: domain.Single}
 	completed := time.Now().UTC()
 	sess.CompletedAt = &completed
 	if err := repo.Save(testTenant, sess); err != nil {
@@ -86,7 +86,7 @@ func TestPostgresSessionRepository_SaveAndGet(t *testing.T) {
 	if got.State != internalsession.StateCompleted {
 		t.Fatalf("state after update = %q", got.State)
 	}
-	if got.Result == nil || got.Result.Mode != spec.Single {
+	if got.Result == nil || got.Result.Mode != domain.Single {
 		t.Fatal("result not round-tripped")
 	}
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 type captureSink struct {
@@ -26,18 +26,18 @@ type stubAdapter struct {
 }
 
 func (s *stubAdapter) Name() string { return "stub" }
-func (s *stubAdapter) Invoke(_ context.Context, _ spec.AgentSpec, _ string, _ map[string]any) (string, error) {
+func (s *stubAdapter) Invoke(_ context.Context, _ domain.AgentSpec, _ string, _ map[string]any) (string, error) {
 	return s.out, nil
 }
 
 func TestRunner_SingleMode_HappyPath(t *testing.T) {
-	s := &spec.DomainSpec{
+	s := &domain.DomainSpec{
 		ID: "test", Version: "0.1.0",
-		Harness: spec.HarnessSpec{
-			Agents: map[string]spec.AgentSpec{
+		Harness: domain.HarnessSpec{
+			Agents: map[string]domain.AgentSpec{
 				"main": {ID: "main", Provider: "anthropic", Model: "m"},
 			},
-			Session: spec.SessionSpec{Mode: spec.Single, Agent: "main"},
+			Session: domain.SessionSpec{Mode: domain.Single, Agent: "main"},
 		},
 	}
 
@@ -77,18 +77,18 @@ func TestRunner_SingleMode_HappyPath(t *testing.T) {
 }
 
 func TestRunner_WorkflowMode_WalksSteps(t *testing.T) {
-	s := &spec.DomainSpec{
+	s := &domain.DomainSpec{
 		ID: "wf", Version: "0.1.0",
-		Harness: spec.HarnessSpec{
-			Agents: map[string]spec.AgentSpec{
+		Harness: domain.HarnessSpec{
+			Agents: map[string]domain.AgentSpec{
 				"a": {ID: "a", Provider: "p", Model: "m"},
 				"b": {ID: "b", Provider: "p", Model: "m"},
 			},
-			Session: spec.SessionSpec{
-				Mode: spec.Workflow,
-				Workflow: &spec.WorkflowSpec{
+			Session: domain.SessionSpec{
+				Mode: domain.Workflow,
+				Workflow: &domain.WorkflowSpec{
 					Entry: "s1",
-					Steps: []spec.StepSpec{
+					Steps: []domain.StepSpec{
 						{ID: "s1", Agent: "a", Output: "x", Next: "s2"},
 						{ID: "s2", Agent: "b", Input: map[string]any{"x": "${x}"}},
 					},
@@ -116,17 +116,17 @@ func TestRunner_WorkflowMode_WalksSteps(t *testing.T) {
 type countingAdapter struct{ count *int }
 
 func (c *countingAdapter) Name() string { return "count" }
-func (c *countingAdapter) Invoke(_ context.Context, _ spec.AgentSpec, _ string, in map[string]any) (string, error) {
+func (c *countingAdapter) Invoke(_ context.Context, _ domain.AgentSpec, _ string, in map[string]any) (string, error) {
 	*c.count++
 	return "ok", nil
 }
 
 func TestRunner_UnknownMode_ReturnsError(t *testing.T) {
-	s := &spec.DomainSpec{
+	s := &domain.DomainSpec{
 		ID: "x", Version: "0.1.0",
-		Harness: spec.HarnessSpec{
-			Agents:  map[string]spec.AgentSpec{"a": {ID: "a", Provider: "p", Model: "m"}},
-			Session: spec.SessionSpec{Mode: "sorcerer"},
+		Harness: domain.HarnessSpec{
+			Agents:  map[string]domain.AgentSpec{"a": {ID: "a", Provider: "p", Model: "m"}},
+			Session: domain.SessionSpec{Mode: "sorcerer"},
 		},
 	}
 	_, err := NewRunner(&stubAdapter{}).Run(context.Background(), s, nil)
@@ -136,11 +136,11 @@ func TestRunner_UnknownMode_ReturnsError(t *testing.T) {
 }
 
 func TestRunner_SupervisorMode_NotImplemented(t *testing.T) {
-	s := &spec.DomainSpec{
+	s := &domain.DomainSpec{
 		ID: "x", Version: "0.1.0",
-		Harness: spec.HarnessSpec{
-			Agents:  map[string]spec.AgentSpec{"a": {ID: "a", Provider: "p", Model: "m"}},
-			Session: spec.SessionSpec{Mode: spec.Supervisor},
+		Harness: domain.HarnessSpec{
+			Agents:  map[string]domain.AgentSpec{"a": {ID: "a", Provider: "p", Model: "m"}},
+			Session: domain.SessionSpec{Mode: domain.Supervisor},
 		},
 	}
 	_, err := NewRunner(&stubAdapter{}).Run(context.Background(), s, nil)

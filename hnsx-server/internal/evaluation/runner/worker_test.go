@@ -19,7 +19,7 @@ import (
 	workerrepo "github.com/hnsx-io/hnsx/server/internal/worker/repository"
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 func TestWorkerPoolRunner_ScoresAndAggregates(t *testing.T) {
@@ -46,7 +46,7 @@ func TestWorkerPoolRunner_ScoresAndAggregates(t *testing.T) {
 	})
 
 	r := NewWorkerPoolRunner(sessionCmds, sessionSvc, evalSvc, nil)
-	if err := r.Run(t.Context(), run, set, &spec.DomainSpec{ID: "d1"}, 0); err != nil {
+	if err := r.Run(t.Context(), run, set, &domain.DomainSpec{ID: "d1"}, 0); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 
@@ -92,7 +92,7 @@ func TestWorkerPoolRunner_FailedSessionScoresZero(t *testing.T) {
 	})
 
 	r := NewWorkerPoolRunner(sessionCmds, sessionSvc, evalSvc, nil)
-	if err := r.Run(t.Context(), run, set, &spec.DomainSpec{ID: "d1"}, 0); err != nil {
+	if err := r.Run(t.Context(), run, set, &domain.DomainSpec{ID: "d1"}, 0); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 
@@ -106,7 +106,7 @@ func TestWorkerPoolRunner_RequiresSessionCommands(t *testing.T) {
 	evalSvc := evalservice.NewService(evalrepo.NewInMemoryRepository())
 	sessionSvc := sessionservice.NewService(sessionrepo.NewInMemoryRepository())
 	r := NewWorkerPoolRunner(nil, sessionSvc, evalSvc, nil)
-	if err := r.Run(t.Context(), &evalmodel.EvalRun{ID: "r", DomainID: "d1"}, &evalmodel.EvalSet{ID: "s", DomainID: "d1"}, &spec.DomainSpec{ID: "d1"}, 0); err == nil {
+	if err := r.Run(t.Context(), &evalmodel.EvalRun{ID: "r", DomainID: "d1"}, &evalmodel.EvalSet{ID: "s", DomainID: "d1"}, &domain.DomainSpec{ID: "d1"}, 0); err == nil {
 		t.Fatal("expected error for missing session commands")
 	}
 }
@@ -118,7 +118,7 @@ func TestWorkerPoolRunner_RequiresSessionService(t *testing.T) {
 	workerSvc := workerservice.NewService(workerrepo.NewInMemoryRepository())
 	cmds := commands.NewSessionCommands(sessionSvc, domainSvc, workerSvc, nil, app.NewState())
 	r := NewWorkerPoolRunner(cmds, nil, evalSvc, nil)
-	if err := r.Run(t.Context(), &evalmodel.EvalRun{ID: "r", DomainID: "d1"}, &evalmodel.EvalSet{ID: "s", DomainID: "d1"}, &spec.DomainSpec{ID: "d1"}, 0); err == nil {
+	if err := r.Run(t.Context(), &evalmodel.EvalRun{ID: "r", DomainID: "d1"}, &evalmodel.EvalSet{ID: "s", DomainID: "d1"}, &domain.DomainSpec{ID: "d1"}, 0); err == nil {
 		t.Fatal("expected error for missing session service")
 	}
 }
@@ -147,7 +147,7 @@ func TestWorkerPoolRunner_UsesTenantFromContext(t *testing.T) {
 
 	r := NewWorkerPoolRunner(sessionCmds, sessionSvc, evalSvc, nil)
 	ctx := tenant.NewContext(t.Context(), tenant.ID("t-42"))
-	if err := r.Run(ctx, run, set, &spec.DomainSpec{ID: "d1"}, 0); err != nil {
+	if err := r.Run(ctx, run, set, &domain.DomainSpec{ID: "d1"}, 0); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 
@@ -180,7 +180,7 @@ func TestWorkerPoolRunner_CreatesSessions(t *testing.T) {
 	})
 
 	r := NewWorkerPoolRunner(sessionCmds, sessionSvc, evalSvc, nil)
-	if err := r.Run(t.Context(), run, set, &spec.DomainSpec{ID: "d1"}, 0); err != nil {
+	if err := r.Run(t.Context(), run, set, &domain.DomainSpec{ID: "d1"}, 0); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 

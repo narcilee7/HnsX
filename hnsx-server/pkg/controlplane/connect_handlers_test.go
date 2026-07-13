@@ -10,7 +10,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	domainrepo "github.com/hnsx-io/hnsx/server/internal/domain/repository"
 	domainsvc "github.com/hnsx-io/hnsx/server/internal/domain/service"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 	"github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1/v1connect"
 )
@@ -29,7 +29,7 @@ func TestConnectDomainRegistry(t *testing.T) {
 		connect.WithHTTPGet(),
 	)
 
-	ds, err := spec.Parse([]byte(`
+	ds, err := domain.Parse([]byte(`
 id: test-domain
 version: "1.0.0"
 description: "connect test"
@@ -47,7 +47,7 @@ harness:
 	if err != nil {
 		t.Fatalf("parse spec: %v", err)
 	}
-	pbSpec, err := spec.ToProto(ds)
+	pbSpec, err := domain.ToProto(ds)
 	if err != nil {
 		t.Fatalf("to proto: %v", err)
 	}

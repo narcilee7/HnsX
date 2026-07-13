@@ -13,7 +13,7 @@ import (
 	"fmt"
 
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // Compile-time checks: both adapters implement runtime.Adapter.
@@ -34,7 +34,7 @@ func (a *NoopAdapter) Name() string { return "noop" }
 
 // Invoke produces a deterministic echo of the agent identity, prompt length
 // and input key set.
-func (a *NoopAdapter) Invoke(_ context.Context, agent spec.AgentSpec, prompt string, input map[string]any) (string, error) {
+func (a *NoopAdapter) Invoke(_ context.Context, agent domain.AgentSpec, prompt string, input map[string]any) (string, error) {
 	keys := make([]string, 0, len(input))
 	for k := range input {
 		keys = append(keys, k)
@@ -53,7 +53,7 @@ func NewEchoAdapter() *EchoAdapter { return &EchoAdapter{} }
 func (a *EchoAdapter) Name() string { return "echo" }
 
 // Invoke returns a JSON dump of the input map alongside a header.
-func (a *EchoAdapter) Invoke(_ context.Context, agent spec.AgentSpec, _ string, input map[string]any) (string, error) {
+func (a *EchoAdapter) Invoke(_ context.Context, agent domain.AgentSpec, _ string, input map[string]any) (string, error) {
 	body, _ := json.Marshal(input)
 	return fmt.Sprintf("[echo] agent=%s input=%s", agent.ID, string(body)), nil
 }

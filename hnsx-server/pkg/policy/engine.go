@@ -19,29 +19,29 @@ import (
 	"sync/atomic"
 
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // Engine evaluates policy rules.
 type Engine struct {
-	spec             spec.PolicySpec
+	spec             domain.PolicySpec
 	turns            atomic.Int64
 	promptTokens     atomic.Int64
 	completionTokens atomic.Int64
 	costUSD          atomic.Uint64 // float64 bits
 }
 
-func newEngine(s spec.PolicySpec) *Engine {
+func newEngine(s domain.PolicySpec) *Engine {
 	return &Engine{spec: s}
 }
 
 // NewEngine constructs a policy engine.
-func NewEngine(s spec.PolicySpec) *Engine {
+func NewEngine(s domain.PolicySpec) *Engine {
 	return newEngine(s)
 }
 
 // Spec returns a defensive copy of the underlying policy.
-func (e *Engine) Spec() spec.PolicySpec { return e.spec }
+func (e *Engine) Spec() domain.PolicySpec { return e.spec }
 
 // ErrBudgetExceeded is returned when an invocation would breach the budget.
 var ErrBudgetExceeded = errors.New("budget exceeded")
@@ -147,8 +147,8 @@ func (e *Engine) CanUseShell() error {
 }
 
 // Guardrails returns the configured guardrails in order.
-func (e *Engine) Guardrails() []spec.GuardrailSpec {
-	out := make([]spec.GuardrailSpec, len(e.spec.Guardrails))
+func (e *Engine) Guardrails() []domain.GuardrailSpec {
+	out := make([]domain.GuardrailSpec, len(e.spec.Guardrails))
 	copy(out, e.spec.Guardrails)
 	return out
 }
@@ -210,14 +210,14 @@ func (e *Engine) EvaluateGuardrails(event GuardrailEvent) GuardrailDecision {
 	return GuardrailDecision{Matched: false, Action: "allow"}
 }
 
-func guardrailApplies(g spec.GuardrailSpec, event GuardrailEvent) bool {
+func guardrailApplies(g domain.GuardrailSpec, event GuardrailEvent) bool {
 	if g.On == "" {
 		return true
 	}
 	return g.On == event.Kind
 }
 
-func guardrailMatches(g spec.GuardrailSpec, event GuardrailEvent) (bool, error) {
+func guardrailMatches(g domain.GuardrailSpec, event GuardrailEvent) (bool, error) {
 	text := event.Text
 	if text == "" && event.Payload != nil {
 		if s, ok := event.Payload["content"].(string); ok {
@@ -247,7 +247,7 @@ func guardrailMatches(g spec.GuardrailSpec, event GuardrailEvent) (bool, error) 
 	}
 }
 
-func guardrailPattern(g spec.GuardrailSpec) string {
+func guardrailPattern(g domain.GuardrailSpec) string {
 	if g.Schema != "" {
 		return g.Schema
 	}

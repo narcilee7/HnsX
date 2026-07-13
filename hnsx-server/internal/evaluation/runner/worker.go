@@ -13,7 +13,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/session/model"
 	sessionservice "github.com/hnsx-io/hnsx/server/internal/session/service"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 var pollInterval = 500 * time.Millisecond
@@ -48,7 +48,7 @@ func NewWorkerPoolRunner(
 // budgetUSD <= 0 disables the budget guard. The runner returns only after all
 // cases have reached a terminal state or ctx is cancelled. The tenant ID is
 // read from ctx via tenant.FromContext.
-func (r *WorkerPoolRunner) Run(ctx context.Context, run *evalmodel.EvalRun, set *evalmodel.EvalSet, domainSpec *spec.DomainSpec, budgetUSD float64) error {
+func (r *WorkerPoolRunner) Run(ctx context.Context, run *evalmodel.EvalRun, set *evalmodel.EvalSet, domainSpec *domain.DomainSpec, budgetUSD float64) error {
 	if r.sessionCmds == nil {
 		return fmt.Errorf("worker pool runner: session commands not configured")
 	}

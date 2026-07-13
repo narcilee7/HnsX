@@ -3,7 +3,7 @@ package store
 import (
 	"testing"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 func TestInMemoryBackend(t *testing.T) {
@@ -50,8 +50,8 @@ func TestNewBackendFromSpecDefaults(t *testing.T) {
 }
 
 func TestNewBackendFromSpecUnsupported(t *testing.T) {
-	cfg := &spec.StoreConfig{
-		Context: spec.StoreNamespaceConfig{Backend: "redis"},
+	cfg := &domain.StoreConfig{
+		Context: domain.StoreNamespaceConfig{Backend: "redis"},
 	}
 	if _, err := NewBackendFromSpec(cfg); err == nil {
 		t.Fatal("expected error for unsupported backend")

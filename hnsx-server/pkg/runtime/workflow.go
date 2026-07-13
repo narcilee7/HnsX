@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 func (r *Runner) runWorkflow(
 	ctx context.Context,
-	specArg *spec.DomainSpec,
+	specArg *domain.DomainSpec,
 	trigger map[string]any,
 	res *Result,
 ) error {
@@ -21,7 +21,7 @@ func (r *Runner) runWorkflow(
 		return errors.New("workflow definition missing")
 	}
 
-	byID := make(map[string]spec.StepSpec, len(wf.Steps))
+	byID := make(map[string]domain.StepSpec, len(wf.Steps))
 	for _, s := range wf.Steps {
 		byID[s.ID] = s
 	}

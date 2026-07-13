@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // EmbeddedRunOptions configures a local session executed by the Python worker.
@@ -134,7 +134,7 @@ func projectRootForPython(pythonPath string) string {
 
 // RunEmbeddedSession executes a DomainSpec in a local Python worker subprocess.
 // The subprocess runs hnsx_worker.session_runtime with the spec and trigger on stdin.
-func RunEmbeddedSession(ctx context.Context, s *spec.DomainSpec, trigger map[string]any, opts EmbeddedRunOptions) (*EmbeddedRunResult, error) {
+func RunEmbeddedSession(ctx context.Context, s *domain.DomainSpec, trigger map[string]any, opts EmbeddedRunOptions) (*EmbeddedRunResult, error) {
 	python, err := opts.resolvePython()
 	if err != nil {
 		return nil, err

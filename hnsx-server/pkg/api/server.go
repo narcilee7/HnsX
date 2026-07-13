@@ -24,7 +24,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/pkg/db"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	pkgexecutor "github.com/hnsx-io/hnsx/server/pkg/session"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // BuildInfo describes this build of hnsx-server. Set by main at process start.
@@ -211,9 +211,9 @@ func (s *Server) PublishObservation(sessionID string, obs runtime.Observation) b
 	return s.AppState.PublishObservation(sessionID, obs)
 }
 
-// RegisterBootstrapDomain inserts an already-validated *spec.DomainSpec
+// RegisterBootstrapDomain inserts an already-validated *domain.DomainSpec
 // into the domain registry. Intended for the `seed-from` path in main.
-func (s *Server) RegisterBootstrapDomain(tenantID tenant.ID, v *spec.DomainSpec) {
+func (s *Server) RegisterBootstrapDomain(tenantID tenant.ID, v *domain.DomainSpec) {
 	if s.App == nil || s.App.DomainService == nil {
 		return
 	}

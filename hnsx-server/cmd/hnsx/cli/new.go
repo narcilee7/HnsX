@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 //go:embed assets/new/README.md.tmpl assets/new/.gitignore.tmpl
@@ -111,7 +111,7 @@ Examples:
 			}
 
 			rendered := renderTemplateVars(string(data), vars)
-			if _, err := spec.Parse([]byte(rendered)); err != nil {
+			if _, err := domain.Parse([]byte(rendered)); err != nil {
 				return fmt.Errorf("rendered domain is invalid: %w", err)
 			}
 

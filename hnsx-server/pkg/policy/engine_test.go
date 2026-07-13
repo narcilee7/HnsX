@@ -4,12 +4,12 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 func TestEvaluateGuardrailsContainsBlock(t *testing.T) {
-	engine := NewEngine(spec.PolicySpec{
-		Guardrails: []spec.GuardrailSpec{
+	engine := NewEngine(domain.PolicySpec{
+		Guardrails: []domain.GuardrailSpec{
 			{
 				ID:      "no-secrets",
 				Type:    "contains",
@@ -36,8 +36,8 @@ func TestEvaluateGuardrailsContainsBlock(t *testing.T) {
 }
 
 func TestEvaluateGuardrailsRegexLog(t *testing.T) {
-	engine := NewEngine(spec.PolicySpec{
-		Guardrails: []spec.GuardrailSpec{
+	engine := NewEngine(domain.PolicySpec{
+		Guardrails: []domain.GuardrailSpec{
 			{
 				ID:      "ssn-like",
 				Type:    "regex",
@@ -59,8 +59,8 @@ func TestEvaluateGuardrailsRegexLog(t *testing.T) {
 }
 
 func TestEvaluateGuardrailsWrongKindIgnored(t *testing.T) {
-	engine := NewEngine(spec.PolicySpec{
-		Guardrails: []spec.GuardrailSpec{
+	engine := NewEngine(domain.PolicySpec{
+		Guardrails: []domain.GuardrailSpec{
 			{
 				ID:     "no-secrets",
 				Type:   "contains",
@@ -78,8 +78,8 @@ func TestEvaluateGuardrailsWrongKindIgnored(t *testing.T) {
 }
 
 func TestEvaluateGuardrailsDefaultAction(t *testing.T) {
-	engine := NewEngine(spec.PolicySpec{
-		Guardrails: []spec.GuardrailSpec{
+	engine := NewEngine(domain.PolicySpec{
+		Guardrails: []domain.GuardrailSpec{
 			{
 				ID:     "missing-action",
 				Type:   "contains",

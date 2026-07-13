@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // Adapter is the contract for invoking an external Agent.
@@ -30,7 +30,7 @@ type Adapter interface {
 	// Name returns the adapter kind (e.g. "noop", "echo", "anthropic").
 	Name() string
 	// Invoke calls the underlying agent and returns its text reply.
-	Invoke(ctx context.Context, agent spec.AgentSpec, prompt string, input map[string]any) (string, error)
+	Invoke(ctx context.Context, agent domain.AgentSpec, prompt string, input map[string]any) (string, error)
 }
 
 // ObservationHook is invoked by Runner for every observation it produces.
@@ -78,7 +78,7 @@ type Result struct {
 	SessionID  string                  `json:"session_id"`
 	DomainID   string                  `json:"domain_id"`
 	State      string                  `json:"state"`
-	Mode       spec.HarnessSessionMode `json:"mode"`
+	Mode       domain.HarnessSessionMode `json:"mode"`
 	Output     map[string]any          `json:"output"`
 	StartedAt  time.Time               `json:"started_at,omitempty"`
 	FinishedAt time.Time               `json:"finished_at,omitempty"`
@@ -92,7 +92,7 @@ var ErrSupervisorNotImplemented = errors.New(
 
 // Run executes a DomainSpec end-to-end and returns the result. Trigger is forwarded
 // to the agent as its initial input.
-func (r *Runner) Run(ctx context.Context, ds *spec.DomainSpec, trigger map[string]any) (*Result, error) {
+func (r *Runner) Run(ctx context.Context, ds *domain.DomainSpec, trigger map[string]any) (*Result, error) {
 	if ds == nil {
 		return nil, errors.New("nil domain spec")
 	}
@@ -126,11 +126,11 @@ func (r *Runner) Run(ctx context.Context, ds *spec.DomainSpec, trigger map[strin
 
 	var runErr error
 	switch ds.Harness.Session.Mode {
-	case spec.Single, spec.SingleTask, spec.MultiTurn:
+	case domain.Single, domain.SingleTask, domain.MultiTurn:
 		runErr = r.runSingle(ctx, ds, trigger, res)
-	case spec.Workflow:
+	case domain.Workflow:
 		runErr = r.runWorkflow(ctx, ds, trigger, res)
-	case spec.Supervisor, spec.Hierarchical, spec.Autonomous:
+	case domain.Supervisor, domain.Hierarchical, domain.Autonomous:
 		runErr = fmt.Errorf("%w (mode=%s, build=phase1)",
 			ErrSupervisorNotImplemented, ds.Harness.Session.Mode)
 	default:
@@ -161,7 +161,7 @@ func (r *Runner) Run(ctx context.Context, ds *spec.DomainSpec, trigger map[strin
 }
 
 // runSingle executes the named primary agent once.
-func (r *Runner) runSingle(ctx context.Context, ds *spec.DomainSpec, trigger map[string]any, res *Result) error {
+func (r *Runner) runSingle(ctx context.Context, ds *domain.DomainSpec, trigger map[string]any, res *Result) error {
 	agentName := ds.Harness.Session.Agent
 	if agentName == "" {
 		for name := range ds.Harness.Agents {
@@ -217,7 +217,7 @@ func (r *Runner) runSingle(ctx context.Context, ds *spec.DomainSpec, trigger map
 // resolvePrompt returns the prompt template configured for the agent.
 // If the agent references a named prompt via system_prompt, we look it up in
 // harness.prompts; otherwise the system_prompt string is treated verbatim.
-func resolvePrompt(ds *spec.DomainSpec, agent spec.AgentSpec) (string, error) {
+func resolvePrompt(ds *domain.DomainSpec, agent domain.AgentSpec) (string, error) {
 	if agent.SystemPrompt == "" {
 		return "", nil
 	}

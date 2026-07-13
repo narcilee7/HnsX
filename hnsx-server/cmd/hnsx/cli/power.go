@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // newPowerCmd groups advanced developer commands (v0.7 Power): domain
@@ -66,7 +66,7 @@ func formatOne(path string, inPlace bool) error {
 	if err != nil {
 		return err
 	}
-	if _, err := spec.Parse(b); err != nil {
+	if _, err := domain.Parse(b); err != nil {
 		return fmt.Errorf("parse: %w", err)
 	}
 	var node yaml.Node
@@ -136,11 +136,11 @@ func newDomainDiffCmd(cfg *Config) *cobra.Command {
 		Short: "Diff two DomainSpec YAMLs structurally",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			a, err := spec.LoadFile(args[0])
+			a, err := domain.LoadFile(args[0])
 			if err != nil {
 				return err
 			}
-			b, err := spec.LoadFile(args[1])
+			b, err := domain.LoadFile(args[1])
 			if err != nil {
 				return err
 			}

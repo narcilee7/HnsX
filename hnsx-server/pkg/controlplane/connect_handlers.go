@@ -25,7 +25,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/internal/trace/model"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 	"github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1/v1connect"
 )
@@ -75,7 +75,7 @@ func (s *ConnectServer) RegisterDomain(ctx context.Context, req *connect.Request
 	if s.App == nil || s.App.DomainService == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("domain service unavailable"))
 	}
-	ds, err := spec.FromProto(req.Msg.GetSpec())
+	ds, err := domain.FromProto(req.Msg.GetSpec())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid domain spec: %w", err))
 	}
@@ -107,7 +107,7 @@ func (s *ConnectServer) GetDomain(ctx context.Context, req *connect.Request[pb.G
 	if err != nil {
 		return nil, mapDomainError(err)
 	}
-	pbSpec, err := spec.ToProto(d.Spec)
+	pbSpec, err := domain.ToProto(d.Spec)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("convert domain spec: %w", err))
 	}
@@ -124,7 +124,7 @@ func (s *ConnectServer) ListDomains(ctx context.Context, req *connect.Request[pb
 	}
 	resp := &pb.ListDomainsResponse{Total: int32(len(items))}
 	for _, d := range items {
-		pbSpec, err := spec.ToProto(d.Spec)
+		pbSpec, err := domain.ToProto(d.Spec)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("convert domain spec: %w", err))
 		}

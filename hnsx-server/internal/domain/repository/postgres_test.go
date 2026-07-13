@@ -6,7 +6,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/domain/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
 	"github.com/hnsx-io/hnsx/server/internal/testutil"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 var pgTestTenant = tenant.DefaultID
@@ -18,15 +18,15 @@ func TestPostgresRepository_RegisterAndGet(t *testing.T) {
 	repo := NewPostgresRepository(database)
 	_ = repo.Delete(pgTestTenant, "test-domain")
 
-	spec := &spec.DomainSpec{
+	spec := &domain.DomainSpec{
 		ID:          "test-domain",
 		Version:     "1.0.0",
 		Description: "test",
-		Harness: spec.HarnessSpec{
-			Agents: map[string]spec.AgentSpec{
-				"agent": {ID: "agent", Provider: "noop", Adapter: spec.AdapterConfig{Kind: "noop"}},
+		Harness: domain.HarnessSpec{
+			Agents: map[string]domain.AgentSpec{
+				"agent": {ID: "agent", Provider: "noop", Adapter: domain.AdapterConfig{Kind: "noop"}},
 			},
-			Session: spec.SessionSpec{Mode: spec.Single, Agent: "agent"},
+			Session: domain.SessionSpec{Mode: domain.Single, Agent: "agent"},
 		},
 	}
 

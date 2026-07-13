@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 func canImportHnsxWorker(python string) bool {
@@ -46,7 +46,7 @@ func TestRunEmbeddedSessionNoopSmoke(t *testing.T) {
 		t.Skipf("example domain not found: %v", err)
 	}
 
-	s, err := spec.LoadFile(domainPath)
+	s, err := domain.LoadFile(domainPath)
 	if err != nil {
 		t.Fatalf("load domain: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestRunEmbeddedSessionWorkflowEcho(t *testing.T) {
 		t.Skipf("example domain not found: %v", err)
 	}
 
-	s, err := spec.LoadFile(domainPath)
+	s, err := domain.LoadFile(domainPath)
 	if err != nil {
 		t.Fatalf("load domain: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestRunEmbeddedSessionNoPolicy(t *testing.T) {
 		t.Skipf("example domain not found: %v", err)
 	}
 
-	s, err := spec.LoadFile(domainPath)
+	s, err := domain.LoadFile(domainPath)
 	if err != nil {
 		t.Fatalf("load domain: %v", err)
 	}

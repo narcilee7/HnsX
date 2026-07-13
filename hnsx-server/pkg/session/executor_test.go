@@ -10,18 +10,18 @@ import (
 	"github.com/hnsx-io/hnsx/server/pkg/adapter"
 	"github.com/hnsx-io/hnsx/server/pkg/policy"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 func TestExecutor_Execute_Permissive(t *testing.T) {
 	exec := NewExecutor(adapter.NewEchoAdapter())
-	ds := &spec.DomainSpec{
+	ds := &domain.DomainSpec{
 		ID: "d-permissive",
-		Harness: spec.HarnessSpec{
-			Agents: map[string]spec.AgentSpec{
-				"a": {Provider: "echo", Adapter: spec.AdapterConfig{Kind: "echo"}},
+		Harness: domain.HarnessSpec{
+			Agents: map[string]domain.AgentSpec{
+				"a": {Provider: "echo", Adapter: domain.AdapterConfig{Kind: "echo"}},
 			},
-			Session: spec.SessionSpec{Mode: spec.Single, Agent: "a"},
+			Session: domain.SessionSpec{Mode: domain.Single, Agent: "a"},
 		},
 	}
 
@@ -36,8 +36,8 @@ func TestExecutor_Execute_Permissive(t *testing.T) {
 
 func TestExecutor_Execute_BudgetTurnsBlocks(t *testing.T) {
 	provider := &staticPolicyProvider{
-		engine: policy.NewEngine(spec.PolicySpec{
-			Budget: spec.BudgetSpec{MaxTurns: 1},
+		engine: policy.NewEngine(domain.PolicySpec{
+			Budget: domain.BudgetSpec{MaxTurns: 1},
 		}),
 	}
 
@@ -46,13 +46,13 @@ func TestExecutor_Execute_BudgetTurnsBlocks(t *testing.T) {
 		WithPolicyProvider(provider).
 		WithAuditRecorder(recorder)
 
-	ds := &spec.DomainSpec{
+	ds := &domain.DomainSpec{
 		ID: "d-budget",
-		Harness: spec.HarnessSpec{
-			Agents: map[string]spec.AgentSpec{
-				"a": {Provider: "echo", Adapter: spec.AdapterConfig{Kind: "echo"}},
+		Harness: domain.HarnessSpec{
+			Agents: map[string]domain.AgentSpec{
+				"a": {Provider: "echo", Adapter: domain.AdapterConfig{Kind: "echo"}},
 			},
-			Session: spec.SessionSpec{Mode: spec.Single, Agent: "a"},
+			Session: domain.SessionSpec{Mode: domain.Single, Agent: "a"},
 		},
 	}
 
@@ -79,26 +79,26 @@ func TestExecutor_Execute_BudgetTurnsBlocks(t *testing.T) {
 
 func TestExecutor_Execute_PermissionDenied(t *testing.T) {
 	provider := &staticPolicyProvider{
-		engine: policy.NewEngine(spec.PolicySpec{
-			Permissions: spec.PermissionSpec{AllowFileWrite: false},
+		engine: policy.NewEngine(domain.PolicySpec{
+			Permissions: domain.PermissionSpec{AllowFileWrite: false},
 		}),
 	}
 	exec := NewExecutor(adapter.NewEchoAdapter()).WithPolicyProvider(provider)
 
-	ds := &spec.DomainSpec{
+	ds := &domain.DomainSpec{
 		ID: "d-perm",
-		Harness: spec.HarnessSpec{
-			Agents: map[string]spec.AgentSpec{
+		Harness: domain.HarnessSpec{
+			Agents: map[string]domain.AgentSpec{
 				"a": {
 					Provider: "echo",
-					Adapter:  spec.AdapterConfig{Kind: "echo"},
+					Adapter:  domain.AdapterConfig{Kind: "echo"},
 					ToolRefs: []string{"writer"},
 				},
 			},
-			Tools: map[string]spec.ToolConfig{
+			Tools: map[string]domain.ToolConfig{
 				"writer": {Kind: "file_write"},
 			},
-			Session: spec.SessionSpec{Mode: spec.Single, Agent: "a"},
+			Session: domain.SessionSpec{Mode: domain.Single, Agent: "a"},
 		},
 	}
 
@@ -131,20 +131,20 @@ func (r *collectingRecorder) Record(_ context.Context, entry AuditEntry) error {
 func TestExecutor_Execute_AttachesCostToObservations(t *testing.T) {
 	sink := &collectingSink{done: make(chan runtime.Observation, 1)}
 	provider := &staticPolicyProvider{
-		engine: policy.NewEngine(spec.PolicySpec{
-			Budget: spec.BudgetSpec{MaxCostUSD: 10.0},
+		engine: policy.NewEngine(domain.PolicySpec{
+			Budget: domain.BudgetSpec{MaxCostUSD: 10.0},
 		}),
 	}
 	exec := NewExecutor(adapter.NewEchoAdapter(), sink).
 		WithPolicyProvider(provider)
 
-	ds := &spec.DomainSpec{
+	ds := &domain.DomainSpec{
 		ID: "d-cost",
-		Harness: spec.HarnessSpec{
-			Agents: map[string]spec.AgentSpec{
-				"a": {Provider: "echo", Adapter: spec.AdapterConfig{Kind: "echo"}},
+		Harness: domain.HarnessSpec{
+			Agents: map[string]domain.AgentSpec{
+				"a": {Provider: "echo", Adapter: domain.AdapterConfig{Kind: "echo"}},
 			},
-			Session: spec.SessionSpec{Mode: spec.Single, Agent: ""},
+			Session: domain.SessionSpec{Mode: domain.Single, Agent: ""},
 		},
 	}
 
@@ -190,8 +190,8 @@ func (s *collectingSink) Close(context.Context) error { return nil }
 
 func TestExecutor_Execute_GuardrailBlocks(t *testing.T) {
 	provider := &staticPolicyProvider{
-		engine: policy.NewEngine(spec.PolicySpec{
-			Guardrails: []spec.GuardrailSpec{
+		engine: policy.NewEngine(domain.PolicySpec{
+			Guardrails: []domain.GuardrailSpec{
 				{
 					ID:      "no-password",
 					Type:    "contains",
@@ -205,13 +205,13 @@ func TestExecutor_Execute_GuardrailBlocks(t *testing.T) {
 	}
 	exec := NewExecutor(adapter.NewEchoAdapter()).WithPolicyProvider(provider)
 
-	ds := &spec.DomainSpec{
+	ds := &domain.DomainSpec{
 		ID: "d-guardrail",
-		Harness: spec.HarnessSpec{
-			Agents: map[string]spec.AgentSpec{
-				"a": {Provider: "echo", Adapter: spec.AdapterConfig{Kind: "echo"}},
+		Harness: domain.HarnessSpec{
+			Agents: map[string]domain.AgentSpec{
+				"a": {Provider: "echo", Adapter: domain.AdapterConfig{Kind: "echo"}},
 			},
-			Session: spec.SessionSpec{Mode: spec.Single, Agent: "a"},
+			Session: domain.SessionSpec{Mode: domain.Single, Agent: "a"},
 		},
 	}
 

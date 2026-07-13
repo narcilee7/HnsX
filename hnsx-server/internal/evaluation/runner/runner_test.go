@@ -9,14 +9,14 @@ import (
 	evalrepo "github.com/hnsx-io/hnsx/server/internal/evaluation/repository"
 	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 type stubExecutor struct {
 	fn func(trigger map[string]any) (*runtime.Result, error)
 }
 
-func (e stubExecutor) Execute(_ context.Context, _ *spec.DomainSpec, trigger map[string]any) (*runtime.Result, error) {
+func (e stubExecutor) Execute(_ context.Context, _ *domain.DomainSpec, trigger map[string]any) (*runtime.Result, error) {
 	return e.fn(trigger)
 }
 
@@ -55,7 +55,7 @@ func TestRunner_ScoresAndAggregates(t *testing.T) {
 	}}
 	r := New(exec, svc, WithConcurrency(2))
 
-	if err := r.Run(context.Background(), run, set, &spec.DomainSpec{ID: "d1"}, 0); err != nil {
+	if err := r.Run(context.Background(), run, set, &domain.DomainSpec{ID: "d1"}, 0); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestRunner_ExecuteErrorScoresZero(t *testing.T) {
 	}}
 	r := New(exec, svc)
 
-	if err := r.Run(context.Background(), run, set, &spec.DomainSpec{ID: "d1"}, 0); err != nil {
+	if err := r.Run(context.Background(), run, set, &domain.DomainSpec{ID: "d1"}, 0); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	got, _ := svc.GetRun(run.ID)
@@ -123,7 +123,7 @@ func TestRunner_BudgetGuardFailsRun(t *testing.T) {
 	// Each case costs 1.0; budget of 0.5 trips after the first case.
 	r := New(exec, svc, WithConcurrency(1), WithCostFunc(func(string) float64 { return 1.0 }))
 
-	if err := r.Run(context.Background(), run, set, &spec.DomainSpec{ID: "d1"}, 0.5); err != nil {
+	if err := r.Run(context.Background(), run, set, &domain.DomainSpec{ID: "d1"}, 0.5); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 	got, _ := svc.GetRun(run.ID)

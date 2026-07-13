@@ -8,7 +8,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/policy/model"
 	"github.com/hnsx-io/hnsx/server/internal/policy/repository"
 	"github.com/hnsx-io/hnsx/server/pkg/policy"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // Service implements policy enforcement for a domain.
@@ -29,7 +29,7 @@ func NewService(repo repository.Repository) *Service {
 // callers (RegisterDomain → LoadDomainPolicy on validator/bootstrap)
 // rely on, while letting the new /api/v1/policies endpoints also
 // manage named policies independently.
-func (s *Service) LoadDomainPolicy(domainID string, ds *spec.DomainSpec) error {
+func (s *Service) LoadDomainPolicy(domainID string, ds *domain.DomainSpec) error {
 	if ds == nil {
 		return nil
 	}
@@ -89,15 +89,15 @@ func (s *Service) Engine(domainID string) (*policy.Engine, error) {
 	p, err := s.repo.ByDomain(domainID)
 	if err != nil {
 		// No policy configured -> permissive engine.
-		return policy.NewEngine(spec.PolicySpec{}), nil
+		return policy.NewEngine(domain.PolicySpec{}), nil
 	}
-	return policy.NewEngine(spec.PolicySpec{
-		Budget: spec.BudgetSpec{
+	return policy.NewEngine(domain.PolicySpec{
+		Budget: domain.BudgetSpec{
 			MaxCostUSD: p.Budget.MaxCostUSD,
 			MaxTurns:   p.Budget.MaxTurns,
 			MaxTokens:  p.Budget.MaxTokens,
 		},
-		Permissions: spec.PermissionSpec{
+		Permissions: domain.PermissionSpec{
 			AllowFileWrite:  p.Permissions.AllowFileWrite,
 			AllowFileDelete: p.Permissions.AllowFileDelete,
 			AllowNetwork:    p.Permissions.AllowNetwork,
@@ -107,7 +107,7 @@ func (s *Service) Engine(domainID string) (*policy.Engine, error) {
 	}), nil
 }
 
-func convertGuardrails(in []spec.GuardrailSpec) []model.Guardrail {
+func convertGuardrails(in []domain.GuardrailSpec) []model.Guardrail {
 	out := make([]model.Guardrail, 0, len(in))
 	for _, g := range in {
 		out = append(out, model.Guardrail{
@@ -123,10 +123,10 @@ func convertGuardrails(in []spec.GuardrailSpec) []model.Guardrail {
 	return out
 }
 
-func convertSpecGuardrails(in []model.Guardrail) []spec.GuardrailSpec {
-	out := make([]spec.GuardrailSpec, 0, len(in))
+func convertSpecGuardrails(in []model.Guardrail) []domain.GuardrailSpec {
+	out := make([]domain.GuardrailSpec, 0, len(in))
 	for _, g := range in {
-		out = append(out, spec.GuardrailSpec{
+		out = append(out, domain.GuardrailSpec{
 			ID:      g.ID,
 			Type:    g.Type,
 			On:      g.On,

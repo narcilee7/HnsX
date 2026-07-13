@@ -12,7 +12,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/session/broadcaster"
 	"github.com/hnsx-io/hnsx/server/pkg/policy"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // PolicyEngineProvider returns a session-scoped policy engine for a domain.
@@ -41,7 +41,7 @@ type AuditRecorder interface {
 type permissiveProvider struct{}
 
 func (permissiveProvider) SessionEngine(_, _ string) (*policy.Engine, error) {
-	return policy.NewEngine(spec.PolicySpec{}), nil
+	return policy.NewEngine(domain.PolicySpec{}), nil
 }
 
 // noopRecorder is used when no audit recorder is configured.
@@ -158,7 +158,7 @@ func (e *Executor) WithApprovalGate(g ApprovalGate) *Executor {
 //
 // Phase 1 keeps the runner mostly serial; future PRs will move execution to
 // goroutines and surface cancellation via context.
-func (e *Executor) Execute(ctx context.Context, s *spec.DomainSpec, trigger map[string]any) (*runtime.Result, error) {
+func (e *Executor) Execute(ctx context.Context, s *domain.DomainSpec, trigger map[string]any) (*runtime.Result, error) {
 	if s == nil {
 		return nil, errors.New("executor: nil spec")
 	}
@@ -308,13 +308,13 @@ type policyAdapter struct {
 	engine    *policy.Engine
 	audit     AuditRecorder
 	approval  ApprovalGate
-	spec      *spec.DomainSpec
+	spec      *domain.DomainSpec
 	sessionID string
 }
 
 func (a *policyAdapter) Name() string { return a.inner.Name() }
 
-func (a *policyAdapter) Invoke(ctx context.Context, agent spec.AgentSpec, prompt string, input map[string]any) (string, error) {
+func (a *policyAdapter) Invoke(ctx context.Context, agent domain.AgentSpec, prompt string, input map[string]any) (string, error) {
 	resource := a.inner.Name()
 
 	if err := a.engine.CheckTurns(); err != nil {

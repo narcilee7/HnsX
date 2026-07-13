@@ -8,7 +8,7 @@
 // stable wire format. Conversion therefore serializes dynamic blocks to JSON
 // strings where the proto expects them, and materializes them back on the
 // reverse path.
-package spec
+package domain
 
 import (
 	"encoding/json"

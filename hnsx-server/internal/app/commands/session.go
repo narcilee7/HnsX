@@ -17,7 +17,7 @@ import (
 	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
 	pkgexecutor "github.com/hnsx-io/hnsx/server/pkg/session"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // broadcasterManager abstracts the in-process SSE fan-out index. It is
@@ -149,8 +149,8 @@ func (c *SessionCommands) dispatch(ctx context.Context, tenantID tenant.ID, sess
 
 // buildWorkerRequest serializes the domain spec + trigger into the request the
 // worker queue consumes.
-func (c *SessionCommands) buildWorkerRequest(sess *app.RegisteredSession, domain *app.RegisteredDomain, trigger map[string]any) (*worker.SessionRequest, error) {
-	specJSON, err := json.Marshal(domain.Spec)
+func (c *SessionCommands) buildWorkerRequest(sess *app.RegisteredSession, d *app.RegisteredDomain, trigger map[string]any) (*worker.SessionRequest, error) {
+	specJSON, err := json.Marshal(d.Spec)
 	if err != nil {
 		return nil, fmt.Errorf("marshal domain spec: %w", err)
 	}
@@ -161,13 +161,13 @@ func (c *SessionCommands) buildWorkerRequest(sess *app.RegisteredSession, domain
 
 	req := &worker.SessionRequest{
 		SessionID:            sess.ID,
-		DomainID:             domain.ID,
-		DomainVersion:        domain.Version,
+		DomainID:             d.ID,
+		DomainVersion:        d.Version,
 		DomainSpecJSON:       string(specJSON),
 		TriggerPayloadJSON:   string(triggerJSON),
 		TraceID:              sess.ID,
 		CorrelationID:        sess.ID,
-		RequiredCapabilities: spec.DeriveCapabilities(domain.Spec),
+		RequiredCapabilities: domain.DeriveCapabilities(d.Spec),
 	}
 	return req, nil
 }

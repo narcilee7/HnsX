@@ -13,7 +13,7 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/session/broadcaster"
 	"github.com/hnsx-io/hnsx/server/pkg/runtime"
-	"github.com/hnsx-io/hnsx/server/pkg/spec"
+	"github.com/hnsx-io/hnsx/server/pkg/domain"
 )
 
 // RegisteredDomain is the runtime view of a loaded DomainSpec.
@@ -25,7 +25,7 @@ type RegisteredDomain struct {
 	ID          string
 	Version     string
 	Description string
-	Spec        *spec.DomainSpec
+	Spec        *domain.DomainSpec
 	Harness     any
 	CreatedAt   string
 	UpdatedAt   string
