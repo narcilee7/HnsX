@@ -58,8 +58,18 @@ service SchedulerService {
   // StreamChannel is the long-lived bidi channel. Worker streams up
   // StreamChannelRequest messages (oneof of observations / status / result).
   // Server pushes down StreamChannelResponse messages (oneof of cancel /
-  // drain / domain-invalidation / ping).
+  // drain / domain-invalidation / pause / resume / ping).
   rpc StreamChannel(stream StreamChannelRequest) returns (stream StreamChannelResponse);
+
+  // PauseSession asks the server to flip a running session to "paused".
+  // The session row stays bound to its worker; the worker is expected to
+  // stop pulling new work for that session_id until ResumeSession is
+  // received. The current step in flight is allowed to complete.
+  rpc PauseSession(PauseSessionRequest) returns (PauseSessionResponse);
+
+  // ResumeSession flips a paused session back to "running" so the
+  // worker resumes pulling work for it.
+  rpc ResumeSession(ResumeSessionRequest) returns (ResumeSessionResponse);
 }
 
 // ----------------------------------------------------------------------------
@@ -234,6 +244,29 @@ message CancelSessionCommand {
   string session_id = 1;
   string reason = 2;
   int64 deadline_ms = 3;
+}
+
+// PauseSessionRequest / Response — control-plane driven pause of a
+// running session. Worker handles the actual "stop pulling work" loop.
+message PauseSessionRequest {
+  string session_id = 1;
+  string reason = 2;                  // surfaced in trace metadata
+}
+
+message PauseSessionResponse {
+  bool ok = 1;                        // false when the session was not running
+  string current_state = 2;           // actual state after the call
+}
+
+// ResumeSessionRequest / Response — flip a paused session back to
+// running. Idempotent: resuming an already-running session returns ok=true.
+message ResumeSessionRequest {
+  string session_id = 1;
+}
+
+message ResumeSessionResponse {
+  bool ok = 1;
+  string current_state = 2;
 }
 
 message DrainWorkerCommand {

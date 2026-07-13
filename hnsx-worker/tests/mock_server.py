@@ -42,6 +42,8 @@ class MockHnsXServer:
         self.heartbeats: list[worker_pb2.HeartbeatRequest] = []
         self.pulls: list[worker_pb2.PullSessionRequest] = []
         self.acks: list[worker_pb2.AckSessionRequest] = []
+        self.pause_calls: list[worker_pb2.PauseSessionRequest] = []
+        self.resume_calls: list[worker_pb2.ResumeSessionRequest] = []
         self.nacks: list[worker_pb2.NackSessionRequest] = []
         # Inbox of canned session assignments the mock will return on PullSession.
         self.session_queue: queue.Queue[worker_pb2.PullSessionResponse] = queue.Queue()
@@ -155,6 +157,14 @@ class _SchedulerServicer(worker_pb2_grpc.SchedulerServiceServicer):
                 time.sleep(0.5)
         except Exception:
             return
+
+    def PauseSession(self, request, context):  # noqa: ARG002
+        self.server.pause_calls.append(request)
+        return worker_pb2.PauseSessionResponse(ok=True, current_state="paused")
+
+    def ResumeSession(self, request, context):  # noqa: ARG002
+        self.server.resume_calls.append(request)
+        return worker_pb2.ResumeSessionResponse(ok=True, current_state="running")
 
 
 class _DomainRegistryServicer(control_plane_pb2_grpc.DomainRegistryServiceServicer):

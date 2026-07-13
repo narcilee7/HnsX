@@ -11,8 +11,8 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/app"
 	domainmodel "github.com/hnsx-io/hnsx/server/internal/domain/model"
 	sessionmodel "github.com/hnsx-io/hnsx/server/internal/session/model"
-	tracemodel "github.com/hnsx-io/hnsx/server/internal/trace/model"
 	"github.com/hnsx-io/hnsx/server/internal/tenant"
+	tracemodel "github.com/hnsx-io/hnsx/server/internal/trace/model"
 	"github.com/hnsx-io/hnsx/server/pkg/handler/viewmodel"
 )
 
@@ -47,6 +47,25 @@ type CancelSessionInput struct {
 type RerunSessionInput struct {
 	TenantID  tenant.ID
 	SessionID string
+}
+
+type PauseSessionInput struct {
+	TenantID  tenant.ID
+	SessionID string
+	Reason     string
+}
+
+type ResumeSessionInput struct {
+	TenantID  tenant.ID
+	SessionID string
+}
+
+type PauseSessionOutput struct {
+	Session *viewmodel.SessionDetail
+}
+
+type ResumeSessionOutput struct {
+	Session *viewmodel.SessionDetail
 }
 
 type GetSessionTraceInput struct {
@@ -213,6 +232,42 @@ func (h *Handler) CancelSession(ctx context.Context, in CancelSessionInput) (*Ca
 	}
 
 	return &CancelSessionOutput{Session: toSessionDetail(sess)}, nil
+}
+
+// PauseSession flips a running session to paused. The session row stays
+// bound to its worker; the worker picks up the new state on its next
+// PullSession and stops pulling turns for it. The current turn is allowed
+// to finish — this method does not abort mid-flight.
+func (h *Handler) PauseSession(ctx context.Context, in PauseSessionInput) (*PauseSessionOutput, error) {
+	defer h.hook(ctx, "session.pause",
+		zap.String("tenant_id", string(in.TenantID)),
+		zap.String("session_id", in.SessionID),
+	)()
+	if h.App == nil || h.SessionCommands == nil {
+		return nil, sessionmodel.ErrSessionNotFound
+	}
+	sess, err := h.SessionCommands.Pause(ctx, in.TenantID, in.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	return &PauseSessionOutput{Session: toSessionDetail(sess)}, nil
+}
+
+// ResumeSession flips a paused session back to running. The assigned
+// worker resumes pulling turns on its next PullSession.
+func (h *Handler) ResumeSession(ctx context.Context, in ResumeSessionInput) (*ResumeSessionOutput, error) {
+	defer h.hook(ctx, "session.resume",
+		zap.String("tenant_id", string(in.TenantID)),
+		zap.String("session_id", in.SessionID),
+	)()
+	if h.App == nil || h.SessionCommands == nil {
+		return nil, sessionmodel.ErrSessionNotFound
+	}
+	sess, err := h.SessionCommands.Resume(ctx, in.TenantID, in.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	return &ResumeSessionOutput{Session: toSessionDetail(sess)}, nil
 }
 
 // RerunSession reruns an existing session.

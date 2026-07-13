@@ -1560,6 +1560,210 @@ func (x *CancelSessionCommand) GetDeadlineMs() int64 {
 	return 0
 }
 
+// PauseSessionRequest / Response — control-plane driven pause of a
+// running session. Worker handles the actual "stop pulling work" loop.
+type PauseSessionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"` // surfaced in trace metadata
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PauseSessionRequest) Reset() {
+	*x = PauseSessionRequest{}
+	mi := &file_hnsx_v1_worker_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PauseSessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PauseSessionRequest) ProtoMessage() {}
+
+func (x *PauseSessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_hnsx_v1_worker_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PauseSessionRequest.ProtoReflect.Descriptor instead.
+func (*PauseSessionRequest) Descriptor() ([]byte, []int) {
+	return file_hnsx_v1_worker_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *PauseSessionRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *PauseSessionRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type PauseSessionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`                                        // false when the session was not running
+	CurrentState  string                 `protobuf:"bytes,2,opt,name=current_state,json=currentState,proto3" json:"current_state,omitempty"` // actual state after the call
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PauseSessionResponse) Reset() {
+	*x = PauseSessionResponse{}
+	mi := &file_hnsx_v1_worker_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PauseSessionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PauseSessionResponse) ProtoMessage() {}
+
+func (x *PauseSessionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_hnsx_v1_worker_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PauseSessionResponse.ProtoReflect.Descriptor instead.
+func (*PauseSessionResponse) Descriptor() ([]byte, []int) {
+	return file_hnsx_v1_worker_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *PauseSessionResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *PauseSessionResponse) GetCurrentState() string {
+	if x != nil {
+		return x.CurrentState
+	}
+	return ""
+}
+
+// ResumeSessionRequest / Response — flip a paused session back to
+// running. Idempotent: resuming an already-running session returns ok=true.
+type ResumeSessionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeSessionRequest) Reset() {
+	*x = ResumeSessionRequest{}
+	mi := &file_hnsx_v1_worker_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeSessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeSessionRequest) ProtoMessage() {}
+
+func (x *ResumeSessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_hnsx_v1_worker_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeSessionRequest.ProtoReflect.Descriptor instead.
+func (*ResumeSessionRequest) Descriptor() ([]byte, []int) {
+	return file_hnsx_v1_worker_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ResumeSessionRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+type ResumeSessionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	CurrentState  string                 `protobuf:"bytes,2,opt,name=current_state,json=currentState,proto3" json:"current_state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeSessionResponse) Reset() {
+	*x = ResumeSessionResponse{}
+	mi := &file_hnsx_v1_worker_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeSessionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeSessionResponse) ProtoMessage() {}
+
+func (x *ResumeSessionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_hnsx_v1_worker_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeSessionResponse.ProtoReflect.Descriptor instead.
+func (*ResumeSessionResponse) Descriptor() ([]byte, []int) {
+	return file_hnsx_v1_worker_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *ResumeSessionResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *ResumeSessionResponse) GetCurrentState() string {
+	if x != nil {
+		return x.CurrentState
+	}
+	return ""
+}
+
 type DrainWorkerCommand struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	DeadlineSeconds int64                  `protobuf:"varint,1,opt,name=deadline_seconds,json=deadlineSeconds,proto3" json:"deadline_seconds,omitempty"`
@@ -1570,7 +1774,7 @@ type DrainWorkerCommand struct {
 
 func (x *DrainWorkerCommand) Reset() {
 	*x = DrainWorkerCommand{}
-	mi := &file_hnsx_v1_worker_proto_msgTypes[21]
+	mi := &file_hnsx_v1_worker_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1582,7 +1786,7 @@ func (x *DrainWorkerCommand) String() string {
 func (*DrainWorkerCommand) ProtoMessage() {}
 
 func (x *DrainWorkerCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_worker_proto_msgTypes[21]
+	mi := &file_hnsx_v1_worker_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1595,7 +1799,7 @@ func (x *DrainWorkerCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainWorkerCommand.ProtoReflect.Descriptor instead.
 func (*DrainWorkerCommand) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_worker_proto_rawDescGZIP(), []int{21}
+	return file_hnsx_v1_worker_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *DrainWorkerCommand) GetDeadlineSeconds() int64 {
@@ -1622,7 +1826,7 @@ type DomainInvalidation struct {
 
 func (x *DomainInvalidation) Reset() {
 	*x = DomainInvalidation{}
-	mi := &file_hnsx_v1_worker_proto_msgTypes[22]
+	mi := &file_hnsx_v1_worker_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1634,7 +1838,7 @@ func (x *DomainInvalidation) String() string {
 func (*DomainInvalidation) ProtoMessage() {}
 
 func (x *DomainInvalidation) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_worker_proto_msgTypes[22]
+	mi := &file_hnsx_v1_worker_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1647,7 +1851,7 @@ func (x *DomainInvalidation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DomainInvalidation.ProtoReflect.Descriptor instead.
 func (*DomainInvalidation) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_worker_proto_rawDescGZIP(), []int{22}
+	return file_hnsx_v1_worker_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *DomainInvalidation) GetDomainId() string {
@@ -1673,7 +1877,7 @@ type Ping struct {
 
 func (x *Ping) Reset() {
 	*x = Ping{}
-	mi := &file_hnsx_v1_worker_proto_msgTypes[23]
+	mi := &file_hnsx_v1_worker_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1685,7 +1889,7 @@ func (x *Ping) String() string {
 func (*Ping) ProtoMessage() {}
 
 func (x *Ping) ProtoReflect() protoreflect.Message {
-	mi := &file_hnsx_v1_worker_proto_msgTypes[23]
+	mi := &file_hnsx_v1_worker_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1698,7 +1902,7 @@ func (x *Ping) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ping.ProtoReflect.Descriptor instead.
 func (*Ping) Descriptor() ([]byte, []int) {
-	return file_hnsx_v1_worker_proto_rawDescGZIP(), []int{23}
+	return file_hnsx_v1_worker_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *Ping) GetTimestampMs() int64 {
@@ -1839,7 +2043,20 @@ const file_hnsx_v1_worker_proto_rawDesc = "" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x1f\n" +
 	"\vdeadline_ms\x18\x03 \x01(\x03R\n" +
-	"deadlineMs\"W\n" +
+	"deadlineMs\"L\n" +
+	"\x13PauseSessionRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"K\n" +
+	"\x14PauseSessionResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12#\n" +
+	"\rcurrent_state\x18\x02 \x01(\tR\fcurrentState\"5\n" +
+	"\x14ResumeSessionRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\"L\n" +
+	"\x15ResumeSessionResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12#\n" +
+	"\rcurrent_state\x18\x02 \x01(\tR\fcurrentState\"W\n" +
 	"\x12DrainWorkerCommand\x12)\n" +
 	"\x10deadline_seconds\x18\x01 \x01(\x03R\x0fdeadlineSeconds\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"K\n" +
@@ -1850,13 +2067,15 @@ const file_hnsx_v1_worker_proto_rawDesc = "" +
 	"\ftimestamp_ms\x18\x01 \x01(\x03R\vtimestampMs2\x94\x01\n" +
 	"\rWorkerService\x12?\n" +
 	"\bRegister\x12\x18.hnsx.v1.RegisterRequest\x1a\x19.hnsx.v1.RegisterResponse\x12B\n" +
-	"\tHeartbeat\x12\x19.hnsx.v1.HeartbeatRequest\x1a\x1a.hnsx.v1.HeartbeatResponse2\xc1\x02\n" +
+	"\tHeartbeat\x12\x19.hnsx.v1.HeartbeatRequest\x1a\x1a.hnsx.v1.HeartbeatResponse2\xde\x03\n" +
 	"\x10SchedulerService\x12H\n" +
 	"\vPullSession\x12\x1b.hnsx.v1.PullSessionRequest\x1a\x1c.hnsx.v1.PullSessionResponse\x12E\n" +
 	"\n" +
 	"AckSession\x12\x1a.hnsx.v1.AckSessionRequest\x1a\x1b.hnsx.v1.AckSessionResponse\x12H\n" +
 	"\vNackSession\x12\x1b.hnsx.v1.NackSessionRequest\x1a\x1c.hnsx.v1.NackSessionResponse\x12R\n" +
-	"\rStreamChannel\x12\x1d.hnsx.v1.StreamChannelRequest\x1a\x1e.hnsx.v1.StreamChannelResponse(\x010\x01B\x8c\x01\n" +
+	"\rStreamChannel\x12\x1d.hnsx.v1.StreamChannelRequest\x1a\x1e.hnsx.v1.StreamChannelResponse(\x010\x01\x12K\n" +
+	"\fPauseSession\x12\x1c.hnsx.v1.PauseSessionRequest\x1a\x1d.hnsx.v1.PauseSessionResponse\x12N\n" +
+	"\rResumeSession\x12\x1d.hnsx.v1.ResumeSessionRequest\x1a\x1e.hnsx.v1.ResumeSessionResponseB\x8c\x01\n" +
 	"\vcom.hnsx.v1B\vWorkerProtoP\x01Z3github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1\xa2\x02\x03HXX\xaa\x02\aHnsx.V1\xca\x02\aHnsx\\V1\xe2\x02\x13Hnsx\\V1\\GPBMetadata\xea\x02\bHnsx::V1b\x06proto3"
 
 var (
@@ -1872,7 +2091,7 @@ func file_hnsx_v1_worker_proto_rawDescGZIP() []byte {
 }
 
 var file_hnsx_v1_worker_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_hnsx_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_hnsx_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_hnsx_v1_worker_proto_goTypes = []any{
 	(WorkerHealth_Status)(0),      // 0: hnsx.v1.WorkerHealth.Status
 	(*ResourceCapacity)(nil),      // 1: hnsx.v1.ResourceCapacity
@@ -1896,16 +2115,20 @@ var file_hnsx_v1_worker_proto_goTypes = []any{
 	(*SessionStatusUpdate)(nil),   // 19: hnsx.v1.SessionStatusUpdate
 	(*SessionFinalResult)(nil),    // 20: hnsx.v1.SessionFinalResult
 	(*CancelSessionCommand)(nil),  // 21: hnsx.v1.CancelSessionCommand
-	(*DrainWorkerCommand)(nil),    // 22: hnsx.v1.DrainWorkerCommand
-	(*DomainInvalidation)(nil),    // 23: hnsx.v1.DomainInvalidation
-	(*Ping)(nil),                  // 24: hnsx.v1.Ping
-	nil,                           // 25: hnsx.v1.WorkerInfo.LabelsEntry
-	(*Observation)(nil),           // 26: hnsx.v1.Observation
+	(*PauseSessionRequest)(nil),   // 22: hnsx.v1.PauseSessionRequest
+	(*PauseSessionResponse)(nil),  // 23: hnsx.v1.PauseSessionResponse
+	(*ResumeSessionRequest)(nil),  // 24: hnsx.v1.ResumeSessionRequest
+	(*ResumeSessionResponse)(nil), // 25: hnsx.v1.ResumeSessionResponse
+	(*DrainWorkerCommand)(nil),    // 26: hnsx.v1.DrainWorkerCommand
+	(*DomainInvalidation)(nil),    // 27: hnsx.v1.DomainInvalidation
+	(*Ping)(nil),                  // 28: hnsx.v1.Ping
+	nil,                           // 29: hnsx.v1.WorkerInfo.LabelsEntry
+	(*Observation)(nil),           // 30: hnsx.v1.Observation
 }
 var file_hnsx_v1_worker_proto_depIdxs = []int32{
 	0,  // 0: hnsx.v1.WorkerHealth.status:type_name -> hnsx.v1.WorkerHealth.Status
 	1,  // 1: hnsx.v1.WorkerInfo.capacity:type_name -> hnsx.v1.ResourceCapacity
-	25, // 2: hnsx.v1.WorkerInfo.labels:type_name -> hnsx.v1.WorkerInfo.LabelsEntry
+	29, // 2: hnsx.v1.WorkerInfo.labels:type_name -> hnsx.v1.WorkerInfo.LabelsEntry
 	4,  // 3: hnsx.v1.RegisterRequest.info:type_name -> hnsx.v1.WorkerInfo
 	2,  // 4: hnsx.v1.HeartbeatRequest.usage:type_name -> hnsx.v1.ResourceUsage
 	3,  // 5: hnsx.v1.HeartbeatRequest.health:type_name -> hnsx.v1.WorkerHealth
@@ -1914,24 +2137,28 @@ var file_hnsx_v1_worker_proto_depIdxs = []int32{
 	19, // 8: hnsx.v1.StreamChannelRequest.status:type_name -> hnsx.v1.SessionStatusUpdate
 	20, // 9: hnsx.v1.StreamChannelRequest.result:type_name -> hnsx.v1.SessionFinalResult
 	21, // 10: hnsx.v1.StreamChannelResponse.cancel:type_name -> hnsx.v1.CancelSessionCommand
-	22, // 11: hnsx.v1.StreamChannelResponse.drain:type_name -> hnsx.v1.DrainWorkerCommand
-	23, // 12: hnsx.v1.StreamChannelResponse.invalidate:type_name -> hnsx.v1.DomainInvalidation
-	24, // 13: hnsx.v1.StreamChannelResponse.ping:type_name -> hnsx.v1.Ping
-	26, // 14: hnsx.v1.ObservationBatch.observations:type_name -> hnsx.v1.Observation
+	26, // 11: hnsx.v1.StreamChannelResponse.drain:type_name -> hnsx.v1.DrainWorkerCommand
+	27, // 12: hnsx.v1.StreamChannelResponse.invalidate:type_name -> hnsx.v1.DomainInvalidation
+	28, // 13: hnsx.v1.StreamChannelResponse.ping:type_name -> hnsx.v1.Ping
+	30, // 14: hnsx.v1.ObservationBatch.observations:type_name -> hnsx.v1.Observation
 	5,  // 15: hnsx.v1.WorkerService.Register:input_type -> hnsx.v1.RegisterRequest
 	7,  // 16: hnsx.v1.WorkerService.Heartbeat:input_type -> hnsx.v1.HeartbeatRequest
 	10, // 17: hnsx.v1.SchedulerService.PullSession:input_type -> hnsx.v1.PullSessionRequest
 	12, // 18: hnsx.v1.SchedulerService.AckSession:input_type -> hnsx.v1.AckSessionRequest
 	14, // 19: hnsx.v1.SchedulerService.NackSession:input_type -> hnsx.v1.NackSessionRequest
 	16, // 20: hnsx.v1.SchedulerService.StreamChannel:input_type -> hnsx.v1.StreamChannelRequest
-	6,  // 21: hnsx.v1.WorkerService.Register:output_type -> hnsx.v1.RegisterResponse
-	8,  // 22: hnsx.v1.WorkerService.Heartbeat:output_type -> hnsx.v1.HeartbeatResponse
-	11, // 23: hnsx.v1.SchedulerService.PullSession:output_type -> hnsx.v1.PullSessionResponse
-	13, // 24: hnsx.v1.SchedulerService.AckSession:output_type -> hnsx.v1.AckSessionResponse
-	15, // 25: hnsx.v1.SchedulerService.NackSession:output_type -> hnsx.v1.NackSessionResponse
-	17, // 26: hnsx.v1.SchedulerService.StreamChannel:output_type -> hnsx.v1.StreamChannelResponse
-	21, // [21:27] is the sub-list for method output_type
-	15, // [15:21] is the sub-list for method input_type
+	22, // 21: hnsx.v1.SchedulerService.PauseSession:input_type -> hnsx.v1.PauseSessionRequest
+	24, // 22: hnsx.v1.SchedulerService.ResumeSession:input_type -> hnsx.v1.ResumeSessionRequest
+	6,  // 23: hnsx.v1.WorkerService.Register:output_type -> hnsx.v1.RegisterResponse
+	8,  // 24: hnsx.v1.WorkerService.Heartbeat:output_type -> hnsx.v1.HeartbeatResponse
+	11, // 25: hnsx.v1.SchedulerService.PullSession:output_type -> hnsx.v1.PullSessionResponse
+	13, // 26: hnsx.v1.SchedulerService.AckSession:output_type -> hnsx.v1.AckSessionResponse
+	15, // 27: hnsx.v1.SchedulerService.NackSession:output_type -> hnsx.v1.NackSessionResponse
+	17, // 28: hnsx.v1.SchedulerService.StreamChannel:output_type -> hnsx.v1.StreamChannelResponse
+	23, // 29: hnsx.v1.SchedulerService.PauseSession:output_type -> hnsx.v1.PauseSessionResponse
+	25, // 30: hnsx.v1.SchedulerService.ResumeSession:output_type -> hnsx.v1.ResumeSessionResponse
+	23, // [23:31] is the sub-list for method output_type
+	15, // [15:23] is the sub-list for method input_type
 	15, // [15:15] is the sub-list for extension type_name
 	15, // [15:15] is the sub-list for extension extendee
 	0,  // [0:15] is the sub-list for field type_name
@@ -1960,7 +2187,7 @@ func file_hnsx_v1_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_hnsx_v1_worker_proto_rawDesc), len(file_hnsx_v1_worker_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   25,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

@@ -222,6 +222,42 @@ func (c *SessionCommands) Cancel(ctx context.Context, tenantID tenant.ID, id str
 	return app.SessionFromModel(sess), nil
 }
 
+// Pause transitions a running session to paused.
+func (c *SessionCommands) Pause(ctx context.Context, tenantID tenant.ID, id string) (*app.RegisteredSession, error) {
+	if c.sessionSvc == nil {
+		return nil, errors.New("nil session service")
+	}
+	sess, err := c.sessionSvc.Pause(tenantID, id)
+	if err != nil {
+		if errors.Is(err, sessionmodel.ErrSessionNotFound) {
+			return nil, ErrSessionNotFound
+		}
+		if errors.Is(err, sessionmodel.ErrInvalidStateTransition) {
+			return nil, fmt.Errorf("cannot pause session in state %q", sess.State)
+		}
+		return nil, err
+	}
+	return app.SessionFromModel(sess), nil
+}
+
+// Resume transitions a paused session back to running.
+func (c *SessionCommands) Resume(ctx context.Context, tenantID tenant.ID, id string) (*app.RegisteredSession, error) {
+	if c.sessionSvc == nil {
+		return nil, errors.New("nil session service")
+	}
+	sess, err := c.sessionSvc.Resume(tenantID, id)
+	if err != nil {
+		if errors.Is(err, sessionmodel.ErrSessionNotFound) {
+			return nil, ErrSessionNotFound
+		}
+		if errors.Is(err, sessionmodel.ErrInvalidStateTransition) {
+			return nil, fmt.Errorf("cannot resume session in state %q", sess.State)
+		}
+		return nil, err
+	}
+	return app.SessionFromModel(sess), nil
+}
+
 // MarkRunning transitions a pending session to running.
 func (c *SessionCommands) MarkRunning(ctx context.Context, tenantID tenant.ID, id string) (*app.RegisteredSession, error) {
 	if c.sessionSvc == nil {

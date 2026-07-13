@@ -32,6 +32,7 @@ var (
 	ErrInvalidSession     = errors.New("session: invalid session")
 	ErrSessionNotTerminal = errors.New("session: not in a terminal state")
 	ErrAlreadyTerminal    = errors.New("session: already in a terminal state")
+	ErrInvalidStateTransition = errors.New("session: invalid state transition for this operation")
 )
 
 // Session is the aggregate root for one execution of a Domain.
