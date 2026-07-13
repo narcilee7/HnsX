@@ -138,6 +138,53 @@ func (s *Service) Cancel(tenantID tenant.ID, id string) (*model.Session, error) 
 	return sess, nil
 }
 
+// Pause transitions a running session to paused. The session row stays
+// bound to its worker; the worker is expected to stop pulling new turns
+// for it. The current step is allowed to finish — the state transition
+// is recorded in the session row, the runtime check happens on the next
+// pull.
+func (s *Service) Pause(tenantID tenant.ID, id string) (*model.Session, error) {
+	sess, err := s.repo.ByID(tenantID, id)
+	if err != nil {
+		return nil, err
+	}
+	if sess.IsTerminal() {
+		return nil, model.ErrAlreadyTerminal
+	}
+	if sess.State != model.StateRunning {
+		return nil, model.ErrInvalidStateTransition
+	}
+	if err := sess.TransitionTo(model.StatePaused); err != nil {
+		return nil, err
+	}
+	if err := s.repo.Save(tenantID, sess); err != nil {
+		return nil, err
+	}
+	return sess, nil
+}
+
+// Resume flips a paused session back to running. Idempotent: resuming a
+// session that is already running returns the session unchanged.
+func (s *Service) Resume(tenantID tenant.ID, id string) (*model.Session, error) {
+	sess, err := s.repo.ByID(tenantID, id)
+	if err != nil {
+		return nil, err
+	}
+	if sess.IsTerminal() {
+		return nil, model.ErrAlreadyTerminal
+	}
+	if sess.State != model.StatePaused {
+		return nil, model.ErrInvalidStateTransition
+	}
+	if err := sess.TransitionTo(model.StateRunning); err != nil {
+		return nil, err
+	}
+	if err := s.repo.Save(tenantID, sess); err != nil {
+		return nil, err
+	}
+	return sess, nil
+}
+
 // UpdateState is a generic state update used by infrastructure adapters that
 // receive worker status reports. It refuses to move a terminal session
 // backwards.

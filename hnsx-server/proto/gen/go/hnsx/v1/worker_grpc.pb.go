@@ -173,6 +173,8 @@ const (
 	SchedulerService_AckSession_FullMethodName    = "/hnsx.v1.SchedulerService/AckSession"
 	SchedulerService_NackSession_FullMethodName   = "/hnsx.v1.SchedulerService/NackSession"
 	SchedulerService_StreamChannel_FullMethodName = "/hnsx.v1.SchedulerService/StreamChannel"
+	SchedulerService_PauseSession_FullMethodName  = "/hnsx.v1.SchedulerService/PauseSession"
+	SchedulerService_ResumeSession_FullMethodName = "/hnsx.v1.SchedulerService/ResumeSession"
 )
 
 // SchedulerServiceClient is the client API for SchedulerService service.
@@ -194,8 +196,16 @@ type SchedulerServiceClient interface {
 	// StreamChannel is the long-lived bidi channel. Worker streams up
 	// StreamChannelRequest messages (oneof of observations / status / result).
 	// Server pushes down StreamChannelResponse messages (oneof of cancel /
-	// drain / domain-invalidation / ping).
+	// drain / domain-invalidation / pause / resume / ping).
 	StreamChannel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[StreamChannelRequest, StreamChannelResponse], error)
+	// PauseSession asks the server to flip a running session to "paused".
+	// The session row stays bound to its worker; the worker is expected to
+	// stop pulling new work for that session_id until ResumeSession is
+	// received. The current step in flight is allowed to complete.
+	PauseSession(ctx context.Context, in *PauseSessionRequest, opts ...grpc.CallOption) (*PauseSessionResponse, error)
+	// ResumeSession flips a paused session back to "running" so the
+	// worker resumes pulling work for it.
+	ResumeSession(ctx context.Context, in *ResumeSessionRequest, opts ...grpc.CallOption) (*ResumeSessionResponse, error)
 }
 
 type schedulerServiceClient struct {
@@ -249,6 +259,26 @@ func (c *schedulerServiceClient) StreamChannel(ctx context.Context, opts ...grpc
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type SchedulerService_StreamChannelClient = grpc.BidiStreamingClient[StreamChannelRequest, StreamChannelResponse]
 
+func (c *schedulerServiceClient) PauseSession(ctx context.Context, in *PauseSessionRequest, opts ...grpc.CallOption) (*PauseSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PauseSessionResponse)
+	err := c.cc.Invoke(ctx, SchedulerService_PauseSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *schedulerServiceClient) ResumeSession(ctx context.Context, in *ResumeSessionRequest, opts ...grpc.CallOption) (*ResumeSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResumeSessionResponse)
+	err := c.cc.Invoke(ctx, SchedulerService_ResumeSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SchedulerServiceServer is the server API for SchedulerService service.
 // All implementations must embed UnimplementedSchedulerServiceServer
 // for forward compatibility.
@@ -268,8 +298,16 @@ type SchedulerServiceServer interface {
 	// StreamChannel is the long-lived bidi channel. Worker streams up
 	// StreamChannelRequest messages (oneof of observations / status / result).
 	// Server pushes down StreamChannelResponse messages (oneof of cancel /
-	// drain / domain-invalidation / ping).
+	// drain / domain-invalidation / pause / resume / ping).
 	StreamChannel(grpc.BidiStreamingServer[StreamChannelRequest, StreamChannelResponse]) error
+	// PauseSession asks the server to flip a running session to "paused".
+	// The session row stays bound to its worker; the worker is expected to
+	// stop pulling new work for that session_id until ResumeSession is
+	// received. The current step in flight is allowed to complete.
+	PauseSession(context.Context, *PauseSessionRequest) (*PauseSessionResponse, error)
+	// ResumeSession flips a paused session back to "running" so the
+	// worker resumes pulling work for it.
+	ResumeSession(context.Context, *ResumeSessionRequest) (*ResumeSessionResponse, error)
 	mustEmbedUnimplementedSchedulerServiceServer()
 }
 
@@ -291,6 +329,12 @@ func (UnimplementedSchedulerServiceServer) NackSession(context.Context, *NackSes
 }
 func (UnimplementedSchedulerServiceServer) StreamChannel(grpc.BidiStreamingServer[StreamChannelRequest, StreamChannelResponse]) error {
 	return status.Error(codes.Unimplemented, "method StreamChannel not implemented")
+}
+func (UnimplementedSchedulerServiceServer) PauseSession(context.Context, *PauseSessionRequest) (*PauseSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PauseSession not implemented")
+}
+func (UnimplementedSchedulerServiceServer) ResumeSession(context.Context, *ResumeSessionRequest) (*ResumeSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResumeSession not implemented")
 }
 func (UnimplementedSchedulerServiceServer) mustEmbedUnimplementedSchedulerServiceServer() {}
 func (UnimplementedSchedulerServiceServer) testEmbeddedByValue()                          {}
@@ -374,6 +418,42 @@ func _SchedulerService_StreamChannel_Handler(srv interface{}, stream grpc.Server
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type SchedulerService_StreamChannelServer = grpc.BidiStreamingServer[StreamChannelRequest, StreamChannelResponse]
 
+func _SchedulerService_PauseSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PauseSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SchedulerServiceServer).PauseSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SchedulerService_PauseSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SchedulerServiceServer).PauseSession(ctx, req.(*PauseSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SchedulerService_ResumeSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SchedulerServiceServer).ResumeSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SchedulerService_ResumeSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SchedulerServiceServer).ResumeSession(ctx, req.(*ResumeSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SchedulerService_ServiceDesc is the grpc.ServiceDesc for SchedulerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -392,6 +472,14 @@ var SchedulerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NackSession",
 			Handler:    _SchedulerService_NackSession_Handler,
+		},
+		{
+			MethodName: "PauseSession",
+			Handler:    _SchedulerService_PauseSession_Handler,
+		},
+		{
+			MethodName: "ResumeSession",
+			Handler:    _SchedulerService_ResumeSession_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

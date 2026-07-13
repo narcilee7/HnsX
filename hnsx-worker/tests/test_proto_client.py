@@ -58,6 +58,8 @@ class _MockControlPlane:
         self.pulls: list[worker_pb2.PullSessionRequest] = []
         self.acks: list[worker_pb2.AckSessionRequest] = []
         self.nacks: list[worker_pb2.NackSessionRequest] = []
+        self.pause_calls: list[worker_pb2.PauseSessionRequest] = []
+        self.resume_calls: list[worker_pb2.ResumeSessionRequest] = []
         self.stream_requests: list[worker_pb2.StreamChannelRequest] = []
         # DomainRegistry traffic (mirrors mock_server.py's servicer).
         self.registered_domains: list[domain_pb2.DomainSpec] = []
@@ -129,6 +131,14 @@ class _SchedulerServicer(worker_pb2_grpc.SchedulerServiceServicer):
     def NackSession(self, request, context):  # noqa: ARG002
         self.m.nacks.append(request)
         return worker_pb2.NackSessionResponse()
+
+    def PauseSession(self, request, context):  # noqa: ARG002
+        self.m.pause_calls.append(request)
+        return worker_pb2.PauseSessionResponse(ok=True, current_state="paused")
+
+    def ResumeSession(self, request, context):  # noqa: ARG002
+        self.m.resume_calls.append(request)
+        return worker_pb2.ResumeSessionResponse(ok=True, current_state="running")
 
     def StreamChannel(self, request_iterator, context):  # noqa: ARG002
         # Push the cancel only after we've observed at least 2 outbound
@@ -608,3 +618,33 @@ def test_no_metadata_when_constructor_omits_credentials(
     keys = {k for k, _ in (md or [])}
     assert "x-tenant-id" not in keys
     assert "x-api-key" not in keys
+
+
+# ---------------------------------------------------------------------------
+# SchedulerService — PauseSession / ResumeSession
+# ---------------------------------------------------------------------------
+
+
+def test_pause_session_returns_state(mock_plane: _MockControlPlane) -> None:
+    client = ControlPlaneClient(mock_plane.addr)
+    try:
+        ok, state = client.pause_session("sess-1", reason="user clicked pause")
+        assert ok is True
+        assert state == "paused"
+        assert len(mock_plane.pause_calls) == 1
+        assert mock_plane.pause_calls[0].session_id == "sess-1"
+        assert mock_plane.pause_calls[0].reason == "user clicked pause"
+    finally:
+        client.close()
+
+
+def test_resume_session_idempotent(mock_plane: _MockControlPlane) -> None:
+    client = ControlPlaneClient(mock_plane.addr)
+    try:
+        ok1, state1 = client.resume_session("sess-1")
+        ok2, state2 = client.resume_session("sess-1")
+        assert ok1 and ok2
+        assert state1 == state2 == "running"
+        assert len(mock_plane.resume_calls) == 2
+    finally:
+        client.close()

@@ -44,7 +44,7 @@ func NewConnectServer(app *app.Application) *ConnectServer {
 	return &ConnectServer{App: app, Handlers: handler.New(app, nil)}
 }
 
-// Handler returns an http.Handler that serves all 5 control plane services.
+// Handler returns an http.Handler that serves all control plane services.
 func (s *ConnectServer) Handler() http.Handler {
 	mux := http.NewServeMux()
 	interceptors := connect.WithInterceptors(
@@ -61,6 +61,11 @@ func (s *ConnectServer) Handler() http.Handler {
 	mux.Handle("/hnsx.v1.TelemetryService/", h)
 	_, h = v1connect.NewEvalServiceHandler(s, interceptors)
 	mux.Handle("/hnsx.v1.EvalService/", h)
+	// SchedulerService lives on the same worker.proto as WorkerService but
+	// is also exposed here so Python / CLI clients (Phase 1 client) can
+	// drive pause/resume via gRPC over the same HTTP port as REST.
+	_, h = v1connect.NewSchedulerServiceHandler(s, interceptors)
+	mux.Handle("/hnsx.v1.SchedulerService/", h)
 	return mux
 }
 
@@ -168,6 +173,57 @@ func (s *ConnectServer) ValidateDomain(ctx context.Context, req *connect.Request
 
 func (s *ConnectServer) ScheduleSession(ctx context.Context, req *connect.Request[pb.ScheduleSessionRequest]) (*connect.Response[pb.ScheduleSessionResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("SessionSchedulerService.ScheduleSession is deprecated; use SchedulerService.PullSession"))
+}
+
+// SchedulerServiceHandler — only PauseSession / ResumeSession are wired
+// here. PullSession / AckSession / NackSession / StreamChannel continue
+// to be served by the raw gRPC server in internal/controlplane/controlplane.go
+// because they hold long-lived bidi streams that Connect doesn't model
+// cleanly for workers.
+func (s *ConnectServer) PauseSession(ctx context.Context, req *connect.Request[pb.PauseSessionRequest]) (*connect.Response[pb.PauseSessionResponse], error) {
+	out, err := s.Handlers.PauseSession(ctx, handler.PauseSessionInput{
+		TenantID:  tenant.FromContext(ctx),
+		SessionID: req.Msg.GetSessionId(),
+		Reason:    req.Msg.GetReason(),
+	})
+	if err != nil {
+		return nil, mapSessionError(err)
+	}
+	return connect.NewResponse(&pb.PauseSessionResponse{
+		Ok:           true,
+		CurrentState: string(out.Session.State),
+	}), nil
+}
+
+func (s *ConnectServer) ResumeSession(ctx context.Context, req *connect.Request[pb.ResumeSessionRequest]) (*connect.Response[pb.ResumeSessionResponse], error) {
+	out, err := s.Handlers.ResumeSession(ctx, handler.ResumeSessionInput{
+		TenantID:  tenant.FromContext(ctx),
+		SessionID: req.Msg.GetSessionId(),
+	})
+	if err != nil {
+		return nil, mapSessionError(err)
+	}
+	return connect.NewResponse(&pb.ResumeSessionResponse{
+		Ok:           true,
+		CurrentState: string(out.Session.State),
+	}), nil
+}
+
+// Required by the generated SchedulerServiceHandler interface.
+func (s *ConnectServer) PullSession(context.Context, *connect.Request[pb.PullSessionRequest]) (*connect.Response[pb.PullSessionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("PullSession is served over raw gRPC at :50061; not on this Connect mux"))
+}
+
+func (s *ConnectServer) AckSession(context.Context, *connect.Request[pb.AckSessionRequest]) (*connect.Response[pb.AckSessionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("AckSession is served over raw gRPC at :50061"))
+}
+
+func (s *ConnectServer) NackSession(context.Context, *connect.Request[pb.NackSessionRequest]) (*connect.Response[pb.NackSessionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("NackSession is served over raw gRPC at :50061"))
+}
+
+func (s *ConnectServer) StreamChannel(context.Context, *connect.BidiStream[pb.StreamChannelRequest, pb.StreamChannelResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("StreamChannel is served over raw gRPC at :50061"))
 }
 
 func (s *ConnectServer) GetSession(ctx context.Context, req *connect.Request[pb.GetSessionRequest]) (*connect.Response[pb.GetSessionResponse], error) {

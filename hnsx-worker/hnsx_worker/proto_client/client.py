@@ -426,6 +426,43 @@ class ControlPlaneClient:
             for s in resp.domains
         ]
 
+    def pause_session(
+        self,
+        session_id: str,
+        *,
+        reason: str = "",
+        timeout: float = 10.0,
+    ) -> tuple[bool, str]:
+        """SchedulerService.PauseSession.
+
+        Returns ``(ok, current_state)``. ``ok`` is False when the server
+        rejects the transition (e.g. session was not running).
+        """
+        proto_req = worker_pb2.PauseSessionRequest(session_id=session_id, reason=reason)
+        try:
+            resp = self._scheduler.PauseSession(proto_req, timeout=timeout)
+        except grpc.RpcError as exc:
+            raise ControlPlaneError(
+                f"PauseSession RPC failed: {exc.code()}: {exc.details() or exc}"
+            ) from exc
+        return bool(resp.ok), resp.current_state
+
+    def resume_session(
+        self,
+        session_id: str,
+        *,
+        timeout: float = 10.0,
+    ) -> tuple[bool, str]:
+        """SchedulerService.ResumeSession. Idempotent on already-running."""
+        proto_req = worker_pb2.ResumeSessionRequest(session_id=session_id)
+        try:
+            resp = self._scheduler.ResumeSession(proto_req, timeout=timeout)
+        except grpc.RpcError as exc:
+            raise ControlPlaneError(
+                f"ResumeSession RPC failed: {exc.code()}: {exc.details() or exc}"
+            ) from exc
+        return bool(resp.ok), resp.current_state
+
     # ------------------------------------------------------------------ bidi stream
 
     def open_stream(

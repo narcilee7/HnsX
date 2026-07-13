@@ -95,6 +95,35 @@ func (s *Server) CancelSession(c *gin.Context) {
 	writeJSON(c, http.StatusOK, out.Session)
 }
 
+// PauseSession handles POST /api/v1/sessions/:id/pause.
+func (s *Server) PauseSession(c *gin.Context) {
+	id := c.Param("id")
+	out, err := s.Handlers.PauseSession(c.Request.Context(), handler.PauseSessionInput{
+		TenantID:  tenantFromGin(c),
+		SessionID: id,
+		Reason:    c.Query("reason"),
+	})
+	if err != nil {
+		writeError(c, mapSessionError(err))
+		return
+	}
+	writeJSON(c, http.StatusOK, out.Session)
+}
+
+// ResumeSession handles POST /api/v1/sessions/:id/resume.
+func (s *Server) ResumeSession(c *gin.Context) {
+	id := c.Param("id")
+	out, err := s.Handlers.ResumeSession(c.Request.Context(), handler.ResumeSessionInput{
+		TenantID:  tenantFromGin(c),
+		SessionID: id,
+	})
+	if err != nil {
+		writeError(c, mapSessionError(err))
+		return
+	}
+	writeJSON(c, http.StatusOK, out.Session)
+}
+
 // RerunSession handles POST /api/v1/sessions/:id/rerun.
 func (s *Server) RerunSession(c *gin.Context) {
 	id := c.Param("id")

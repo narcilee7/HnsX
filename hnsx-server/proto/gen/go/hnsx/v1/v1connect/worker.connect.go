@@ -51,6 +51,12 @@ const (
 	// SchedulerServiceStreamChannelProcedure is the fully-qualified name of the SchedulerService's
 	// StreamChannel RPC.
 	SchedulerServiceStreamChannelProcedure = "/hnsx.v1.SchedulerService/StreamChannel"
+	// SchedulerServicePauseSessionProcedure is the fully-qualified name of the SchedulerService's
+	// PauseSession RPC.
+	SchedulerServicePauseSessionProcedure = "/hnsx.v1.SchedulerService/PauseSession"
+	// SchedulerServiceResumeSessionProcedure is the fully-qualified name of the SchedulerService's
+	// ResumeSession RPC.
+	SchedulerServiceResumeSessionProcedure = "/hnsx.v1.SchedulerService/ResumeSession"
 )
 
 // WorkerServiceClient is a client for the hnsx.v1.WorkerService service.
@@ -176,8 +182,16 @@ type SchedulerServiceClient interface {
 	// StreamChannel is the long-lived bidi channel. Worker streams up
 	// StreamChannelRequest messages (oneof of observations / status / result).
 	// Server pushes down StreamChannelResponse messages (oneof of cancel /
-	// drain / domain-invalidation / ping).
+	// drain / domain-invalidation / pause / resume / ping).
 	StreamChannel(context.Context) *connect.BidiStreamForClient[v1.StreamChannelRequest, v1.StreamChannelResponse]
+	// PauseSession asks the server to flip a running session to "paused".
+	// The session row stays bound to its worker; the worker is expected to
+	// stop pulling new work for that session_id until ResumeSession is
+	// received. The current step in flight is allowed to complete.
+	PauseSession(context.Context, *connect.Request[v1.PauseSessionRequest]) (*connect.Response[v1.PauseSessionResponse], error)
+	// ResumeSession flips a paused session back to "running" so the
+	// worker resumes pulling work for it.
+	ResumeSession(context.Context, *connect.Request[v1.ResumeSessionRequest]) (*connect.Response[v1.ResumeSessionResponse], error)
 }
 
 // NewSchedulerServiceClient constructs a client for the hnsx.v1.SchedulerService service. By
@@ -215,6 +229,18 @@ func NewSchedulerServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(schedulerServiceMethods.ByName("StreamChannel")),
 			connect.WithClientOptions(opts...),
 		),
+		pauseSession: connect.NewClient[v1.PauseSessionRequest, v1.PauseSessionResponse](
+			httpClient,
+			baseURL+SchedulerServicePauseSessionProcedure,
+			connect.WithSchema(schedulerServiceMethods.ByName("PauseSession")),
+			connect.WithClientOptions(opts...),
+		),
+		resumeSession: connect.NewClient[v1.ResumeSessionRequest, v1.ResumeSessionResponse](
+			httpClient,
+			baseURL+SchedulerServiceResumeSessionProcedure,
+			connect.WithSchema(schedulerServiceMethods.ByName("ResumeSession")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -224,6 +250,8 @@ type schedulerServiceClient struct {
 	ackSession    *connect.Client[v1.AckSessionRequest, v1.AckSessionResponse]
 	nackSession   *connect.Client[v1.NackSessionRequest, v1.NackSessionResponse]
 	streamChannel *connect.Client[v1.StreamChannelRequest, v1.StreamChannelResponse]
+	pauseSession  *connect.Client[v1.PauseSessionRequest, v1.PauseSessionResponse]
+	resumeSession *connect.Client[v1.ResumeSessionRequest, v1.ResumeSessionResponse]
 }
 
 // PullSession calls hnsx.v1.SchedulerService.PullSession.
@@ -246,6 +274,16 @@ func (c *schedulerServiceClient) StreamChannel(ctx context.Context) *connect.Bid
 	return c.streamChannel.CallBidiStream(ctx)
 }
 
+// PauseSession calls hnsx.v1.SchedulerService.PauseSession.
+func (c *schedulerServiceClient) PauseSession(ctx context.Context, req *connect.Request[v1.PauseSessionRequest]) (*connect.Response[v1.PauseSessionResponse], error) {
+	return c.pauseSession.CallUnary(ctx, req)
+}
+
+// ResumeSession calls hnsx.v1.SchedulerService.ResumeSession.
+func (c *schedulerServiceClient) ResumeSession(ctx context.Context, req *connect.Request[v1.ResumeSessionRequest]) (*connect.Response[v1.ResumeSessionResponse], error) {
+	return c.resumeSession.CallUnary(ctx, req)
+}
+
 // SchedulerServiceHandler is an implementation of the hnsx.v1.SchedulerService service.
 type SchedulerServiceHandler interface {
 	// PullSession long-polls: the server holds the call open until it has a
@@ -263,8 +301,16 @@ type SchedulerServiceHandler interface {
 	// StreamChannel is the long-lived bidi channel. Worker streams up
 	// StreamChannelRequest messages (oneof of observations / status / result).
 	// Server pushes down StreamChannelResponse messages (oneof of cancel /
-	// drain / domain-invalidation / ping).
+	// drain / domain-invalidation / pause / resume / ping).
 	StreamChannel(context.Context, *connect.BidiStream[v1.StreamChannelRequest, v1.StreamChannelResponse]) error
+	// PauseSession asks the server to flip a running session to "paused".
+	// The session row stays bound to its worker; the worker is expected to
+	// stop pulling new work for that session_id until ResumeSession is
+	// received. The current step in flight is allowed to complete.
+	PauseSession(context.Context, *connect.Request[v1.PauseSessionRequest]) (*connect.Response[v1.PauseSessionResponse], error)
+	// ResumeSession flips a paused session back to "running" so the
+	// worker resumes pulling work for it.
+	ResumeSession(context.Context, *connect.Request[v1.ResumeSessionRequest]) (*connect.Response[v1.ResumeSessionResponse], error)
 }
 
 // NewSchedulerServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -298,6 +344,18 @@ func NewSchedulerServiceHandler(svc SchedulerServiceHandler, opts ...connect.Han
 		connect.WithSchema(schedulerServiceMethods.ByName("StreamChannel")),
 		connect.WithHandlerOptions(opts...),
 	)
+	schedulerServicePauseSessionHandler := connect.NewUnaryHandler(
+		SchedulerServicePauseSessionProcedure,
+		svc.PauseSession,
+		connect.WithSchema(schedulerServiceMethods.ByName("PauseSession")),
+		connect.WithHandlerOptions(opts...),
+	)
+	schedulerServiceResumeSessionHandler := connect.NewUnaryHandler(
+		SchedulerServiceResumeSessionProcedure,
+		svc.ResumeSession,
+		connect.WithSchema(schedulerServiceMethods.ByName("ResumeSession")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/hnsx.v1.SchedulerService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SchedulerServicePullSessionProcedure:
@@ -308,6 +366,10 @@ func NewSchedulerServiceHandler(svc SchedulerServiceHandler, opts ...connect.Han
 			schedulerServiceNackSessionHandler.ServeHTTP(w, r)
 		case SchedulerServiceStreamChannelProcedure:
 			schedulerServiceStreamChannelHandler.ServeHTTP(w, r)
+		case SchedulerServicePauseSessionProcedure:
+			schedulerServicePauseSessionHandler.ServeHTTP(w, r)
+		case SchedulerServiceResumeSessionProcedure:
+			schedulerServiceResumeSessionHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -331,4 +393,12 @@ func (UnimplementedSchedulerServiceHandler) NackSession(context.Context, *connec
 
 func (UnimplementedSchedulerServiceHandler) StreamChannel(context.Context, *connect.BidiStream[v1.StreamChannelRequest, v1.StreamChannelResponse]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("hnsx.v1.SchedulerService.StreamChannel is not implemented"))
+}
+
+func (UnimplementedSchedulerServiceHandler) PauseSession(context.Context, *connect.Request[v1.PauseSessionRequest]) (*connect.Response[v1.PauseSessionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hnsx.v1.SchedulerService.PauseSession is not implemented"))
+}
+
+func (UnimplementedSchedulerServiceHandler) ResumeSession(context.Context, *connect.Request[v1.ResumeSessionRequest]) (*connect.Response[v1.ResumeSessionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hnsx.v1.SchedulerService.ResumeSession is not implemented"))
 }

@@ -78,6 +78,8 @@ func newRouter(s *Server) *gin.Engine {
 				sg.GET("/events", s.StreamSessionEvents)
 				sg.POST("/cancel", s.CancelSession)
 				sg.POST("/rerun", s.RerunSession)
+				sg.POST("/pause", s.PauseSession)
+				sg.POST("/resume", s.ResumeSession)
 			}
 		}
 
