@@ -49,6 +49,19 @@ export function cancelSession(id: string): Promise<void> {
   return post(`/sessions/${id}/cancel`)
 }
 
+export function pauseSession(id: string, reason?: string): Promise<SessionViewModel> {
+  const search = reason ? `?reason=${encodeURIComponent(reason)}` : ''
+  return post<unknown>(`/sessions/${id}/pause${search}`).then((res) =>
+    mapSessionStatusFromJson(res as Parameters<typeof mapSessionStatusFromJson>[0]),
+  )
+}
+
+export function resumeSession(id: string): Promise<SessionViewModel> {
+  return post<unknown>(`/sessions/${id}/resume`).then((res) =>
+    mapSessionStatusFromJson(res as Parameters<typeof mapSessionStatusFromJson>[0]),
+  )
+}
+
 export function getSessionTrace(id: string): Promise<unknown> {
   return get(`/sessions/${id}/trace`)
 }

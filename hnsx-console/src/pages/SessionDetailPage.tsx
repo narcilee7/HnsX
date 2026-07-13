@@ -16,7 +16,7 @@ import {
   LatencyHistogram,
   AgentFlowDiagram,
 } from '@hnsx/observability'
-import { useSession, useSessionEvents } from '@/hooks/useSessions'
+import { useSession, useSessionEvents, usePauseSession, useResumeSession } from '@/hooks/useSessions'
 import { useResolveApproval, useApprovals } from '@/hooks/useApprovals'
 import { useDomain } from '@/hooks/useDomains'
 import {
@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, Check, Radio, X } from 'lucide-react'
+import { ArrowLeft, Check, Pause, Play, Radio, X } from 'lucide-react'
 import type { ObservationViewModel } from '@/api/mappers'
 
 export default function SessionDetailPage() {
@@ -43,6 +43,9 @@ export default function SessionDetailPage() {
 
   const { data: pendingApprovals } = useApprovals({ session: id, status: 'pending', limit: 1 })
   const resolve = useResolveApproval()
+  const pause = usePauseSession()
+  const resume = useResumeSession()
+  const liveState = state || session?.state
   const pendingApprovalId = pendingApprovals?.items[0]?.id
   const { data: domain } = useDomain(session?.domainId)
 
@@ -88,6 +91,26 @@ export default function SessionDetailPage() {
         ]}
       >
         <div className="flex items-center gap-2">
+          {liveState === 'running' && (
+            <button
+              className={cn(buttonVariants({ variant: 'outline' }))}
+              onClick={() => pause.mutate({ id: session.id })}
+              disabled={pause.isPending}
+              title="Stop pulling new turns; the current turn finishes."
+            >
+              <Pause className="mr-2 h-4 w-4" /> Pause
+            </button>
+          )}
+          {liveState === 'paused' && (
+            <button
+              className={cn(buttonVariants({ variant: 'default' }))}
+              onClick={() => resume.mutate(session.id)}
+              disabled={resume.isPending}
+              title="Resume pulling turns for this session."
+            >
+              <Play className="mr-2 h-4 w-4" /> Resume
+            </button>
+          )}
           {isPaused && pendingApprovalId && (
             <>
               <button

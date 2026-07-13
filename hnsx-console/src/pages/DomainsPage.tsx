@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
@@ -49,6 +49,8 @@ export default function DomainsPage() {
   const [open, setOpen] = useState(false)
   const [yaml, setYaml] = useState(DEFAULT_DOMAIN_YAML)
 
+  const Editor = lazy(() => import('@monaco-editor/react'))
+
   const columns = useMemo<ColumnDef<DomainSummary>[]>(
     () => [
       {
@@ -98,23 +100,40 @@ export default function DomainsPage() {
           <Button onClick={() => setOpen(true)}>
             <Plus className="mr-2 h-4 w-4" /> Register Domain
           </Button>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Register Domain</DialogTitle>
               <DialogDescription>
-                Paste the domain YAML below. It will be parsed and validated on the server.
+                Paste the domain YAML in the Monaco editor below. <strong>Commit</strong>
+                sends it to the server, which validates and persists it. This replaces
+                the CLI's <code>hnsx domain apply</code>.
               </DialogDescription>
             </DialogHeader>
-            <textarea
-              className="min-h-[320px] w-full rounded-md border bg-muted/30 p-3 font-mono text-sm"
-              value={yaml}
-              onChange={(e) => setYaml(e.target.value)}
-              placeholder="Paste domain YAML..."
-            />
+            <Suspense
+              fallback={
+                <div className="min-h-[320px] rounded-md border bg-muted/30 p-3 font-mono text-xs text-muted-foreground">
+                  loading editor…
+                </div>
+              }
+            >
+              <Editor
+                height="320px"
+                defaultLanguage="yaml"
+                theme="vs-light"
+                value={yaml}
+                onChange={(v) => setYaml(v ?? '')}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 12,
+                  tabSize: 2,
+                  insertSpaces: true,
+                }}
+              />
+            </Suspense>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={handleRegister} disabled={create.isPending}>
-                Register
+              <Button onClick={handleRegister} disabled={create.isPending || !yaml.trim()}>
+                {create.isPending ? 'Registering…' : 'Commit'}
               </Button>
             </DialogFooter>
           </DialogContent>

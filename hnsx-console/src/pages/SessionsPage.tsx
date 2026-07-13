@@ -13,6 +13,8 @@ import {
   useSessions,
   useCreateSession,
   useCancelSession,
+  usePauseSession,
+  useResumeSession,
 } from '@/hooks/useSessions'
 import { useDomains } from '@/hooks/useDomains'
 import type { SessionViewModel } from '@/api/mappers'
@@ -23,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Play, RotateCcw, XCircle, Search, Radio } from 'lucide-react'
+import { Play, Pause, RotateCcw, XCircle, Search, Radio } from 'lucide-react'
 
 const STATE_OPTIONS = [
   { value: 'running', label: 'Running', tone: 'info' as const },
@@ -47,6 +49,8 @@ export default function SessionsPage() {
   })
   const createSession = useCreateSession()
   const cancelSession = useCancelSession()
+  const pauseSession = usePauseSession()
+  const resumeSession = useResumeSession()
 
   const filteredItems = useMemo(() => {
     if (!searchApplied) return data?.items ?? []
@@ -113,14 +117,35 @@ export default function SessionsPage() {
         cell: ({ row }) => (
           <div className="flex items-center gap-1">
             {row.original.state === 'running' ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => pauseSession.mutate({ id: row.original.id })}
+                  aria-label="Pause session"
+                  title="Pause"
+                >
+                  <Pause className="h-3.5 w-3.5 text-[var(--warning)]" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => cancelSession.mutate(row.original.id)}
+                  aria-label="Cancel session"
+                  title="Cancel"
+                >
+                  <XCircle className="h-3.5 w-3.5 text-[var(--danger)]" />
+                </Button>
+              </>
+            ) : row.original.state === 'paused' ? (
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => cancelSession.mutate(row.original.id)}
-                aria-label="Cancel session"
-                title="Cancel"
+                onClick={() => resumeSession.mutate(row.original.id)}
+                aria-label="Resume session"
+                title="Resume"
               >
-                <XCircle className="h-3.5 w-3.5 text-[var(--danger)]" />
+                <Play className="h-3.5 w-3.5 text-[var(--success)]" />
               </Button>
             ) : (
               <Button
