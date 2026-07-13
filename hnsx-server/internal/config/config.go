@@ -30,8 +30,17 @@ type Config struct {
 	// SchedulerService gRPC surface. Empty disables the gRPC server.
 	GRPCAddr string `yaml:"grpc_addr"`
 
-	// DatabaseURL is the Postgres connection string. Empty disables the DB.
+	// DatabaseURL is the Postgres connection string. Empty means "use the
+	// embedded SQLite file" — see DaemonDataDir / SQLitePath below.
 	DatabaseURL string `yaml:"database_url"`
+
+	// DaemonDataDir is the on-disk root for daemon-mode state: the SQLite
+	// database file, the auto-generated HNSX_SECRET_KEY, seed artifacts.
+	// Defaults to ~/.local/share/hnsx when DatabaseURL is empty.
+	DaemonDataDir string `yaml:"daemon_data_dir"`
+
+	// SQLitePath overrides DaemonDataDir/hnsx.db. Empty keeps the default.
+	SQLitePath string `yaml:"sqlite_path"`
 
 	// MigrationsDir is the directory containing *.sql migrations to apply
 	// before the server starts accepting traffic.
@@ -118,6 +127,8 @@ func Default() *Config {
 		HTTPAddr:      "127.0.0.1:50051",
 		GRPCAddr:      "127.0.0.1:50061",
 		DatabaseURL:   "",
+		DaemonDataDir: defaultDaemonDataDir(),
+		SQLitePath:    "",
 		MigrationsDir: "go/migrations",
 		OTel: OTelConfig{
 			Exporter:     "otlp",
@@ -138,6 +149,15 @@ func Default() *Config {
 			DefaultRole: "operator",
 		},
 	}
+}
+
+// defaultDaemonDataDir picks XDG-style ~/.local/share/hnsx, falling back
+// to $HOME/.hnsx when $HOME isn't set.
+func defaultDaemonDataDir() string {
+	if h, err := os.UserHomeDir(); err == nil && h != "" {
+		return filepath.Join(h, ".local", "share", "hnsx")
+	}
+	return "/tmp/hnsx"
 }
 
 // Load resolves configuration by merging defaults, an optional YAML config
@@ -176,6 +196,12 @@ func applyEnv(cfg *Config) {
 	}
 	if _, ok := os.LookupEnv("HNSX_DATABASE_URL"); ok {
 		cfg.DatabaseURL = os.Getenv("HNSX_DATABASE_URL")
+	}
+	if v := os.Getenv("HNSX_DAEMON_DATA_DIR"); v != "" {
+		cfg.DaemonDataDir = v
+	}
+	if v := os.Getenv("HNSX_SQLITE_PATH"); v != "" {
+		cfg.SQLitePath = v
 	}
 	if v := os.Getenv("HNSX_MIGRATIONS_DIR"); v != "" {
 		cfg.MigrationsDir = v
@@ -231,8 +257,8 @@ func (c *Config) Validate() error {
 	if c.HTTPAddr == "" {
 		return errors.New("config.http_addr is required")
 	}
-	if strings.TrimSpace(c.DatabaseURL) == "" {
-		return errors.New("config.database_url is required")
+	if strings.TrimSpace(c.DatabaseURL) == "" && strings.TrimSpace(c.SQLitePath) == "" && strings.TrimSpace(c.DaemonDataDir) == "" {
+		return errors.New("config.database_url or config.daemon_data_dir (or config.sqlite_path) is required")
 	}
 	switch c.OTel.Exporter {
 	case "stdout", "otlp", "none", "":
@@ -264,8 +290,16 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// PostgresEnabled reports whether a database connection is configured.
+// PostgresEnabled reports whether a Postgres connection is configured.
+// When false, the server falls back to embedded SQLite (see DaemonDataDir).
 func (c *Config) PostgresEnabled() bool { return strings.TrimSpace(c.DatabaseURL) != "" }
+
+// SQLiteEnabled reports whether the embedded SQLite backend should be used.
+// True when no Postgres URL is configured AND a DaemonDataDir / SQLitePath
+// is set (Default always sets DaemonDataDir).
+func (c *Config) SQLiteEnabled() bool {
+	return !c.PostgresEnabled()
+}
 
 // RedisEnabled reports whether a Redis connection is configured for the
 // session scheduling queue.

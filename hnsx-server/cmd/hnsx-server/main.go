@@ -45,7 +45,12 @@ Usage:
 
 Environment:
   HNSX_HTTP_ADDR           Listen address (default 127.0.0.1:50051)
-  HNSX_DATABASE_URL        Postgres connection string (required)
+  HNSX_GRPC_ADDR           gRPC listen address (default 127.0.0.1:50061)
+  HNSX_DATABASE_URL        Postgres connection string. When empty, embedded
+                           SQLite is used (see HNSX_DAEMON_DATA_DIR).
+  HNSX_DAEMON_DATA_DIR     Where SQLite DB and secret.key live in daemon mode
+                           (default ~/.local/share/hnsx)
+  HNSX_SQLITE_PATH         Override the SQLite file path
   HNSX_MIGRATIONS_DIR      SQL migrations directory
   HNSX_OTEL_EXPORTER       stdout | otlp | none (default otlp)
   HNSX_OTEL_OTLP_ENDPOINT  OTLP gRPC endpoint (default 127.0.0.1:4317)
