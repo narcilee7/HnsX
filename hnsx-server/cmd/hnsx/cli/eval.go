@@ -53,7 +53,7 @@ func newEvalSetListCmd(cfg *Config) *cobra.Command {
 			}
 			if cfg.Output == "quiet" {
 				for _, e := range items {
-					fmt.Println(e.ID)
+					o.Line("%s", e.ID)
 				}
 				return nil
 			}

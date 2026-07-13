@@ -198,7 +198,7 @@ func newExamplesCmd(cfg *Config) *cobra.Command {
 			}
 			if cfg.Output == "quiet" {
 				for _, e := range filtered {
-					fmt.Println(e.Name)
+					out.Line("%s", e.Name)
 				}
 				return nil
 			}
@@ -455,9 +455,10 @@ func tailEvents(cfg *Config, sessionID string) error {
 	if resp.StatusCode/100 != 2 {
 		return fmt.Errorf("events: HTTP %d", resp.StatusCode)
 	}
+	out := NewOutput(cfg.Output)
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
-		fmt.Println(scanner.Text())
+		out.Line("%s", scanner.Text())
 	}
 	return scanner.Err()
 }

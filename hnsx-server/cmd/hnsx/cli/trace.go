@@ -100,7 +100,7 @@ func newTraceListCmd(cfg *Config) *cobra.Command {
 			}
 			if cfg.Output == "quiet" {
 				for _, t := range out {
-					fmt.Println(t.ID)
+					o.Line("%s", t.ID)
 				}
 				return nil
 			}
@@ -134,21 +134,22 @@ func newTraceShowCmd(cfg *Config) *cobra.Command {
 		Short: "Show a trace tree of observations",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			o := NewOutput(cfg.Output)
 			body, err := getJSON(cfg, "/api/v1/traces/"+args[0])
 			if err != nil {
 				return err
 			}
 			if cfg.Output == "json" {
-				fmt.Println(string(body))
+				o.Line("%s", string(body))
 				return nil
 			}
 			// Pretty-print indented JSON; observation tree details follow.
 			var pretty map[string]any
 			if err := json.Unmarshal(body, &pretty); err == nil {
 				out, _ := json.MarshalIndent(pretty, "", "  ")
-				fmt.Println(string(out))
+				o.Line("%s", string(out))
 			} else {
-				fmt.Println(string(body))
+				o.Line("%s", string(body))
 			}
 			return nil
 		},

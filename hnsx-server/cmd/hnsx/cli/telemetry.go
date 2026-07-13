@@ -28,10 +28,11 @@ func newTelemetryCmd(cfg *Config) *cobra.Command {
 		Use:   "on",
 		Short: "Enable anonymous usage telemetry",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := NewOutput(cfg.Output)
 			if err := writeTelemetry(&telemetryConfig{Enabled: true}); err != nil {
 				return err
 			}
-			fmt.Println("✓ telemetry enabled")
+			out.Line("✓ telemetry enabled")
 			return nil
 		},
 	})
@@ -39,10 +40,11 @@ func newTelemetryCmd(cfg *Config) *cobra.Command {
 		Use:   "off",
 		Short: "Disable all client-side telemetry (default)",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := NewOutput(cfg.Output)
 			if err := writeTelemetry(&telemetryConfig{Enabled: false}); err != nil {
 				return err
 			}
-			fmt.Println("✓ telemetry disabled")
+			out.Line("✓ telemetry disabled")
 			return nil
 		},
 	})
@@ -50,16 +52,17 @@ func newTelemetryCmd(cfg *Config) *cobra.Command {
 		Use:   "status",
 		Short: "Show whether telemetry is enabled",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := NewOutput(cfg.Output)
 			cfg, err := readTelemetry()
 			if err != nil {
-				fmt.Println("telemetry: unknown (no config file)")
+				out.Line("telemetry: unknown (no config file)")
 				return nil
 			}
 			state := "off"
 			if cfg.Enabled {
 				state = "on"
 			}
-			fmt.Printf("telemetry: %s\n", state)
+			out.Line("telemetry: %s", state)
 			return nil
 		},
 	})

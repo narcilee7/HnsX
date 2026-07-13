@@ -29,7 +29,7 @@ harness:
 		t.Fatal(err)
 	}
 
-	out, err := captureStdout(func() error { return formatOne(path, false) })
+	out, err := captureStdout(func() error { return formatOne(path, false, NewOutput("human")) })
 	if err != nil {
 		t.Fatalf("format: %v", err)
 	}

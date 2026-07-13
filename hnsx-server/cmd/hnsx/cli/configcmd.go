@@ -29,7 +29,7 @@ func newConfigShowCmd(cfg *Config) *cobra.Command {
 				return nil
 			}
 			if cfg.Output == "quiet" {
-				fmt.Println(cfg.ConfigFile)
+				o.Line("%s", cfg.ConfigFile)
 				return nil
 			}
 			o.Card("Effective Configuration", configPairs(cfg))
@@ -49,11 +49,8 @@ func newConfigGetCmd(cfg *Config) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if cfg.Output == "quiet" {
-				fmt.Println(v)
-				return nil
-			}
-			fmt.Println(v)
+			out := NewOutput(cfg.Output)
+			out.Line("%s", v)
 			return nil
 		},
 	}

@@ -46,7 +46,7 @@ func newValidateCmd(cfg *Config) *cobra.Command {
 			}
 			if jsonOutput || cfg.Output == "json" {
 				b, _ := json.MarshalIndent(result, "", "  ")
-				fmt.Println(string(b))
+				out.Line("%s", string(b))
 			} else {
 				out.Line("✓ domain '%s' v%s is valid", s.ID, s.Version)
 				out.Line("  mode:    %s", s.Harness.Session.Mode)

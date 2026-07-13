@@ -13,10 +13,9 @@ func newVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print hnsx version info",
 		Run: func(cmd *cobra.Command, args []string) {
-			// Write directly to os.Stdout: cobra's cmd.OutOrStdout is
-			// captured by callers (e.g. tests, $(...) substitution),
-			// and we want version info to always reach the terminal.
-			fmt.Println(version.String())
+			// Write through cobra's stdout stream so callers (tests,
+			// $(...) substitution) can capture version info.
+			fmt.Fprintln(cmd.OutOrStdout(), version.String())
 		},
 	}
 }
