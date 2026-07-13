@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"time"
@@ -58,10 +57,9 @@ func (r *PostgresRepository) Save(tenantID tenant.ID, d *model.RegisteredDomain)
 		rec.CurrentVersion = d.Version
 		rec.Description = d.Description
 		rec.Status = "active"
-		nowStr := now.Format(time.RFC3339Nano)
-		rec.UpdatedAt = nowStr
+		rec.UpdatedAt = now
 		if isNew {
-			rec.CreatedAt = nowStr
+			rec.CreatedAt = now
 		}
 
 		if err := tx.Save(&rec).Error; err != nil {
@@ -75,7 +73,7 @@ func (r *PostgresRepository) Save(tenantID tenant.ID, d *model.RegisteredDomain)
 			YAMLBody:    string(specJSON),
 			JSONBody:    specJSON,
 			HarnessHash: "",
-			CreatedAt:   now.Format(time.RFC3339Nano),
+			CreatedAt:   now,
 		}
 		return tx.Save(&version).Error
 	})
@@ -215,7 +213,7 @@ func (r *PostgresRepository) ListVersions(tenantID tenant.ID, id string) ([]Vers
 		}
 		out[i] = VersionRecord{
 			Version:   v.Version,
-			CreatedAt: parseTimestamp(v.CreatedAt),
+			CreatedAt: v.CreatedAt,
 			Spec:      &s,
 		}
 	}
@@ -279,29 +277,9 @@ func (r *PostgresRepository) toModel(tid string, rec DomainRecord) (*model.Regis
 		Version:     rec.CurrentVersion,
 		Description: rec.Description,
 		Spec:        &s,
-		CreatedAt:   parseTimestamp(rec.CreatedAt),
-		UpdatedAt:   parseTimestamp(rec.UpdatedAt),
+		CreatedAt:   rec.CreatedAt,
+		UpdatedAt:   rec.UpdatedAt,
 	}, nil
 }
 
 var _ Repository = (*PostgresRepository)(nil)
-
-// Ensure context import is referenced when needed.
-var _ = context.Background()
-
-// parseTimestamp turns the RFC3339 string we store (so the same row
-// round-trips against Postgres timestamptz and SQLite TEXT) back into
-// a time.Time. Empty / unparseable values yield the zero time rather
-// than an error — registration code can already cover that path.
-func parseTimestamp(s string) time.Time {
-	if s == "" {
-		return time.Time{}
-	}
-	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
-		return t
-	}
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		return t
-	}
-	return time.Time{}
-}

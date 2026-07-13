@@ -92,20 +92,10 @@ func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*
 	if err != nil {
 		return nil, fmt.Errorf("db: open: %w", err)
 	}
-	if cfg.SQLiteEnabled() {
-		// Apply the SQLite-specific minimum schema (tenants + domains +
-		// domain_versions) directly via Exec — the existing goose set is
-		// Postgres-only. Other repos stay Postgres-bound; v1.1 will port
-		// the remaining schema.
-		if err := db.EnsureSQLiteSchema(store); err != nil {
-			return nil, fmt.Errorf("db: sqlite schema: %w", err)
-		}
-		log.Info("sqlite schema applied (tenants + domains + domain_versions)")
-	} else if err := db.Migrate(ctx, store, cfg.MigrationsDir); err != nil {
+	if err := db.Migrate(ctx, store, cfg.MigrationsDir); err != nil {
 		return nil, fmt.Errorf("db: migrate: %w", err)
-	} else {
-		log.Info("migrations applied", zap.String("dir", cfg.MigrationsDir))
 	}
+	log.Info("migrations applied", zap.String("dir", cfg.MigrationsDir))
 
 	appState := NewState()
 
@@ -306,28 +296,23 @@ type funcSink struct {
 	record func(context.Context, domain.Observation) error
 }
 
-// openStore picks Postgres when HNSX_DATABASE_URL is set, otherwise the
-// embedded SQLite file at <DaemonDataDir>/hnsx.db (parent dir auto-created).
+// openStore opens the configured Postgres database. The daemon-mode
+// infrastructure (secret-key auto-gen, sensible defaults) lives in
+// ensureSecretKey / config.Default, not in the DB layer — keeping the
+// store function trivial means local dev is "point at Postgres DSN,
+// everything else works the same as production".
 func openStore(ctx context.Context, cfg *config.Config, log *zap.Logger) (*db.DB, error) {
-	if cfg.PostgresEnabled() {
-		return db.Open(ctx, cfg.DatabaseURL)
+	if !cfg.PostgresEnabled() {
+		return nil, errors.New("postgres is required: set HNSX_DATABASE_URL (e.g. postgres://hnsx:hnsx@localhost:5432/hnsx?sslmode=disable)")
 	}
-	sqlitePath := cfg.SQLitePath
-	if sqlitePath == "" {
-		sqlitePath = filepath.Join(cfg.DaemonDataDir, "hnsx.db")
-	}
-	if err := os.MkdirAll(filepath.Dir(sqlitePath), 0o755); err != nil {
-		return nil, fmt.Errorf("daemon: mkdir %s: %w", filepath.Dir(sqlitePath), err)
-	}
-	log.Info("daemon mode: using embedded SQLite",
-		zap.String("path", sqlitePath),
-		zap.String("data_dir", cfg.DaemonDataDir))
-	store, err := db.OpenSQLite(sqlitePath)
+	store, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return nil, err
 	}
-	if err := ensureSecretKey(cfg.DaemonDataDir, log); err != nil {
-		return nil, fmt.Errorf("daemon: secret key: %w", err)
+	if cfg.DaemonDataDir != "" {
+		if err := ensureSecretKey(cfg.DaemonDataDir, log); err != nil {
+			return nil, fmt.Errorf("daemon: secret key: %w", err)
+		}
 	}
 	return store, nil
 }

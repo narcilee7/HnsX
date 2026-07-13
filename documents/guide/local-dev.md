@@ -1,36 +1,91 @@
 # 本地开发体验
 
-> 目标：从源码拉下来一条命令起服务，另一条命令起前端，浏览器里点点点跑完整个产品。
-> 这一份只覆盖"我要用 HnsX 看看是什么"，不覆盖"我要给 HnsX 写代码"——后者见 [`CONTRIBUTING.md`](../../CONTRIBUTING.md)。
+> 目标：从源码拉下来，一条命令起 Postgres，一条命令起 server，一条命令起 console，浏览器里点点点看产品。
+> 重点是**让本地开发尽可能无痛**：DB 准备好、server 自己起、log 落地、Console 能连上。
 
 ---
 
-## 路径 A：单二进制 daemon 模式（推荐先试这个）
+## 全栈概览
 
-HnsX v1.0 起，`hnsx-server` 可以脱离 CLI / docker-compose 单独跑起来：内嵌 SQLite、自动建库、自动生成 secret-key、监听 `:50051`。**Domain 注册 / 列表 / 详情 / 多版本** 这条核心路径在这条路径上完整可用。
+```
+                  ┌─────────────────────────────┐
+                  │ hnsx-server (Go)              │  HTTP :50051  ← Console
+   ┌────────┐     │ - REST API                    │  gRPC :50061  ← Worker (raw gRPC)
+   │Postgres│◄────│ - Connect/gRPC mux (REST+ gRPC│
+   │ :5432 │     │ - 自动迁移 + 自动 secret-key  │
+   └────────┘     └─────────────────────────────┘
+                          ▲             ▲
+                          │             │
+                  ┌───────┴────┐  ┌─────┴──────┐
+                  │ hnsx-worker│  │ hnsx-console│
+                  │ (Python)   │  │ (React/Vite)│
+                  │ gRPC client│  │ :5173       │
+                  └────────────┘  └────────────┘
+```
 
-### 1. 启动 server
+**一个进程 = 一个 daemon**。`hnsx-server` 直接连本地 Postgres，无需 docker-compose 来包一层。
+
+---
+
+## 0. 前置条件
+
+| 工具 | 用途 | 验证 |
+|---|---|---|
+| Go 1.22+ | 编译 server | `go version` |
+| Node 20+ + pnpm | 跑 console | `node -v && pnpm -v` |
+| Python 3.11+ + venv | 跑 worker（可选，路径 A 不需要） | `python3 --version` |
+| Postgres（任何方式都行） | 数据持久化 | 见下一节 |
+
+Postgres 的几种取法：
 
 ```bash
-# 仓库根目录
+# A. Homebrew / apt — 最简单
+brew install postgresql@16 && brew services start postgresql@16
+createuser hnsx --pwprompt   # 设密码 hnsx
+createdb -O hnsx hnsx
+
+# B. Docker（一次性，最干净）
+docker run --name hnsx-pg -d -p 5432:5432 \
+  -e POSTGRES_USER=hnsx -e POSTGRES_PASSWORD=hnsx -e POSTGRES_DB=hnsx \
+  postgres:16
+
+# C. 系统包管理器
+sudo apt install postgresql
+sudo -u postgres createuser hnsx --pwprompt
+sudo -u postgres createdb -O hnsx hnsx
+```
+
+**Postgres 不是 daemon 模式的一部分**。server 假定 Postgres 已经存在并可连。
+
+---
+
+## 1. 启动 server
+
+```bash
 make build-server
-./bin/hnsx-server server
+HNSX_DATABASE_URL='postgres://hnsx:hnsx@localhost:5432/hnsx?sslmode=disable' \
+  ./bin/hnsx-server server
 ```
 
-你会看到：
+或者把 `HNSX_DATABASE_URL` 写到 `~/.zshrc` / `~/.bashrc` 里省去每次输入。
+
+正常输出：
 
 ```
-{"level":"info","msg":"daemon mode: using embedded SQLite","path":"~/.local/share/hnsx/hnsx.db"}
-{"level":"info","msg":"auto-generated HNSX_SECRET_KEY","path":"~/.local/share/hnsx/secret.key","action":"BACK THIS UP — losing this file means losing access to encrypted secrets"}
-{"level":"info","msg":"sqlite schema applied (tenants + domains + domain_versions)"}
-{"level":"info","msg":"hnsx-server listening","http":"127.0.0.1:50051"}
+{"msg":"migrations applied","dir":"go/migrations"}
+{"msg":"secret store: encryption enabled"}
+{"msg":"hnsx-server listening","http":"127.0.0.1:50051","grpc":"127.0.0.1:50061"}
 ```
 
-数据 + secret 默认落在 `~/.local/share/hnsx/`。覆盖路径：
+**Daemon-mode 提供的便利**（与 Postgres 解耦）：
 
-```bash
-HNSX_DAEMON_DATA_DIR=/tmp/my-hnsx-data ./bin/hnsx-server server
-```
+| env | 默认 | 作用 |
+|---|---|---|
+| `HNSX_DAEMON_DATA_DIR` | `~/.local/share/hnsx` | secret-key 等 daemon 状态 |
+| `HNSX_SECRET_KEY` | (auto-gen on first boot) | 加密 secret 用；首次启动后从 `secret.key` 读 |
+| `HNSX_MIGRATIONS_DIR` | `go/migrations` | goose 迁移目录 |
+| `HNSX_HTTP_ADDR` | `127.0.0.1:50051` | REST + Connect 监听 |
+| `HNSX_GRPC_ADDR` | `127.0.0.1:50061` | 给 worker 的原始 gRPC（不是 Connect） |
 
 健康检查：
 
@@ -39,29 +94,43 @@ curl http://127.0.0.1:50051/healthz
 # {"build":{...},"status":"ok"}
 ```
 
-### 2. 启动前端
+把 server 推到后台跑（不想占终端）：
 
-新开一个终端：
+```bash
+# 写到 launchd / systemd（生产路径）
+make daemon-install
+# 或手动后台
+nohup ./bin/hnsx-server server > /tmp/hnsx.log 2>&1 &
+tail -f /tmp/hnsx.log
+```
+
+---
+
+## 2. 启动 console
+
+新终端：
 
 ```bash
 pnpm install --force
 pnpm dev
 ```
 
-Vite 默认监听 `http://localhost:5173`。前端默认指向 `http://localhost:50051/api/v1`，跟 server 默认端口对得上，**不用改配置就能连**。
+Vite 默认 `http://localhost:5173`，CORS 全开，连得上 `:50051` 默认 config，**不用改配置**。
 
-### 3. 浏览器点点点
+---
 
-打开 `http://localhost:5173`，按这个顺序走：
+## 3. 浏览器点点点
+
+打开 `http://localhost:5173`：
 
 | 步骤 | 路径 | 操作 |
 |---|---|---|
-| 1 | `/domains` | 点 **Register Domain** → 弹出一个 Monaco YAML 编辑器。粘贴： |
+| 1 | `/domains` | **Register Domain** → 弹 Monaco YAML 编辑器 → 粘贴： |
 
 ```yaml
 id: customer-service
 version: 1.0.0
-description: First demo domain — customer support triage
+description: Customer support triage
 harness:
   agents:
     main:
@@ -77,14 +146,38 @@ harness:
 
 | 步骤 | 路径 | 操作 |
 |---|---|---|
-| 2 | `/domains/customer-service` | 点 **Editor** 改 YAML，**Save** 后再点 **Versions** 看版本历史。**Debug** tab 列了这个 domain 的最近 sessions（SQLite 模式下表是空的，要先 trigger session 才有）。 |
-| 3 | `/observability/debug` | 新加的 Live Debug 入口：跨 domain 列最近 sessions + traces，按 domain / agent 过滤。点任意 session 进详情看 SSE 流的 observation timeline。 |
-| 4 | `/sessions` | 全局 session 列表，跑中的 session 多了 Pause / Cancel 按钮，已暂停的多 Resume。 |
-| 5 | `/traces` | Trace 列表，含 duration / observation count / 费用摘要。 |
+| 2 | `/domains/customer-service` | **Editor** 改 YAML → **Save** → **Versions** 看历史 → **Debug** 看这个 domain 的最近 sessions |
+| 3 | `/observability/debug` | 跨 domain 调试入口：左侧 sessions、右侧 traces，按 domain / agent 过滤。点 session 进详情看实时 SSE 流 |
+| 4 | `/sessions` | 列表，跑中的 session 有 Pause / Cancel；暂停的有 Resume |
+| 5 | `/traces` | 列表带 duration / observation count / 费用 |
 
-### 4. 用 Python 注册一个 domain（可选）
+---
 
-路径 A 完整支持 Python 端 gRPC 注册，无需经过 CLI 或 REST：
+## 4. 跑 worker（让 session 真能跑起来）
+
+需要 worker 是因为你 trigger session 时要有人执行；不然状态会卡在 pending。
+
+```bash
+make worker-install                                # 一次：建 venv + 装依赖
+HNSX_SERVER=127.0.0.1:50061 \
+  .venv/bin/python -m hnsx_worker.worker_service
+```
+
+正常输出：
+
+```
+{"msg":"worker registered","worker_id":"w-...","heartbeat_interval":5}
+{"msg":"heartbeat sent"}
+{"msg":"session pulled","session_id":"s-..."}
+```
+
+回到 console 点 `/domains/customer-service/run`，trigger 一个 session，timeline 会实时滚 observation。
+
+---
+
+## 5. 用 Python 注册 domain
+
+API 完整，路径 A、B 都行——只是换 transport：
 
 ```python
 from hnsx_worker.proto_client import ControlPlaneClient
@@ -100,110 +193,36 @@ ref = c.register_domain({
 print(ref)  # DomainRef(id='from-python@1.0.0', version=1)
 ```
 
-切回 `/domains` 看，刚注册的已经在列表里。
-
-### 5. SQLite daemon 模式的边界
-
-能跑：
-
-- ✅ Register / List / Get / Update Domain
-- ✅ Domain YAML 验证
-- ✅ Versioning + rollback
-- ✅ Python gRPC + REST + Console 三路注册互通
-
-**不能跑**（v1.0 暂未 port，留 v1.1）：
-
-- ❌ Trigger Session / 跑 Harness / 收 Observation（sessions / traces 表还没 SQLite schema）
-- ❌ Audit / Approval / Secret / Eval
-- ❌ Worker 注册 / Heartbeat（worker 还是直连 Postgres）
-
-如果想试这些就走 **路径 B**。
+切回 `/domains` 看，刚刚 Python 注册的已经在列表里——三路注册（gRPC / REST / Console）共用同一个 Postgres 表。
 
 ---
 
-## 路径 B：Postgres 全栈（功能完整）
+## 6. 想跑 CLI 命令？
 
-适合想看完整 Session / Trace / Eval / Worker 流程的。需要在本地跑 Postgres + HnsX server + Python worker。
-
-### 前置条件
-
-- macOS / Linux
-- Docker + Docker Compose
-- Go 1.22+（编译 server / CLI）
-- Node 20+ + pnpm（编译 console）
-- Python 3.11+ + venv（worker）
-
-### 1. 拉起 Postgres
+CLI 不是必须的，但装了能快速验证：
 
 ```bash
-make db-up        # docker compose 起一个 Postgres
-```
-
-### 2. 编译 + 起 server（连 Postgres）
-
-```bash
-make build
-HNSX_DATABASE_URL=postgres://hnsx:hnsx@localhost:5432/hnsx?sslmode=disable \
-  ./bin/hnsx-server server
-```
-
-日志里 `migrations applied` 表示 schema 已经建好。
-
-### 3. 起 worker
-
-```bash
-make worker-install      # 一次：建 venv + 装依赖
-HNSX_SERVER=127.0.0.1:50061 \
-  .venv/bin/python -m hnsx_worker.worker_service
-```
-
-worker 会自动 register + heartbeat + 从 server 拉 session。
-
-### 4. 起 console
-
-```bash
-pnpm install --force
-pnpm dev
-```
-
-### 5. 体验全流程
-
-| 步骤 | 路径 | 看到什么 |
-|---|---|---|
-| 1 | `/domains` | Register 一个 domain（同上） |
-| 2 | `/domains/customer-service/run` | Trigger Session：填 trigger payload、点 Run |
-| 3 | `/sessions` | Session 出现，state=running |
-| 4 | 点进 session | Timeline 实时滚动（tool_call / tool_result / agent_text_delta） |
-| 5 | 点 Pause | State → paused；worker 停拉下一个 turn（当前 turn 跑完才停） |
-| 6 | 点 Resume | State → running，继续 |
-| 7 | `/traces` | Trace 列表带 duration / token / cost |
-| 8 | `/observability/debug` | 跨 domain 调试入口 |
-| 9 | `/audit` | Audit log（Domain 注册 / Session 取消等操作记录） |
-
-### 6. CLI 联动
-
-CLI 不是必须，但装了可以快速验证：
-
-```bash
-hnsx version
-hnsx domain list
-hnsx session list --state running
-hnsx trace list
-hnsx trace show <id>
-hnsx update --check
+brew install narcilee7/hnsx/hnsx
+# 或源码：
+make build-cli
+./bin/hnsx version
+./bin/hnsx domain list
+./bin/hnsx session list --state running
+./bin/hnsx trace list
+./bin/hnsx trace show <id>
 ```
 
 ---
 
-## 三条安装路径快速对照
+## 三条安装路径对照
 
 | | curl | Homebrew | 源码 |
 |---|---|---|---|
-| CLI | ✅ | ✅ | ✅ |
-| Server | (通过 homebrew plist 自动 launchd) | (同左) | `make build-server && ./bin/hnsx-server server` |
+| CLI | ✅ | ✅ | `make build-cli` |
+| Server | (通过 homebrew plist launchd) | (同左) | `make build-server && hnsx-server server` |
 | Worker | ❌（自己 `pip install hnsx-worker`） | ❌（同左） | `make worker-install && python -m hnsx_worker.worker_service` |
 | Console | ❌（自己 `pnpm dev`） | ❌（同左） | ❌（同左） |
-| 一句话 | 全自动要 launchd | 同左 | 最灵活，能改东西 |
+| 一句话 | 全自动，launchd 拉起 server | 同左 | 最灵活，能改东西 |
 
 详见 [`install.md`](./install.md)。
 
@@ -213,12 +232,13 @@ hnsx update --check
 
 | 现象 | 排查 |
 |---|---|
-| `curl: (52) Empty reply from server` for `hnsx.dev` | 这个域名还没接通，**不要用**。从源码跑用路径 A / B。 |
-| console 连不上 server | 检查 `HNSX_HTTP_ADDR` 是不是 `:50051`，Vite 是不是 `:5173`。CORS 已经全开（`Access-Control-Allow-Origin: *`）。 |
-| SQLite daemon 起不来，提示 `sqlite schema applied` 后崩溃 | 检查 `~/.local/share/hnsx/` 是不是只读，权限够不够。 |
-| Postgres 模式下 `migrations skipped` | SQLite 模式才出这条；Postgres 下 `migrations applied` 才是正常的。 |
-| Worker 报 `no such table: sessions` | SQLite 模式预期行为。要跑 worker 就走路径 B（Postgres）。 |
-| Python `register_domain` 报 `gen_random_uuid` 错 | 这条是 v1.0 已修复的；如果你在用 v1.0 之前的版本，先升级。 |
+| `curl: (52) Empty reply from server` for `hnsx.dev` | 这个域名还没接通，**不要用**。从源码跑就用上面的 1+2+3。 |
+| server 起不来 + `postgres is required` | 没设 `HNSX_DATABASE_URL`。Postgres 是 server 必需的——单独建一个本地实例。 |
+| `migrations failed: relation already exists` | 上次跑了一半的迁移。`psql ... -c "DROP TABLE goose_db_version"` 然后重试（数据不会丢因为 goose 只跟踪 schema）。 |
+| Console 连不上 server | 检查 `HNSX_HTTP_ADDR` 跟 console 跑的端口对不对。CORS 已开。 |
+| Worker 报 `no such table: sessions` | migrations 没跑完。`make db-up` 跑全套，或直接重启 server 让它跑 goose。 |
+| Python `register_domain` 失败 | v1.0 之前有过 gen_random_uuid 兼容 bug，确保用最新代码（Phase 1 PR #33 修了）。 |
+| `secret store: encryption enabled` 失败 + `set HNSX_SECRET_KEY` 错误 | 没找到 `~/.local/share/hnsx/secret.key` 也没设 env。第一次会自动生成，删目录重跑就好。 |
 
 ---
 
