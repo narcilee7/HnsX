@@ -100,6 +100,18 @@ build-cli:
 build-server:
 	cd $(SERVER_DIR) && go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/hnsx-server ./cmd/hnsx-server
 
+.PHONY: build-daemon
+build-daemon:
+	cd $(SERVER_DIR) && go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/harnessx-daemon ./cmd/harnessx-daemon
+
+.PHONY: build-multica-fork
+build-multica-fork:
+	cd $(ROOT) && go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/multica ./multica_fork/cmd/multica && \
+	  go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/multica-server ./multica_fork/cmd/server
+
+.PHONY: build-all
+build-all: build-cli build-server build-daemon build-multica-fork
+
 .PHONY: build-go
 build-go: build-cli build-server
 

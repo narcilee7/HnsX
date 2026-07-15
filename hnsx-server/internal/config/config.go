@@ -65,6 +65,10 @@ type Config struct {
 
 	// Auth controls authentication and tenant mapping.
 	Auth AuthConfig `yaml:"auth"`
+
+	// MulticaMode, when true, mounts the Multica-compatible REST + WS adapter
+	// alongside the HnsX-native API. Enabled by the --multica-mode flag.
+	MulticaMode bool `yaml:"multica_mode"`
 }
 
 // RedisConfig selects a Redis server and queue key namespace.
@@ -144,6 +148,7 @@ func Default() *Config {
 			Mode:        "none",
 			DefaultRole: "operator",
 		},
+		MulticaMode: false,
 	}
 }
 

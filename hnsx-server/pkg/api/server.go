@@ -95,6 +95,12 @@ type Server struct {
 	// When empty the template gallery endpoint returns an empty list.
 	TemplatesIndexPath string
 
+	// MulticaMount, when set, is invoked by Handler() to register the
+	// Multica-compatible REST + WS routes on the same gin engine. The
+	// pointer indirection avoids an import cycle between this package and
+	// pkg/multica_adapter.
+	MulticaMount func(router gin.IRouter)
+
 	shutdownOnce   sync.Once
 	httpServer     *http.Server
 	activeRequests sync.WaitGroup
@@ -152,7 +158,11 @@ func (s *Server) LoadDomainPolicy(ctx context.Context, domainID string) error {
 
 // Handler returns the gin.Engine with the entire API surface mounted.
 func (s *Server) Handler() *gin.Engine {
-	return newRouter(s)
+	r := newRouter(s)
+	if s.MulticaMount != nil {
+		s.MulticaMount(r)
+	}
+	return r
 }
 
 // Listen starts the HTTP server on addr. Blocks until Shutdown is called.

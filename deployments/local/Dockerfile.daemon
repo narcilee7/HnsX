@@ -1,0 +1,46 @@
+# Dockerfile.daemon — HarnessX Daemon image (W23).
+#
+# Builds the single-binary HarnessX Daemon and ships it in a minimal
+# scratch-like image. The container registers with the control plane
+# over WS, spawns agent CLIs (CC / Codex / ...) from PATH inside the
+# container, and streams observations back.
+#
+# Build:  docker build -f deployments/local/Dockerfile.daemon -t harnessx-daemon:latest .
+# Run:    docker run --rm -e HARNESSX_SERVER_URL=http://server:50051 harnessx-daemon:latest
+
+# ── builder ─────────────────────────────────────────────────────────────
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /src
+
+# Cache deps first.
+COPY hnsx-server/go.mod hnsx-server/go.sum ./hnsx-server/
+COPY multica_fork/go.mod multica_fork/go.sum ./multica_fork/
+COPY sdk/go/go.mod sdk/go/go.sum ./sdk/go/
+COPY go.work go.work.sum ./
+RUN cd hnsx-server && go mod download
+
+# Copy source.
+COPY hnsx-server ./hnsx-server
+COPY multica_fork ./multica_fork
+COPY sdk/go ./sdk/go
+
+RUN cd hnsx-server && CGO_ENABLED=0 go build \
+    -ldflags="-s -w" \
+    -o /out/harnessx-daemon \
+    ./cmd/harnessx-daemon
+
+# ── runtime ─────────────────────────────────────────────────────────────
+FROM alpine:3.19
+
+# Agent CLIs run as the same user that invoked the daemon. Install
+# pre-reqs: ca-certs for HTTPS to the control plane, bash for any
+# user-installed entrypoints.
+RUN apk add --no-cache ca-certificates bash
+
+COPY --from=builder /out/harnessx-daemon /usr/local/bin/harnessx-daemon
+
+# Default to the multica-mode entrypoint; the daemon reads server URL
+# from HARNESSX_SERVER_URL env.
+ENTRYPOINT ["/usr/local/bin/harnessx-daemon"]
+CMD ["--server", "http://server:50051"]

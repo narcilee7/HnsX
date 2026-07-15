@@ -21,6 +21,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/pkg/api"
 	"github.com/hnsx-io/hnsx/server/pkg/controlplane"
 	"github.com/hnsx-io/hnsx/server/pkg/domain"
+	"github.com/hnsx-io/hnsx/server/pkg/multica_adapter"
 	"github.com/hnsx-io/hnsx/server/pkg/version"
 	pb "github.com/hnsx-io/hnsx/server/proto/gen/go/hnsx/v1"
 )
@@ -31,6 +32,7 @@ type Server struct {
 	Application *app.Application
 	APIServer   *api.Server
 	GRPCServer  *controlplane.Server
+	Multica     *multica_adapter.Adapter
 	Log         *zap.Logger
 }
 
@@ -39,6 +41,7 @@ func NewServerFromArgs(args []string) (*Server, error) {
 	fs := flag.NewFlagSet("server", flag.ExitOnError)
 	cfgPath := fs.String("config", "", "optional path to YAML config")
 	seedFrom := fs.String("seed-from", "", "optional directory of v2 DomainSpec YAMLs to register on boot (development only)")
+	multicaMode := fs.Bool("multica-mode", false, "expose the Multica-compatible REST + WS API contract on top of HnsX")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
@@ -46,6 +49,9 @@ func NewServerFromArgs(args []string) (*Server, error) {
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
 		return nil, fmt.Errorf("config: %w", err)
+	}
+	if *multicaMode {
+		cfg.MulticaMode = true
 	}
 
 	log, err := logger.New(cfg.Log.Level)
@@ -88,6 +94,12 @@ func NewServerFromArgs(args []string) (*Server, error) {
 		Application: application,
 		APIServer:   apiServer,
 		Log:         log,
+	}
+
+	if cfg.MulticaMode {
+		s.Multica = multica_adapter.New(application, apiServer)
+		apiServer.MulticaMount = s.Multica.Mount
+		log.Info("multica mode enabled: exposing /api/workspaces, /api/agents, /api/issues, /api/squads, /api/daemon/*")
 	}
 
 	if cfg.GRPCAddr != "" {
