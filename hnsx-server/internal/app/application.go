@@ -43,6 +43,7 @@ import (
 	squadhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/squad"
 	workspacehandler "github.com/hnsx-io/hnsx/server/internal/api/handler/workspace"
 	"github.com/hnsx-io/hnsx/server/internal/domain/agentruntime"
+	"github.com/hnsx-io/hnsx/server/internal/domain/policy"
 	agentinfra "github.com/hnsx-io/hnsx/server/internal/infra/agentruntime" // concrete backends
 	"github.com/hnsx-io/hnsx/server/internal/infra/db/postgres"
 	agentsvc "github.com/hnsx-io/hnsx/server/internal/service/agent"
@@ -56,6 +57,24 @@ import (
 	squadsvc "github.com/hnsx-io/hnsx/server/internal/service/squad"
 	workspacesvc "github.com/hnsx-io/hnsx/server/internal/service/workspace"
 )
+
+// policyLookup is the daemon_runtime.PolicyLookup implementation that
+// returns the workspace's first Policy. R3.x swaps this for a per-harness
+// binding lookup.
+type policyLookup struct {
+	repo *postgres.PolicyRepo
+}
+
+func (p *policyLookup) FirstPolicyForWorkspace(ctx context.Context, workspaceID string) (*policy.Policy, error) {
+	list, err := p.repo.ListByWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if len(list) == 0 {
+		return nil, nil
+	}
+	return list[0], nil
+}
 
 // Config holds runtime configuration for hnsxd. Loaded from
 // HNSX_* environment variables and an optional YAML file.
@@ -215,12 +234,22 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 		setRepo := postgres.NewEvalSetRepo(app.DB)
 		runRepo := postgres.NewEvalRunRepo(app.DB)
 		evalSvc := evalsvc.New(setRepo, runRepo, sink, logger)
+		policyRepo := postgres.NewPolicyRepo(app.DB)
+		approvalRepo := postgres.NewApprovalRepo(app.DB)
+		gate := approvalsvc.NewGate(approvalsvc.GateConfig{
+			Repo:   approvalRepo,
+			Logger: logger,
+		})
+		engine := policysvc.NewEngine()
 		app.DaemonRuntime = daemonruntime.New(daemonruntime.Config{
 			Issues:   app.IssueSvc,
 			Agents:   app.AgentSvc,
 			Registry: app.Backends,
 			Sink:     sink,
 			Eval:     evalAutoRunner{evalSvc},
+			Policies: &policyLookup{repo: policyRepo},
+			Gate:     gate,
+			Engine:   engine,
 			Logger:   logger,
 		})
 	}

@@ -11,22 +11,33 @@ package daemon_runtime
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/hnsx-io/hnsx/server/internal/domain/agent"
 	"github.com/hnsx-io/hnsx/server/internal/domain/agentruntime"
+	"github.com/hnsx-io/hnsx/server/internal/domain/approval"
 	"github.com/hnsx-io/hnsx/server/internal/domain/issue"
 	"github.com/hnsx-io/hnsx/server/internal/domain/observation"
+	"github.com/hnsx-io/hnsx/server/internal/domain/policy"
 )
+
+// PolicyLookup fetches the policy attached to a workspace. The default
+// implementation in app picks the workspace's first policy; tests pass
+// a stub that returns nil.
+type PolicyLookup interface {
+	FirstPolicyForWorkspace(ctx context.Context, workspaceID string) (*policy.Policy, error)
+}
+
+type approvalGate interface {
+	Request(ctx context.Context, a *approval.Approval) error
+	Wait(ctx context.Context, approvalID string) (approval.Status, error)
+}
 
 // Service is the daemon-runtime orchestrator. It pulls work from the issue
 // service, runs it through the agent runtime registry, and records every
@@ -37,6 +48,9 @@ type Service struct {
 	registry agentruntime.Registry
 	sink     observation.Sink
 	eval     EvalAutoRunner
+	policies PolicyLookup
+	gate     approvalGate
+	engine   policy.Engine
 	logger   *slog.Logger
 }
 
@@ -49,6 +63,9 @@ type Config struct {
 	Registry agentruntime.Registry
 	Sink     observation.Sink
 	Eval     EvalAutoRunner
+	Policies PolicyLookup
+	Gate     approvalGate
+	Engine   policy.Engine
 	Logger   *slog.Logger
 }
 
@@ -83,6 +100,9 @@ func New(cfg Config) *Service {
 		registry: cfg.Registry,
 		sink:     cfg.Sink,
 		eval:     cfg.Eval,
+		policies: cfg.Policies,
+		gate:     cfg.Gate,
+		engine:   cfg.Engine,
 		logger:   cfg.Logger.With("component", "daemon_runtime"),
 	}
 }
@@ -202,12 +222,88 @@ func (s *Service) runIssue(ctx context.Context, a *agent.Agent, i *issue.Issue) 
 	promptHash := hashPrompt(prompt)
 	agentTemplateID := agentTemplateID(a, backendName, model)
 	signatures := newToolSignatureSet()
+	pol := s.loadPolicy(ctx, i.WorkspaceID)
 	var seq int64
 	for msg := range sess.Messages() {
 		// Accumulate tool signatures as we see tool_use events.
 		if name := extractToolName(msg); name != "" {
 			signatures.Add(name)
 		}
+
+		// Policy gate: tool_use events come either as a top-level
+		// "type":"tool_use" line OR embedded inside an assistant message's
+		// content[] (the Claude stream-json format). We extract both
+		// forms and run the policy on each tool_name.
+		toolNames := toolNamesForMessage(msg)
+		if len(toolNames) > 0 {
+			s.logger.Info("daemon_runtime: tool names extracted from msg",
+				"msg_kind", msg.Kind, "tools", toolNames)
+		}
+		for _, toolName := range toolNames {
+			if s.engine == nil || pol == nil {
+				break
+			}
+			ec := policy.EvalContext{
+				WorkspaceID: i.WorkspaceID,
+				IssueID:     i.ID,
+				AgentID:     a.ID,
+				Action:      "tool_call",
+				ToolName:    toolName,
+			}
+			dec, err := s.engine.Evaluate(ctx, pol, ec)
+			if err != nil {
+				s.logger.Warn("daemon_runtime: policy eval failed", "err", err)
+				break
+			}
+			switch dec.Action {
+			case policy.ActionDeny:
+				s.logger.Warn("daemon_runtime: policy denied tool",
+					"issue", i.ID, "tool", toolName, "rule", dec.RuleID)
+				_ = sess.Cancel(ctx)
+				for drain := range sess.Messages() {
+					_ = drain
+				}
+				_ = s.recordPolicyDecision(ctx, i, pol, dec, observation.PolicyDeny)
+				return s.issues.UpdateStatus(ctx, i.ID, issue.StatusBlocked)
+			case policy.ActionApprovalRequired:
+				if s.gate == nil {
+					s.logger.Warn("daemon_runtime: approval required but no gate wired; defaulting to allow")
+					continue
+				}
+				s.logger.Info("daemon_runtime: approval required, gating",
+					"issue", i.ID, "tool", toolName, "rule", dec.RuleID)
+				appr := &approval.Approval{
+					ID:          uuid.NewString(),
+					WorkspaceID: i.WorkspaceID,
+					IssueID:     i.ID,
+					AgentID:     a.ID,
+					Action:      "tool_call:" + toolName,
+					Reason:      dec.Message,
+				}
+				if err := s.gate.Request(ctx, appr); err != nil {
+					s.logger.Warn("daemon_runtime: approval request failed", "err", err)
+					continue
+				}
+				status, werr := s.gate.Wait(ctx, appr.ID)
+				if werr != nil {
+					s.logger.Warn("daemon_runtime: approval wait failed", "err", werr)
+					continue
+				}
+				if status != approval.StatusGranted {
+					s.logger.Info("daemon_runtime: approval denied/expired; aborting",
+						"issue", i.ID, "status", status)
+					_ = sess.Cancel(ctx)
+					for drain := range sess.Messages() {
+						_ = drain
+					}
+					_ = s.recordPolicyDecision(ctx, i, pol, dec, observation.PolicyDeny)
+					return s.issues.UpdateStatus(ctx, i.ID, issue.StatusBlocked)
+				}
+				s.logger.Info("daemon_runtime: approval granted; continuing",
+					"issue", i.ID, "approval", appr.ID)
+			}
+		}
+
 		obs := &observation.Observation{
 			ID:              uuid.NewString(),
 			WorkspaceID:     i.WorkspaceID,
@@ -266,6 +362,54 @@ func (s *Service) listAgentsForWorkspace(ctx context.Context, workspaceID string
 	return s.agents.ListByWorkspace(ctx, workspaceID, agent.ListFilter{Limit: 100})
 }
 
+// loadPolicy fetches the workspace's first policy. Returns nil when
+// no policy is configured (which the runtime treats as default-allow).
+func (s *Service) loadPolicy(ctx context.Context, workspaceID string) *policy.Policy {
+	if s.policies == nil {
+		return nil
+	}
+	p, err := s.policies.FirstPolicyForWorkspace(ctx, workspaceID)
+	if err != nil {
+		s.logger.Warn("daemon_runtime: load policy failed", "err", err)
+		return nil
+	}
+	if p == nil {
+		s.logger.Info("daemon_runtime: no policy configured for workspace", "workspace", workspaceID)
+	} else {
+		s.logger.Info("daemon_runtime: policy loaded", "policy", p.ID, "workspace", workspaceID, "name", p.Name)
+	}
+	return p
+}
+
+// log is the package-level slog logger used for debug-level events.
+// We avoid the Slogger inside Service.Debug to keep slog.Level config
+// at the application boundary.
+
+// recordPolicyDecision writes a KindPolicyDecision Observation so the
+// flywheel can join every policy outcome to the message stream.
+func (s *Service) recordPolicyDecision(ctx context.Context, i *issue.Issue, p *policy.Policy, dec policy.Decision, outcome observation.PolicyDecision) error {
+	payload, _ := json.Marshal(map[string]any{
+		"rule_id":  dec.RuleID,
+		"message":  dec.Message,
+		"policy_id": func() string {
+			if p != nil {
+				return p.ID
+			}
+			return ""
+		}(),
+	})
+	obs := &observation.Observation{
+		ID:             uuid.NewString(),
+		WorkspaceID:    i.WorkspaceID,
+		IssueID:        i.ID,
+		Kind:           observation.KindPolicyDecision,
+		Payload:        payload,
+		OccurredAt:     time.Now().UTC(),
+		PolicyDecision: outcome,
+	}
+	return s.sink.Write(ctx, obs)
+}
+
 // kindFromMessage maps an agentruntime.Message onto an observation.Kind.
 func kindFromMessage(m agentruntime.Message) observation.Kind {
 	switch m.Kind {
@@ -282,72 +426,6 @@ func kindFromMessage(m agentruntime.Message) observation.Kind {
 	default:
 		return observation.KindMessage
 	}
-}
-
-func hashPrompt(p string) string {
-	// sha256 hex digest; lets eval slice regressions by exact prompt.
-	sum := sha256.Sum256([]byte(p))
-	return hex.EncodeToString(sum[:])
-}
-
-// agentTemplateID derives a stable template identifier from the agent's
-// runtime config. The shape is "<backend>:<model>" so two agents
-// pointing at the same backend+model land in the same template bucket.
-// R3.x may promote this to a first-class AgentTemplate entity.
-func agentTemplateID(a *agent.Agent, backend, model string) string {
-	if a == nil {
-		return backend + ":" + model
-	}
-	// Prefer an explicit template id if the harness binding is set later.
-	if a.ID != "" {
-		return a.ID
-	}
-	return backend + ":" + model
-}
-
-// toolSignatureSet accumulates tool names seen during an agent run,
-// preserving insertion order and emitting a stable JSON array.
-type toolSignatureSet struct {
-	order []string
-	set   map[string]struct{}
-}
-
-func newToolSignatureSet() *toolSignatureSet {
-	return &toolSignatureSet{set: make(map[string]struct{})}
-}
-
-func (s *toolSignatureSet) Add(name string) {
-	if name == "" {
-		return
-	}
-	if _, ok := s.set[name]; ok {
-		return
-	}
-	s.set[name] = struct{}{}
-	s.order = append(s.order, name)
-}
-
-func (s *toolSignatureSet) JSON() json.RawMessage {
-	if len(s.order) == 0 {
-		return json.RawMessage("[]")
-	}
-	buf, _ := json.Marshal(s.order)
-	return buf
-}
-
-// extractToolName pulls the tool name out of a tool_use message's
-// payload. Returns "" if the message is not a tool_use event.
-func extractToolName(m agentruntime.Message) string {
-	if m.Kind != agentruntime.MsgToolUse {
-		return ""
-	}
-	var p struct {
-		Name string `json:"name"`
-	}
-	if err := json.Unmarshal(m.Payload, &p); err != nil {
-		return ""
-	}
-	return strings.TrimSpace(p.Name)
 }
 
 func resOrErrMsg(res *agentruntime.Result, err error) string {
