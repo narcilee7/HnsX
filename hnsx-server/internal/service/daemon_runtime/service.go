@@ -32,6 +32,7 @@ type Service struct {
 	agents   *agent_svc_handle
 	registry agentruntime.Registry
 	sink     observation.Sink
+	eval     EvalAutoRunner
 	logger   *slog.Logger
 }
 
@@ -43,6 +44,7 @@ type Config struct {
 	Agents   AgentGetter
 	Registry agentruntime.Registry
 	Sink     observation.Sink
+	Eval     EvalAutoRunner
 	Logger   *slog.Logger
 }
 
@@ -58,6 +60,13 @@ type AgentGetter interface {
 	Get(ctx context.Context, id string) (*agent.Agent, error)
 }
 
+// EvalAutoRunner is the eval hook the runtime calls when an issue closes.
+// Implementations live in service/eval; the interface lets tests pass
+// stubs without dragging the eval package in.
+type EvalAutoRunner interface {
+	AutoRun(ctx context.Context, workspaceID, issueID string, harnessID *string) error
+}
+
 // New wires a daemon runtime from a Config.
 func New(cfg Config) *Service {
 	if cfg.Logger == nil {
@@ -68,6 +77,7 @@ func New(cfg Config) *Service {
 		agents:   &agent_svc_handle{AgentGetter: cfg.Agents},
 		registry: cfg.Registry,
 		sink:     cfg.Sink,
+		eval:     cfg.Eval,
 		logger:   cfg.Logger.With("component", "daemon_runtime"),
 	}
 }
@@ -213,6 +223,21 @@ func (s *Service) runIssue(ctx context.Context, a *agent.Agent, i *issue.Issue) 
 	if err := s.issues.UpdateStatus(ctx, i.ID, finalStatus); err != nil {
 		return fmt.Errorf("final status update: %w", err)
 	}
+
+	// Flywheel hook: when an issue completes (done OR blocked), trigger
+	// eval.AutoRun. Failures here are non-fatal — eval results land in
+	// their own table and are recoverable.
+	if s.eval != nil {
+		go func() {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := s.eval.AutoRun(bgCtx, i.WorkspaceID, i.ID, nil); err != nil {
+				s.logger.Warn("daemon_runtime: eval.AutoRun failed",
+					"issue", i.ID, "err", err)
+			}
+		}()
+	}
+
 	return nil
 }
 

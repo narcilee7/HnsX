@@ -44,6 +44,7 @@ import (
 	agentsvc "github.com/hnsx-io/hnsx/server/internal/service/agent"
 	daemonsvc "github.com/hnsx-io/hnsx/server/internal/service/daemon"
 	daemonruntime "github.com/hnsx-io/hnsx/server/internal/service/daemon_runtime"
+	evalsvc "github.com/hnsx-io/hnsx/server/internal/service/eval"
 	issuesvc "github.com/hnsx-io/hnsx/server/internal/service/issue"
 	squadsvc "github.com/hnsx-io/hnsx/server/internal/service/squad"
 	workspacesvc "github.com/hnsx-io/hnsx/server/internal/service/workspace"
@@ -187,11 +188,15 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 		// Daemon runtime: pulls assigned issues, spawns the agent backend,
 		// streams observations. Lazily wired only when DB is available.
 		sink := postgres.NewObservationSink(app.DB)
+		setRepo := postgres.NewEvalSetRepo(app.DB)
+		runRepo := postgres.NewEvalRunRepo(app.DB)
+		evalSvc := evalsvc.New(setRepo, runRepo, sink, logger)
 		app.DaemonRuntime = daemonruntime.New(daemonruntime.Config{
 			Issues:   app.IssueSvc,
 			Agents:   app.AgentSvc,
 			Registry: app.Backends,
 			Sink:     sink,
+			Eval:     evalAutoRunner{evalSvc},
 			Logger:   logger,
 		})
 	}
@@ -265,4 +270,14 @@ func newLogger(level string) (*slog.Logger, error) {
 	}
 	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})
 	return slog.New(h), nil
+}
+// evalAutoRunner adapts *evalsvc.Service to the daemon_runtime.EvalAutoRunner
+// interface (which returns just an error so the daemon can fire-and-forget).
+type evalAutoRunner struct {
+	svc *evalsvc.Service
+}
+
+func (e evalAutoRunner) AutoRun(ctx context.Context, workspaceID, issueID string, harnessID *string) error {
+	_, err := e.svc.AutoRun(ctx, workspaceID, issueID, harnessID)
+	return err
 }
