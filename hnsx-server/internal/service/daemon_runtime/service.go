@@ -58,6 +58,7 @@ type IssueListerAndUpdater interface {
 // AgentGetter is the agent service subset we depend on.
 type AgentGetter interface {
 	Get(ctx context.Context, id string) (*agent.Agent, error)
+	ListByWorkspace(ctx context.Context, workspaceID string, f agent.ListFilter) ([]*agent.Agent, error)
 }
 
 // EvalAutoRunner is the eval hook the runtime calls when an issue closes.
@@ -241,12 +242,15 @@ func (s *Service) runIssue(ctx context.Context, a *agent.Agent, i *issue.Issue) 
 	return nil
 }
 
-// listAgentsForWorkspace delegates to the agent service. We keep the
-// agent list empty for R1.9 since ListByWorkspace isn't currently used
-// by the runtime — replace with a real call once the workspace_id is
-// reliably populated.
-func (s *Service) listAgentsForWorkspace(_ context.Context, _ string) ([]*agent.Agent, error) {
-	return nil, nil
+// listAgentsForWorkspace fetches every agent in the workspace. R2+
+// replaces this with a heartbeat-driven registry keyed on daemon_id;
+// for now we use the agent service's workspace-scoped list so the
+// daemon can find its work.
+func (s *Service) listAgentsForWorkspace(ctx context.Context, workspaceID string) ([]*agent.Agent, error) {
+	if s.agents == nil {
+		return nil, nil
+	}
+	return s.agents.ListByWorkspace(ctx, workspaceID, agent.ListFilter{Limit: 100})
 }
 
 // kindFromMessage maps an agentruntime.Message onto an observation.Kind.
