@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+// ErrDaemonNotFound is returned by Repo implementations when a lookup misses.
+var ErrDaemonNotFound = errors.New("daemon: not found")
+
 // Status tracks the heartbeat-derived health of a daemon.
 type Status string
 

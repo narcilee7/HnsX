@@ -25,11 +25,27 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
+	"go.uber.org/zap"
+
+	"github.com/hnsx-io/hnsx/server/internal/api/router"
+	agenthandler "github.com/hnsx-io/hnsx/server/internal/api/handler/agent"
+	daemonhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/daemon"
+	issuehandler "github.com/hnsx-io/hnsx/server/internal/api/handler/issue"
+	squadhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/squad"
+	workspacehandler "github.com/hnsx-io/hnsx/server/internal/api/handler/workspace"
 	"github.com/hnsx-io/hnsx/server/internal/domain/agentruntime"
 	agentinfra "github.com/hnsx-io/hnsx/server/internal/infra/agentruntime" // concrete backends
+	"github.com/hnsx-io/hnsx/server/internal/infra/db/postgres"
+	agentsvc "github.com/hnsx-io/hnsx/server/internal/service/agent"
+	daemonsvc "github.com/hnsx-io/hnsx/server/internal/service/daemon"
+	issuesvc "github.com/hnsx-io/hnsx/server/internal/service/issue"
+	squadsvc "github.com/hnsx-io/hnsx/server/internal/service/squad"
+	workspacesvc "github.com/hnsx-io/hnsx/server/internal/service/workspace"
 )
 
 // Config holds runtime configuration for hnsxd. Loaded from
@@ -74,16 +90,28 @@ type Application struct {
 	logger   *slog.Logger
 	Backends agentruntime.Registry
 
-	// Wired components go here as R1.4+ lands:
-	//   dbPool    *pgxpool.Pool
-	//   workspaceRepo workspace.Repo
-	//   workspaceSvc  *workspacesvc.Service
-	//   router        *gin.Engine
-	//   ...
+	// Resource services exposed for CLI / WS transports.
+	WorkspaceSvc *workspacesvc.Service
+	AgentSvc     *agentsvc.Service
+	IssueSvc     *issuesvc.Service
+	SquadSvc     *squadsvc.Service
+	DaemonSvc    *daemonsvc.Service
+
+	// DB pool + handlers. Available so WS layer (R1.9) and tests can use them.
+	DB       *postgres.DB
+	Handlers router.Deps
+
+	// HTTP server lifecycle.
+	httpServer *http.Server
 }
 
-// New constructs the application: loads config, opens DB pools, wires
+// New constructs the application: loads config, opens DB pool, wires
 // repos -> services -> handlers -> router.
+//
+// The Postgres pool is optional: if cfg.PostgresDSN is empty, the
+// application boots without DB and the HTTP server responds with 500 on
+// any endpoint that needs persistence. This keeps `hnsxd backends list`
+// (and other CLI subcommands) usable without a running database.
 func New(ctx context.Context, cfg *Config) (*Application, error) {
 	if cfg == nil {
 		return nil, errors.New("app: nil config")
@@ -94,38 +122,111 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 		return nil, fmt.Errorf("logger: %w", err)
 	}
 
+	app := &Application{
+		cfg:    cfg,
+		logger: logger,
+	}
+
+	// 1. Agent runtime registry (no DB needed).
 	registry := agentinfra.NewRegistry(logger)
 	claudeRunner := agentinfra.NewClaudeRunner(cfg.ClaudeExecutable, logger)
 	registry.Register(agentinfra.NewClaudeBackend(claudeRunner))
+	app.Backends = registry
 	logger.Info("app: agent backends registered",
 		"backends", strings.Join(registry.List(), ", "),
 	)
 
-	return &Application{
-		cfg:      cfg,
-		logger:   logger,
-		Backends: registry,
-	}, nil
+	// 2. Database pool (optional).
+	if cfg.PostgresDSN != "" {
+		// Postgres package expects a *zap.Logger. We pass a no-op one and
+		// rely on slog at the application boundary; GORM slow queries are
+		// still logged via slog inside the postgres package's warn path.
+		db, err := postgres.Open(ctx, postgres.Config{
+			DSN:        cfg.PostgresDSN,
+			LogQueries: false,
+		}, zap.NewNop())
+		if err != nil {
+			return nil, fmt.Errorf("app: postgres: %w", err)
+		}
+		app.DB = db
+		logger.Info("app: postgres ready")
+	} else {
+		logger.Warn("app: postgres DSN not set; DB-backed endpoints will fail")
+	}
+
+	// 3. Wire repos -> services -> handlers (only if DB is available).
+	if app.DB != nil {
+		workspaceRepo := postgres.NewWorkspaceRepo(app.DB)
+		agentRepo := postgres.NewAgentRepo(app.DB)
+		issueRepo := postgres.NewIssueRepo(app.DB)
+		squadRepo := postgres.NewSquadRepo(app.DB)
+		daemonRepo := postgres.NewDaemonRepo(app.DB)
+
+		app.WorkspaceSvc = workspacesvc.New(workspaceRepo)
+		app.AgentSvc = agentsvc.New(agentRepo)
+		app.IssueSvc = issuesvc.New(issueRepo)
+		app.SquadSvc = squadsvc.New(squadRepo)
+		app.DaemonSvc = daemonsvc.New(daemonRepo)
+
+		app.Handlers = router.Deps{
+			Workspace: workspacehandler.New(app.WorkspaceSvc),
+			Issue:     issuehandler.New(app.IssueSvc),
+			Agent:     agenthandler.New(app.AgentSvc),
+			Squad:     squadhandler.New(app.SquadSvc),
+			Daemon:    daemonhandler.New(app.DaemonSvc),
+		}
+	}
+
+	// 4. HTTP server lifecycle.
+	engine := router.New(app.Handlers)
+	app.httpServer = &http.Server{
+		Addr:              cfg.HTTPAddr,
+		Handler:           engine,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	return app, nil
 }
 
-// Serve starts the HTTP+WS server and blocks until ctx is cancelled.
+// Serve runs the HTTP server until ctx is cancelled. Blocks.
 func (a *Application) Serve(ctx context.Context) error {
-	// Real server wiring lands in R1.6 (gin router). For now we just signal
-	// that the binary is alive so the skeleton is exercised end-to-end.
-	a.logger.Info("app: serve (skeleton mode — HTTP/WS server lands in R1.6)",
-		"http_addr", a.cfg.HTTPAddr,
-	)
-	<-ctx.Done()
-	return ctx.Err()
+	if a.httpServer == nil {
+		return errors.New("app: http server not initialized")
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		a.logger.Info("app: serving HTTP",
+			"addr", a.cfg.HTTPAddr,
+			"db", a.DB != nil,
+		)
+		if err := a.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+			return
+		}
+		errCh <- nil
+	}()
+
+	select {
+	case <-ctx.Done():
+		a.logger.Info("app: shutting down HTTP server")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return a.httpServer.Shutdown(shutdownCtx)
+	case err := <-errCh:
+		return err
+	}
 }
 
 // Close releases every resource held by the application.
 func (a *Application) Close() {
 	a.logger.Info("app: closing")
+	if a.DB != nil {
+		_ = a.DB.Close()
+	}
 }
 
-// Logger returns the application logger so callers (CLI subcommands,
-// HTTP handlers) can use the same configured sink.
+// Logger returns the application logger.
 func (a *Application) Logger() *slog.Logger { return a.logger }
 
 // newLogger builds a slog logger at the configured level.

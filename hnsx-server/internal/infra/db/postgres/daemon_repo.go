@@ -9,8 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// ErrDaemonNotFound is returned when a daemon lookup misses.
-var ErrDaemonNotFound = errors.New("daemon: not found")
+// daemon.ErrDaemonNotFound is returned when a daemon lookup misses.
 
 // DaemonRepo implements daemon.Repo against Postgres via GORM.
 type DaemonRepo struct{ db *DB }
@@ -31,7 +30,7 @@ func (r *DaemonRepo) Get(ctx context.Context, id string) (*daemon.Daemon, error)
 	var d daemon.Daemon
 	err := r.db.WithContext(ctx).First(&d, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrDaemonNotFound
+		return nil, daemon.ErrDaemonNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -63,7 +62,7 @@ func (r *DaemonRepo) Heartbeat(ctx context.Context, id string, when time.Time) e
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrDaemonNotFound
+		return daemon.ErrDaemonNotFound
 	}
 	return nil
 }
@@ -77,7 +76,7 @@ func (r *DaemonRepo) UpdateStatus(ctx context.Context, id string, status daemon.
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrDaemonNotFound
+		return daemon.ErrDaemonNotFound
 	}
 	return nil
 }
@@ -88,7 +87,7 @@ func (r *DaemonRepo) Delete(ctx context.Context, id string) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrDaemonNotFound
+		return daemon.ErrDaemonNotFound
 	}
 	return nil
 }

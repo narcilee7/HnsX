@@ -10,9 +10,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// ErrWorkspaceNotFound is returned when a workspace lookup misses. The
+// workspace.ErrWorkspaceNotFound is returned when a workspace lookup misses. The
 // service layer translates this into a 404 at the HTTP boundary.
-var ErrWorkspaceNotFound = errors.New("workspace: not found")
 
 // WorkspaceRepo implements workspace.Repo against Postgres via GORM.
 type WorkspaceRepo struct{ db *DB }
@@ -32,7 +31,7 @@ func (r *WorkspaceRepo) Get(ctx context.Context, id string) (*workspace.Workspac
 	var w workspace.Workspace
 	err := r.db.WithContext(ctx).First(&w, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrWorkspaceNotFound
+		return nil, workspace.ErrWorkspaceNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -44,7 +43,7 @@ func (r *WorkspaceRepo) GetBySlug(ctx context.Context, slug string) (*workspace.
 	var w workspace.Workspace
 	err := r.db.WithContext(ctx).First(&w, "slug = ?", slug).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrWorkspaceNotFound
+		return nil, workspace.ErrWorkspaceNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -89,7 +88,7 @@ func (r *WorkspaceRepo) Update(ctx context.Context, w *workspace.Workspace) erro
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrWorkspaceNotFound
+		return workspace.ErrWorkspaceNotFound
 	}
 	return nil
 }
@@ -103,7 +102,7 @@ func (r *WorkspaceRepo) Archive(ctx context.Context, id string) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrWorkspaceNotFound
+		return workspace.ErrWorkspaceNotFound
 	}
 	return nil
 }
@@ -118,7 +117,7 @@ func (r *WorkspaceRepo) Delete(ctx context.Context, id string) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrWorkspaceNotFound
+		return workspace.ErrWorkspaceNotFound
 	}
 	return nil
 }

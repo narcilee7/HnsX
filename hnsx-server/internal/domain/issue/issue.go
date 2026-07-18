@@ -15,6 +15,13 @@ import (
 	"time"
 )
 
+// ErrIssueNotFound is returned by Repo implementations when a lookup misses.
+var ErrIssueNotFound = errors.New("issue: not found")
+
+// ErrAssigneeMismatch is returned by the service when assignee_type=agent
+// is paired with an empty assignee_id. Transport maps this to 400.
+var ErrAssigneeMismatch = errors.New("issue: assignee_type=agent requires a valid agent_id")
+
 // Status enumerates the lifecycle of an issue.
 type Status string
 

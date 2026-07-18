@@ -15,6 +15,9 @@ import (
 	"time"
 )
 
+// ErrAgentNotFound is returned by Repo implementations when a lookup misses.
+var ErrAgentNotFound = errors.New("agent: not found")
+
 // RuntimeMode picks where the agent's CLI is executed.
 type RuntimeMode string
 

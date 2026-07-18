@@ -11,8 +11,12 @@ package observation
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 )
+
+// ErrObservationNotFound is returned by Sink implementations when a lookup misses.
+var ErrObservationNotFound = errors.New("observation: not found")
 
 // Kind discriminates observation types.
 type Kind string

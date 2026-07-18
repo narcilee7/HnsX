@@ -10,8 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// ErrAgentNotFound is returned when an agent lookup misses.
-var ErrAgentNotFound = errors.New("agent: not found")
+// agent.ErrAgentNotFound is returned when an agent lookup misses.
 
 // AgentRepo implements agent.Repo against Postgres via GORM.
 type AgentRepo struct{ db *DB }
@@ -29,7 +28,7 @@ func (r *AgentRepo) Get(ctx context.Context, id string) (*agent.Agent, error) {
 	var a agent.Agent
 	err := r.db.WithContext(ctx).First(&a, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrAgentNotFound
+		return nil, agent.ErrAgentNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -79,7 +78,7 @@ func (r *AgentRepo) Update(ctx context.Context, a *agent.Agent) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrAgentNotFound
+		return agent.ErrAgentNotFound
 	}
 	return nil
 }
@@ -93,7 +92,7 @@ func (r *AgentRepo) UpdateStatus(ctx context.Context, id string, status agent.St
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrAgentNotFound
+		return agent.ErrAgentNotFound
 	}
 	return nil
 }
@@ -111,7 +110,7 @@ func (r *AgentRepo) Archive(ctx context.Context, id string) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrAgentNotFound
+		return agent.ErrAgentNotFound
 	}
 	return nil
 }
@@ -125,7 +124,7 @@ func (r *AgentRepo) Delete(ctx context.Context, id string) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrAgentNotFound
+		return agent.ErrAgentNotFound
 	}
 	return nil
 }

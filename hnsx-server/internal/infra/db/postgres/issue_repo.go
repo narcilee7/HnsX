@@ -8,8 +8,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// ErrIssueNotFound is returned when an issue lookup misses.
-var ErrIssueNotFound = errors.New("issue: not found")
+// issue.ErrIssueNotFound is returned when an issue lookup misses.
 
 // IssueRepo implements issue.Repo against Postgres via GORM.
 type IssueRepo struct{ db *DB }
@@ -27,7 +26,7 @@ func (r *IssueRepo) Get(ctx context.Context, id string) (*issue.Issue, error) {
 	var i issue.Issue
 	err := r.db.WithContext(ctx).First(&i, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrIssueNotFound
+		return nil, issue.ErrIssueNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -115,7 +114,7 @@ func (r *IssueRepo) Update(ctx context.Context, i *issue.Issue) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrIssueNotFound
+		return issue.ErrIssueNotFound
 	}
 	return nil
 }
@@ -129,7 +128,7 @@ func (r *IssueRepo) UpdateStatus(ctx context.Context, id string, status issue.St
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrIssueNotFound
+		return issue.ErrIssueNotFound
 	}
 	return nil
 }
@@ -140,7 +139,7 @@ func (r *IssueRepo) Delete(ctx context.Context, id string) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrIssueNotFound
+		return issue.ErrIssueNotFound
 	}
 	return nil
 }

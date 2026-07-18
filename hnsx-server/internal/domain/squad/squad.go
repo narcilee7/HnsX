@@ -16,6 +16,9 @@ import (
 	"time"
 )
 
+// ErrSquadNotFound is returned by Repo implementations when a lookup misses.
+var ErrSquadNotFound = errors.New("squad: not found")
+
 // MemberRole distinguishes a leader from a member within a squad.
 type MemberRole string
 

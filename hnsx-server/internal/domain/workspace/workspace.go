@@ -17,6 +17,11 @@ import (
 	"time"
 )
 
+// ErrWorkspaceNotFound is returned by Repo implementations when a lookup
+// misses. Defined in the domain package (not in the persistence impl) so
+// transport layers can match on it without importing the infra package.
+var ErrWorkspaceNotFound = errors.New("workspace: not found")
+
 // Status enumerates the lifecycle of a workspace.
 type Status string
 

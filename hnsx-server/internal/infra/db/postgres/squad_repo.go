@@ -9,8 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// ErrSquadNotFound is returned when a squad lookup misses.
-var ErrSquadNotFound = errors.New("squad: not found")
+// squad.ErrSquadNotFound is returned when a squad lookup misses.
 
 // SquadRepo implements squad.Repo against Postgres via GORM.
 //
@@ -32,7 +31,7 @@ func (r *SquadRepo) Get(ctx context.Context, id string) (*squad.Squad, error) {
 	var s squad.Squad
 	err := r.db.WithContext(ctx).First(&s, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrSquadNotFound
+		return nil, squad.ErrSquadNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -68,7 +67,7 @@ func (r *SquadRepo) Update(ctx context.Context, s *squad.Squad) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrSquadNotFound
+		return squad.ErrSquadNotFound
 	}
 	return nil
 }
@@ -83,7 +82,7 @@ func (r *SquadRepo) AddMember(ctx context.Context, squadID string, m squad.Membe
 	var s squad.Squad
 	if err := r.db.WithContext(ctx).First(&s, "id = ?", squadID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrSquadNotFound
+			return squad.ErrSquadNotFound
 		}
 		return err
 	}
@@ -104,7 +103,7 @@ func (r *SquadRepo) RemoveMember(ctx context.Context, squadID, memberID string) 
 	var s squad.Squad
 	if err := r.db.WithContext(ctx).First(&s, "id = ?", squadID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrSquadNotFound
+			return squad.ErrSquadNotFound
 		}
 		return err
 	}
@@ -131,7 +130,7 @@ func (r *SquadRepo) Delete(ctx context.Context, id string) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrSquadNotFound
+		return squad.ErrSquadNotFound
 	}
 	return nil
 }

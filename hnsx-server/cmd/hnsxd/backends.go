@@ -5,12 +5,16 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/hnsx-io/hnsx/server/internal/app"
+	agentinfra "github.com/hnsx-io/hnsx/server/internal/infra/agentruntime"
 )
 
 // newBackendsCmd exposes the agentruntime registry for smoke tests and
-// operator debugging. Listing registered backends proves that
-// app.New() successfully wired the infrastructure layer.
+// operator debugging. Listing registered backends proves the agent
+// runtime layer is wired correctly.
+//
+// This command deliberately bypasses app.New (which would try to open
+// Postgres + wire the gin router) so it stays usable without a database
+// — useful for ops debugging in a broken-DB scenario.
 func newBackendsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "backends",
@@ -21,13 +25,12 @@ func newBackendsCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List all registered agent runtime backends",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			application, err := app.New(cmd.Context(), minimalConfig())
-			if err != nil {
-				return err
-			}
-			defer application.Close()
+			cfg := minimalConfig()
+			registry := agentinfra.NewRegistry(nil)
+			claudeRunner := agentinfra.NewClaudeRunner(cfg.ClaudeExecutable, nil)
+			registry.Register(agentinfra.NewClaudeBackend(claudeRunner))
 
-			names := application.Backends.List()
+			names := registry.List()
 			if len(names) == 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), "(no backends registered)")
 				return nil

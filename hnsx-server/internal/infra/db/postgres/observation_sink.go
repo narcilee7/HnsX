@@ -2,13 +2,11 @@ package postgres
 
 import (
 	"context"
-	"errors"
 
 	"github.com/hnsx-io/hnsx/server/internal/domain/observation"
 )
 
-// ErrObservationNotFound is returned when an observation lookup misses.
-var ErrObservationNotFound = errors.New("observation: not found")
+// observation.ErrObservationNotFound is returned when an observation lookup misses.
 
 // ObservationSink implements observation.Sink against Postgres via GORM.
 type ObservationSink struct{ db *DB }
