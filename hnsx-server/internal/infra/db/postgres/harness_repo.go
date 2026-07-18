@@ -8,9 +8,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ErrHarnessNotFound is returned when a harness lookup misses.
-var ErrHarnessNotFound = errors.New("harness: not found")
-
 // HarnessRepo implements harness.Repo against Postgres via GORM.
 type HarnessRepo struct{ db *DB }
 
@@ -27,7 +24,7 @@ func (r *HarnessRepo) Get(ctx context.Context, id string) (*harness.Harness, err
 	var h harness.Harness
 	err := r.db.WithContext(ctx).First(&h, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrHarnessNotFound
+		return nil, harness.ErrHarnessNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -68,7 +65,7 @@ func (r *HarnessRepo) Update(ctx context.Context, h *harness.Harness) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrHarnessNotFound
+		return harness.ErrHarnessNotFound
 	}
 	return nil
 }
@@ -79,7 +76,7 @@ func (r *HarnessRepo) Delete(ctx context.Context, id string) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrHarnessNotFound
+		return harness.ErrHarnessNotFound
 	}
 	return nil
 }

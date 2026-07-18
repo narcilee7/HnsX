@@ -33,22 +33,63 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/hnsx-io/hnsx/server/internal/api/router"
+	wshandler "github.com/hnsx-io/hnsx/server/internal/api/handler/ws"
 	agenthandler "github.com/hnsx-io/hnsx/server/internal/api/handler/agent"
+	approvalhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/approval"
 	daemonhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/daemon"
+	evalhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/eval"
+	harnesshandler "github.com/hnsx-io/hnsx/server/internal/api/handler/harness"
 	issuehandler "github.com/hnsx-io/hnsx/server/internal/api/handler/issue"
+	observationhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/observation"
+	policyhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/policy"
 	squadhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/squad"
 	workspacehandler "github.com/hnsx-io/hnsx/server/internal/api/handler/workspace"
 	"github.com/hnsx-io/hnsx/server/internal/domain/agentruntime"
+	"github.com/hnsx-io/hnsx/server/internal/domain/policy"
 	agentinfra "github.com/hnsx-io/hnsx/server/internal/infra/agentruntime" // concrete backends
 	"github.com/hnsx-io/hnsx/server/internal/infra/db/postgres"
 	agentsvc "github.com/hnsx-io/hnsx/server/internal/service/agent"
+	approvalsvc "github.com/hnsx-io/hnsx/server/internal/service/approval"
 	daemonsvc "github.com/hnsx-io/hnsx/server/internal/service/daemon"
 	daemonruntime "github.com/hnsx-io/hnsx/server/internal/service/daemon_runtime"
 	evalsvc "github.com/hnsx-io/hnsx/server/internal/service/eval"
+	harnesssvc "github.com/hnsx-io/hnsx/server/internal/service/harness"
 	issuesvc "github.com/hnsx-io/hnsx/server/internal/service/issue"
+	policysvc "github.com/hnsx-io/hnsx/server/internal/service/policy"
 	squadsvc "github.com/hnsx-io/hnsx/server/internal/service/squad"
 	workspacesvc "github.com/hnsx-io/hnsx/server/internal/service/workspace"
+	wsclient "github.com/hnsx-io/hnsx/server/internal/ws"
+	"github.com/hnsx-io/hnsx/server/internal/ws/handler"
 )
+
+// wsURLFromHTTPAddr converts the server's HTTP bind address to a
+// WebSocket URL pointing at /ws/daemon. Strips the leading ":" for
+// port-only binds and prepends "ws://".
+func wsURLFromHTTPAddr(addr string) string {
+	addr = strings.TrimPrefix(addr, ":")
+	if !strings.Contains(addr, "://") {
+		addr = "ws://127.0.0.1:" + addr
+	}
+	return strings.TrimRight(addr, "/") + "/ws/daemon"
+}
+
+// policyLookup is the daemon_runtime.PolicyLookup implementation that
+// returns the workspace's first Policy. R3.x swaps this for a per-harness
+// binding lookup.
+type policyLookup struct {
+	repo *postgres.PolicyRepo
+}
+
+func (p *policyLookup) FirstPolicyForWorkspace(ctx context.Context, workspaceID string) (*policy.Policy, error) {
+	list, err := p.repo.ListByWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if len(list) == 0 {
+		return nil, nil
+	}
+	return list[0], nil
+}
 
 // Config holds runtime configuration for hnsxd. Loaded from
 // HNSX_* environment variables and an optional YAML file.
@@ -98,6 +139,10 @@ type Application struct {
 	IssueSvc     *issuesvc.Service
 	SquadSvc     *squadsvc.Service
 	DaemonSvc    *daemonsvc.Service
+	HarnessSvc   *harnesssvc.Service
+	PolicySvc    *policysvc.Service
+	EvalSvc      *evalsvc.Service
+	ApprovalSvc  *approvalsvc.Service
 
 	// DB pool + handlers. Available so WS layer (R1.9) and tests can use them.
 	DB       *postgres.DB
@@ -176,33 +221,97 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 		app.IssueSvc = issuesvc.New(issueRepo)
 		app.SquadSvc = squadsvc.New(squadRepo)
 		app.DaemonSvc = daemonsvc.New(daemonRepo)
+		app.HarnessSvc = harnesssvc.New(postgres.NewHarnessRepo(app.DB))
+		app.PolicySvc = policysvc.New(postgres.NewPolicyRepo(app.DB))
+		app.EvalSvc = evalsvc.New(
+			postgres.NewEvalSetRepo(app.DB),
+			postgres.NewEvalRunRepo(app.DB),
+			postgres.NewObservationSink(app.DB),
+			logger,
+		)
+		app.ApprovalSvc = approvalsvc.New(postgres.NewApprovalRepo(app.DB))
+
+		// Shared Postgres observation sink. The HTTP handler reads from it;
+		// the daemon runtime wraps it with a WS sink so observations travel
+		// over the WebSocket when a daemon is connected.
+		sink := postgres.NewObservationSink(app.DB)
 
 		app.Handlers = router.Deps{
-			Workspace: workspacehandler.New(app.WorkspaceSvc),
-			Issue:     issuehandler.New(app.IssueSvc),
-			Agent:     agenthandler.New(app.AgentSvc),
-			Squad:     squadhandler.New(app.SquadSvc),
-			Daemon:    daemonhandler.New(app.DaemonSvc),
+			Workspace:   workspacehandler.New(app.WorkspaceSvc),
+			Issue:       issuehandler.New(app.IssueSvc),
+			Agent:       agenthandler.New(app.AgentSvc),
+			Squad:       squadhandler.New(app.SquadSvc),
+			Daemon:      daemonhandler.New(app.DaemonSvc),
+			Harness:     harnesshandler.New(app.HarnessSvc),
+			Policy:      policyhandler.New(app.PolicySvc),
+			Eval:        evalhandler.New(app.EvalSvc),
+			Approval:    approvalhandler.New(app.ApprovalSvc),
+			Observation: observationhandler.New(sink),
 		}
 
 		// Daemon runtime: pulls assigned issues, spawns the agent backend,
 		// streams observations. Lazily wired only when DB is available.
-		sink := postgres.NewObservationSink(app.DB)
 		setRepo := postgres.NewEvalSetRepo(app.DB)
 		runRepo := postgres.NewEvalRunRepo(app.DB)
 		evalSvc := evalsvc.New(setRepo, runRepo, sink, logger)
+		policyRepo := postgres.NewPolicyRepo(app.DB)
+		approvalRepo := postgres.NewApprovalRepo(app.DB)
+		gate := approvalsvc.NewGate(approvalsvc.GateConfig{
+			Repo:   approvalRepo,
+			Logger: logger,
+		})
+		engine := policysvc.NewEngine()
+
+		// WS client: the daemon runtime talks to the server over
+		// /ws/daemon instead of sharing the Postgres pool. Built even
+		// for the in-process case so the runtime uses the same code
+		// path whether the daemon is local or remote.
+		wsURL := wsURLFromHTTPAddr(cfg.HTTPAddr)
+		wsClient := wsclient.NewClient(wsURL)
+		dialCtx, dialCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := wsClient.Connect(dialCtx); err != nil {
+			logger.Warn("app: ws client connect failed (daemon will fall back to direct DB)",
+				"url", wsURL, "err", err)
+		} else {
+			logger.Info("app: ws client connected to daemon endpoint", "url", wsURL)
+		}
+		dialCancel()
+
+		// Observation sink for the daemon runtime: observations travel over
+		// the WS to the server, which persists them. If WS is down, fall back
+		// to writing directly to Postgres so local-only smoke tests still work.
+		wsSink := wsclient.NewObservationSink(wsClient, sink)
+
 		app.DaemonRuntime = daemonruntime.New(daemonruntime.Config{
 			Issues:   app.IssueSvc,
 			Agents:   app.AgentSvc,
 			Registry: app.Backends,
-			Sink:     sink,
+			Sink:     wsSink,
+			WS:       wsClient,
 			Eval:     evalAutoRunner{evalSvc},
+			Policies: &policyLookup{repo: policyRepo},
+			Gate:     gate,
+			Engine:   engine,
 			Logger:   logger,
 		})
 	}
 
 	// 4. HTTP server lifecycle.
 	engine := router.New(app.Handlers)
+
+	// 4a. /ws/daemon endpoint. Daemons connect here for claim/observation
+	//     round-trips; the WS handler is wired with the same services
+	//     the HTTP handlers use, so the source of truth stays in one place.
+	if app.DB != nil {
+		wsBridge := &wsServiceAdapter{
+			issues: &issueServiceHandle{svc: app.IssueSvc},
+			sink:   postgres.NewObservationSink(app.DB),
+			approval: &approvalServiceHandle{svc: app.ApprovalSvc},
+		}
+		daemonWSHandler := handler.NewHandler(wsBridge, logger)
+		engine.GET("/ws/daemon", wshandler.Handler(daemonWSHandler, logger))
+	}
+
 	app.httpServer = &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           engine,

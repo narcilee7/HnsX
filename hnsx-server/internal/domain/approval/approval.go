@@ -18,6 +18,9 @@ import (
 	"time"
 )
 
+// ErrApprovalNotFound is returned by Repo implementations when a lookup misses.
+var ErrApprovalNotFound = errors.New("approval: not found")
+
 // Status tracks the lifecycle of an Approval request.
 type Status string
 

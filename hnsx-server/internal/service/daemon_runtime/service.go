@@ -11,6 +11,7 @@ package daemon_runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -20,9 +21,33 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/domain/agent"
 	"github.com/hnsx-io/hnsx/server/internal/domain/agentruntime"
+	"github.com/hnsx-io/hnsx/server/internal/domain/approval"
 	"github.com/hnsx-io/hnsx/server/internal/domain/issue"
 	"github.com/hnsx-io/hnsx/server/internal/domain/observation"
+	"github.com/hnsx-io/hnsx/server/internal/domain/policy"
+	"github.com/hnsx-io/hnsx/server/internal/ws"
 )
+
+// PolicyLookup fetches the policy attached to a workspace. The default
+// implementation in app picks the workspace's first policy; tests pass
+// a stub that returns nil.
+type PolicyLookup interface {
+	FirstPolicyForWorkspace(ctx context.Context, workspaceID string) (*policy.Policy, error)
+}
+
+type approvalGate interface {
+	Request(ctx context.Context, a *approval.Approval) error
+	Wait(ctx context.Context, approvalID string) (approval.Status, error)
+}
+
+// WSClient is the typed subset of the daemon ↔ server WS protocol
+// the runtime uses. Implemented by ws.Client; tests pass a stub.
+type WSClient interface {
+	Claim(ctx context.Context, workspaceID string) ([]ws.ClaimedIssue, error)
+	WriteObservations(ctx context.Context, batch []ws.ObservationEvent) error
+	UpdateStatus(ctx context.Context, issueID string, status issue.Status) error
+	Heartbeat(ctx context.Context, workspaceID string) error
+}
 
 // Service is the daemon-runtime orchestrator. It pulls work from the issue
 // service, runs it through the agent runtime registry, and records every
@@ -32,7 +57,11 @@ type Service struct {
 	agents   *agent_svc_handle
 	registry agentruntime.Registry
 	sink     observation.Sink
+	wsClient WSClient
 	eval     EvalAutoRunner
+	policies PolicyLookup
+	gate     approvalGate
+	engine   policy.Engine
 	logger   *slog.Logger
 }
 
@@ -44,7 +73,11 @@ type Config struct {
 	Agents   AgentGetter
 	Registry agentruntime.Registry
 	Sink     observation.Sink
+	WS       WSClient
 	Eval     EvalAutoRunner
+	Policies PolicyLookup
+	Gate     approvalGate
+	Engine   policy.Engine
 	Logger   *slog.Logger
 }
 
@@ -78,7 +111,11 @@ func New(cfg Config) *Service {
 		agents:   &agent_svc_handle{AgentGetter: cfg.Agents},
 		registry: cfg.Registry,
 		sink:     cfg.Sink,
+		wsClient: cfg.WS,
 		eval:     cfg.Eval,
+		policies: cfg.Policies,
+		gate:     cfg.Gate,
+		engine:   cfg.Engine,
 		logger:   cfg.Logger.With("component", "daemon_runtime"),
 	}
 }
@@ -113,42 +150,97 @@ func (s *Service) Run(ctx context.Context, workspaceID string, tick time.Duratio
 	}
 }
 
-// tick runs one pass: list running agents in this workspace, then for each
-// pick up one issue and run it.
-//
-// For R1.9 we keep the agent list hardcoded to "any agent whose
-// RuntimeMode is local and which we can find"; the workspace-scoped
-// sweep comes in R2 once the daemon↔server heartbeats are wired.
+// tick runs one pass: claim work via WS, then for each claimed
+// issue run it through the configured backend.
 func (s *Service) tick(ctx context.Context, workspaceID string) error {
-	// In R1.9 the daemon discovers agents via the agent service's
-	// ListByWorkspace; R2 will replace this with a heartbeat-driven
-	// registry keyed on daemon_id.
-	agents, err := s.listAgentsForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("list agents: %w", err)
-	}
-	if len(agents) == 0 {
-		return nil
+	// Heartbeat: cheap liveness signal so the server knows this
+	// daemon is alive. R3.5h+ writes this to the daemons table.
+	if s.wsClient != nil {
+		if err := s.wsClient.Heartbeat(ctx, workspaceID); err != nil {
+			s.logger.Warn("daemon_runtime: ws heartbeat failed", "err", err)
+		}
 	}
 
-	for _, a := range agents {
-		issues, err := s.issues.ListAssignedToAgent(ctx, a.ID, []issue.Status{issue.StatusTodo, issue.StatusInProgress})
+	// Claim: ask the server for the workspace's assigned issues.
+	// R3.5h+ uses WS exclusively; R1.9-R3.5h fell back to direct DB
+	// via s.issues.ListAssignedToAgent.
+	var issues []*issue.Issue
+	if s.wsClient != nil {
+		claimed, err := s.wsClient.Claim(ctx, workspaceID)
 		if err != nil {
-			s.logger.Warn("daemon_runtime: list issues failed", "agent", a.ID, "err", err)
-			continue
+			s.logger.Warn("daemon_runtime: ws claim failed", "err", err)
+		} else {
+			for _, c := range claimed {
+				issues = append(issues, &issue.Issue{
+					ID:          c.ID,
+					WorkspaceID: c.WorkspaceID,
+					Title:       c.Title,
+					Description: c.Description,
+					AssigneeID:  strPtrOrNil(c.AgentID),
+				})
+			}
 		}
-		if len(issues) == 0 {
-			continue
+	}
+	if s.wsClient == nil {
+		// Fallback: direct DB (used by the CLI's e2e paths that
+		// share the server's Postgres pool).
+		agents, err := s.listAgentsForWorkspace(ctx, workspaceID)
+		if err != nil {
+			return fmt.Errorf("list agents: %w", err)
 		}
-		// Take the first one; R2 may use priority / FIFO / squad leader routing.
-		if err := s.runIssue(ctx, a, issues[0]); err != nil {
+		if len(agents) == 0 {
+			return nil
+		}
+		for _, a := range agents {
+			its, err := s.issues.ListAssignedToAgent(ctx, a.ID, []issue.Status{issue.StatusTodo, issue.StatusInProgress})
+			if err != nil {
+				s.logger.Warn("daemon_runtime: list issues failed", "agent", a.ID, "err", err)
+				continue
+			}
+			issues = append(issues, its...)
+		}
+	}
+
+	for _, i := range issues {
+		if err := s.runIssue(ctx, workspaceID, i); err != nil {
 			s.logger.Warn("daemon_runtime: run issue failed",
-				"agent", a.ID, "issue", issues[0].ID, "err", err)
-			// Mark the issue as blocked so we don't loop on it.
-			_ = s.issues.UpdateStatus(ctx, issues[0].ID, issue.StatusBlocked)
+				"issue", i.ID, "err", err)
+			_ = s.updateIssueStatus(ctx, i, issue.StatusBlocked)
 		}
 	}
 	return nil
+}
+
+// strPtrOrNil returns &s when s is non-empty, else nil.
+func strPtrOrNil(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// strDeref returns *s when non-nil, else "".
+func strDeref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// updateIssueStatus prefers the WS path (daemon ↔ server) when wired;
+// falls back to direct IssueSvc for CLI-only paths that don't open a
+// WebSocket connection.
+func (s *Service) updateIssueStatus(ctx context.Context, i *issue.Issue, status issue.Status) error {
+	if s.wsClient != nil {
+		if err := s.wsClient.UpdateStatus(ctx, i.ID, status); err != nil {
+			s.logger.Warn("daemon_runtime: ws status update failed, falling back",
+				"issue", i.ID, "err", err)
+			// fall through
+		} else {
+			return nil
+		}
+	}
+	return s.issues.UpdateStatus(ctx, i.ID, status)
 }
 
 // runIssue spawns the configured backend for the agent, streams messages
@@ -157,7 +249,15 @@ func (s *Service) tick(ctx context.Context, workspaceID string) error {
 // The agent's RuntimeConfig (JSON) is expected to contain {"backend":
 // "claude", "model": "..."} — for R1.9 we only honor "backend" and
 // default to "claude".
-func (s *Service) runIssue(ctx context.Context, a *agent.Agent, i *issue.Issue) error {
+// runIssue runs one issue end-to-end: claim → spawn → stream messages
+// → update status. The agent is fetched by ID (WS claim does not yet
+// carry full agent row, just the agent_id on the issue).
+func (s *Service) runIssue(ctx context.Context, workspaceID string, i *issue.Issue) error {
+	agentID := strDeref(i.AssigneeID)
+	a, err := s.agents.Get(ctx, agentID)
+	if err != nil {
+		return fmt.Errorf("load agent %q: %w", agentID, err)
+	}
 	backendName := "claude"
 	model := ""
 	if len(a.RuntimeConfig) > 0 {
@@ -195,18 +295,105 @@ func (s *Service) runIssue(ctx context.Context, a *agent.Agent, i *issue.Issue) 
 	}
 
 	// Stream messages into the observation sink.
+	promptHash := hashPrompt(prompt)
+	agentTemplateID := agentTemplateID(a, backendName, model)
+	signatures := newToolSignatureSet()
+	pol := s.loadPolicy(ctx, i.WorkspaceID)
 	var seq int64
 	for msg := range sess.Messages() {
+		// Accumulate tool signatures as we see tool_use events — covers
+		// both top-level tool_use events AND tool_use blocks embedded
+		// inside an assistant message's content[].
+		for _, name := range toolNamesForMessage(msg) {
+			signatures.Add(name)
+		}
+
+		// Policy gate: tool_use events come either as a top-level
+		// "type":"tool_use" line OR embedded inside an assistant message's
+		// content[] (the Claude stream-json format). We extract both
+		// forms and run the policy on each tool_name.
+		toolNames := toolNamesForMessage(msg)
+		if len(toolNames) > 0 {
+			s.logger.Info("daemon_runtime: tool names extracted from msg",
+				"msg_kind", msg.Kind, "tools", toolNames)
+		}
+		for _, toolName := range toolNames {
+			if s.engine == nil || pol == nil {
+				break
+			}
+			ec := policy.EvalContext{
+				WorkspaceID: i.WorkspaceID,
+				IssueID:     i.ID,
+				AgentID:     a.ID,
+				Action:      "tool_call",
+				ToolName:    toolName,
+			}
+			dec, err := s.engine.Evaluate(ctx, pol, ec)
+			if err != nil {
+				s.logger.Warn("daemon_runtime: policy eval failed", "err", err)
+				break
+			}
+			switch dec.Action {
+			case policy.ActionDeny:
+				s.logger.Warn("daemon_runtime: policy denied tool",
+					"issue", i.ID, "tool", toolName, "rule", dec.RuleID)
+				_ = sess.Cancel(ctx)
+				for drain := range sess.Messages() {
+					_ = drain
+				}
+				_ = s.recordPolicyDecision(ctx, i, pol, dec, observation.PolicyDeny)
+				return s.issues.UpdateStatus(ctx, i.ID, issue.StatusBlocked)
+			case policy.ActionApprovalRequired:
+				if s.gate == nil {
+					s.logger.Warn("daemon_runtime: approval required but no gate wired; defaulting to allow")
+					continue
+				}
+				s.logger.Info("daemon_runtime: approval required, gating",
+					"issue", i.ID, "tool", toolName, "rule", dec.RuleID)
+				appr := &approval.Approval{
+					ID:          uuid.NewString(),
+					WorkspaceID: i.WorkspaceID,
+					IssueID:     i.ID,
+					AgentID:     a.ID,
+					Action:      "tool_call:" + toolName,
+					Reason:      dec.Message,
+				}
+				if err := s.gate.Request(ctx, appr); err != nil {
+					s.logger.Warn("daemon_runtime: approval request failed", "err", err)
+					continue
+				}
+				status, werr := s.gate.Wait(ctx, appr.ID)
+				if werr != nil {
+					s.logger.Warn("daemon_runtime: approval wait failed", "err", werr)
+					continue
+				}
+				if status != approval.StatusGranted {
+					s.logger.Info("daemon_runtime: approval denied/expired; aborting",
+						"issue", i.ID, "status", status)
+					_ = sess.Cancel(ctx)
+					for drain := range sess.Messages() {
+						_ = drain
+					}
+					_ = s.recordPolicyDecision(ctx, i, pol, dec, observation.PolicyDeny)
+					return s.issues.UpdateStatus(ctx, i.ID, issue.StatusBlocked)
+				}
+				s.logger.Info("daemon_runtime: approval granted; continuing",
+					"issue", i.ID, "approval", appr.ID)
+			}
+		}
+
 		obs := &observation.Observation{
-			ID:           uuid.NewString(),
-			WorkspaceID:  i.WorkspaceID,
-			IssueID:      i.ID,
-			AgentID:      a.ID,
-			Kind:         kindFromMessage(msg),
-			Sequence:     seq,
-			Payload:      msg.Payload,
-			OccurredAt:   time.Now().UTC(),
-			PromptHash:   hashPrompt(prompt),
+			ID:              uuid.NewString(),
+			WorkspaceID:     i.WorkspaceID,
+			IssueID:         i.ID,
+			AgentID:         a.ID,
+			Kind:            kindFromMessage(msg),
+			Sequence:        seq,
+			Payload:         msg.Payload,
+			OccurredAt:      time.Now().UTC(),
+			PromptHash:      promptHash,
+			AgentTemplateID: agentTemplateID,
+			ToolSignatures:  signatures.JSON(),
 		}
 		seq++
 		if err := s.sink.Write(ctx, obs); err != nil {
@@ -253,6 +440,54 @@ func (s *Service) listAgentsForWorkspace(ctx context.Context, workspaceID string
 	return s.agents.ListByWorkspace(ctx, workspaceID, agent.ListFilter{Limit: 100})
 }
 
+// loadPolicy fetches the workspace's first policy. Returns nil when
+// no policy is configured (which the runtime treats as default-allow).
+func (s *Service) loadPolicy(ctx context.Context, workspaceID string) *policy.Policy {
+	if s.policies == nil {
+		return nil
+	}
+	p, err := s.policies.FirstPolicyForWorkspace(ctx, workspaceID)
+	if err != nil {
+		s.logger.Warn("daemon_runtime: load policy failed", "err", err)
+		return nil
+	}
+	if p == nil {
+		s.logger.Info("daemon_runtime: no policy configured for workspace", "workspace", workspaceID)
+	} else {
+		s.logger.Info("daemon_runtime: policy loaded", "policy", p.ID, "workspace", workspaceID, "name", p.Name)
+	}
+	return p
+}
+
+// log is the package-level slog logger used for debug-level events.
+// We avoid the Slogger inside Service.Debug to keep slog.Level config
+// at the application boundary.
+
+// recordPolicyDecision writes a KindPolicyDecision Observation so the
+// flywheel can join every policy outcome to the message stream.
+func (s *Service) recordPolicyDecision(ctx context.Context, i *issue.Issue, p *policy.Policy, dec policy.Decision, outcome observation.PolicyDecision) error {
+	payload, _ := json.Marshal(map[string]any{
+		"rule_id":  dec.RuleID,
+		"message":  dec.Message,
+		"policy_id": func() string {
+			if p != nil {
+				return p.ID
+			}
+			return ""
+		}(),
+	})
+	obs := &observation.Observation{
+		ID:             uuid.NewString(),
+		WorkspaceID:    i.WorkspaceID,
+		IssueID:        i.ID,
+		Kind:           observation.KindPolicyDecision,
+		Payload:        payload,
+		OccurredAt:     time.Now().UTC(),
+		PolicyDecision: outcome,
+	}
+	return s.sink.Write(ctx, obs)
+}
+
 // kindFromMessage maps an agentruntime.Message onto an observation.Kind.
 func kindFromMessage(m agentruntime.Message) observation.Kind {
 	switch m.Kind {
@@ -269,13 +504,6 @@ func kindFromMessage(m agentruntime.Message) observation.Kind {
 	default:
 		return observation.KindMessage
 	}
-}
-
-func hashPrompt(p string) string {
-	// R3 fills this with sha256(prompt); for R1.9 we leave it empty so
-	// the observation row still records the dimension column.
-	_ = p
-	return ""
 }
 
 func resOrErrMsg(res *agentruntime.Result, err error) string {

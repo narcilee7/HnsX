@@ -8,9 +8,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ErrPolicyNotFound is returned when a policy lookup misses.
-var ErrPolicyNotFound = errors.New("policy: not found")
-
 // PolicyRepo implements policy.Repo against Postgres via GORM.
 type PolicyRepo struct{ db *DB }
 
@@ -27,7 +24,7 @@ func (r *PolicyRepo) Get(ctx context.Context, id string) (*policy.Policy, error)
 	var p policy.Policy
 	err := r.db.WithContext(ctx).First(&p, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrPolicyNotFound
+		return nil, policy.ErrPolicyNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -63,7 +60,7 @@ func (r *PolicyRepo) Update(ctx context.Context, p *policy.Policy) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrPolicyNotFound
+		return policy.ErrPolicyNotFound
 	}
 	return nil
 }
@@ -74,7 +71,7 @@ func (r *PolicyRepo) Delete(ctx context.Context, id string) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrPolicyNotFound
+		return policy.ErrPolicyNotFound
 	}
 	return nil
 }

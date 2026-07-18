@@ -14,6 +14,12 @@ import (
 	"time"
 )
 
+// ErrEvalSetNotFound is returned by EvalSetRepo when a lookup misses.
+var ErrEvalSetNotFound = errors.New("eval set: not found")
+
+// ErrEvalRunNotFound is returned by RunRepo when a lookup misses.
+var ErrEvalRunNotFound = errors.New("eval run: not found")
+
 // ScorerKind discriminates how a case is scored.
 type ScorerKind string
 

@@ -200,3 +200,62 @@ func scoreOne(c eval.Case, observed string) (bool, float64, string) {
 // _ conformance.
 var _ = json.Marshal
 var _ = slog.Default
+
+// CreateSetInput mirrors the EvalSet entity minus server-generated fields.
+type CreateSetInput struct {
+	WorkspaceID string
+	Name        string
+	Description string
+	Cases       []eval.Case
+	Version     string
+}
+
+// CreateSet persists a new EvalSet.
+func (s *Service) CreateSet(ctx context.Context, in CreateSetInput) (*eval.EvalSet, error) {
+	e := &eval.EvalSet{
+		ID:          uuid.NewString(),
+		WorkspaceID: in.WorkspaceID,
+		Name:        in.Name,
+		Description: in.Description,
+		Version:     in.Version,
+	}
+	if e.Version == "" {
+		e.Version = "1.0.0"
+	}
+	if len(in.Cases) > 0 {
+		buf, _ := json.Marshal(in.Cases)
+		e.Cases = buf
+	}
+	if err := e.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.setRepo.Create(ctx, e); err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+
+// GetSet fetches an EvalSet by ID.
+func (s *Service) GetSet(ctx context.Context, id string) (*eval.EvalSet, error) {
+	return s.setRepo.Get(ctx, id)
+}
+
+// ListSetsByWorkspace returns EvalSets in a workspace.
+func (s *Service) ListSetsByWorkspace(ctx context.Context, workspaceID string) ([]*eval.EvalSet, error) {
+	return s.setRepo.ListByWorkspace(ctx, workspaceID)
+}
+
+// DeleteSet removes an EvalSet by ID.
+func (s *Service) DeleteSet(ctx context.Context, id string) error {
+	return s.setRepo.Delete(ctx, id)
+}
+
+// ListRuns returns recent Runs for an EvalSet.
+func (s *Service) ListRuns(ctx context.Context, evalSetID string, limit int) ([]*eval.Run, error) {
+	return s.runRepo.ListByEvalSet(ctx, evalSetID, limit)
+}
+
+// GetRun fetches a Run by ID.
+func (s *Service) GetRun(ctx context.Context, id string) (*eval.Run, error) {
+	return s.runRepo.Get(ctx, id)
+}
