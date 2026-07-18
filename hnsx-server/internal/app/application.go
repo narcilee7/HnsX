@@ -40,6 +40,7 @@ import (
 	evalhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/eval"
 	harnesshandler "github.com/hnsx-io/hnsx/server/internal/api/handler/harness"
 	issuehandler "github.com/hnsx-io/hnsx/server/internal/api/handler/issue"
+	observationhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/observation"
 	policyhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/policy"
 	squadhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/squad"
 	workspacehandler "github.com/hnsx-io/hnsx/server/internal/api/handler/workspace"
@@ -230,21 +231,26 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 		)
 		app.ApprovalSvc = approvalsvc.New(postgres.NewApprovalRepo(app.DB))
 
+		// Shared Postgres observation sink. The HTTP handler reads from it;
+		// the daemon runtime wraps it with a WS sink so observations travel
+		// over the WebSocket when a daemon is connected.
+		sink := postgres.NewObservationSink(app.DB)
+
 		app.Handlers = router.Deps{
-			Workspace: workspacehandler.New(app.WorkspaceSvc),
-			Issue:     issuehandler.New(app.IssueSvc),
-			Agent:     agenthandler.New(app.AgentSvc),
-			Squad:     squadhandler.New(app.SquadSvc),
-			Daemon:    daemonhandler.New(app.DaemonSvc),
-			Harness:   harnesshandler.New(app.HarnessSvc),
-			Policy:    policyhandler.New(app.PolicySvc),
-			Eval:      evalhandler.New(app.EvalSvc),
-			Approval:  approvalhandler.New(app.ApprovalSvc),
+			Workspace:   workspacehandler.New(app.WorkspaceSvc),
+			Issue:       issuehandler.New(app.IssueSvc),
+			Agent:       agenthandler.New(app.AgentSvc),
+			Squad:       squadhandler.New(app.SquadSvc),
+			Daemon:      daemonhandler.New(app.DaemonSvc),
+			Harness:     harnesshandler.New(app.HarnessSvc),
+			Policy:      policyhandler.New(app.PolicySvc),
+			Eval:        evalhandler.New(app.EvalSvc),
+			Approval:    approvalhandler.New(app.ApprovalSvc),
+			Observation: observationhandler.New(sink),
 		}
 
 		// Daemon runtime: pulls assigned issues, spawns the agent backend,
 		// streams observations. Lazily wired only when DB is available.
-		sink := postgres.NewObservationSink(app.DB)
 		setRepo := postgres.NewEvalSetRepo(app.DB)
 		runRepo := postgres.NewEvalRunRepo(app.DB)
 		evalSvc := evalsvc.New(setRepo, runRepo, sink, logger)

@@ -12,6 +12,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/eval"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/harness"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/issue"
+	"github.com/hnsx-io/hnsx/server/internal/api/handler/observation"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/policy"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/squad"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/workspace"
@@ -21,15 +22,16 @@ import (
 // Deps groups the handlers the router wires. app.New constructs this
 // once and passes it to New().
 type Deps struct {
-	Workspace *workspace.Handler
-	Issue     *issue.Handler
-	Agent     *agent.Handler
-	Squad     *squad.Handler
-	Daemon    *daemon.Handler
-	Harness   *harness.Handler
-	Policy    *policy.Handler
-	Eval      *eval.Handler
-	Approval  *approval.Handler
+	Workspace   *workspace.Handler
+	Issue       *issue.Handler
+	Agent       *agent.Handler
+	Squad       *squad.Handler
+	Daemon      *daemon.Handler
+	Harness     *harness.Handler
+	Policy      *policy.Handler
+	Eval        *eval.Handler
+	Approval    *approval.Handler
+	Observation *observation.Handler
 }
 
 // New constructs a fully-configured gin.Engine with all routes mounted
@@ -61,6 +63,9 @@ func New(deps Deps) *gin.Engine {
 	}
 	if deps.Approval != nil {
 		deps.Approval.Register(api)
+	}
+	if deps.Observation != nil {
+		deps.Observation.Register(api)
 	}
 
 	return r
