@@ -1,358 +1,265 @@
-// Package app composes the server-side application layer. It wires together
-// repositories, services, the executor, the worker queue/registry, and the
-// broadcaster index. It is consumed by both the HTTP API and the gRPC control
-// plane.
+// Package app is the composition root for hnsxd. It is the only package
+// allowed to import across all layers (domain / service / infra / api /
+// grpc / ws / cli / server) and to wire concrete implementations to ports.
+//
+// The split:
+//
+//	domain.*   — pure entities + ports (no infra imports)
+//	service.*  — orchestrates domain via ports (no concrete infra imports)
+//	infra.*    — implements domain ports
+//	api/grpc/ws/cli — transports, depend only on service layer
+//	app        — wires the above; nothing else is allowed to do so
+//
+// New resources are added by:
+//
+//  1. declaring the entity + repo port in internal/domain/<resource>/
+//  2. implementing the repo in internal/infra/db/postgres/
+//  3. adding commands/queries in internal/service/<resource>/
+//  4. exposing transport via internal/api/<resource>/{router,handler,dto}
+//
+// app.New wires all four steps together.
 package app
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
-	approvalmodel "github.com/hnsx-io/hnsx/server/internal/approval/model"
-	approvalrepo "github.com/hnsx-io/hnsx/server/internal/approval/repository"
-	approvalservice "github.com/hnsx-io/hnsx/server/internal/approval/service"
-	auditrepository "github.com/hnsx-io/hnsx/server/internal/audit/repository"
-	auditservice "github.com/hnsx-io/hnsx/server/internal/audit/service"
-	"github.com/hnsx-io/hnsx/server/internal/config"
-	domainrepository "github.com/hnsx-io/hnsx/server/internal/domain/repository"
-	domainservice "github.com/hnsx-io/hnsx/server/internal/domain/service"
-	evalrepository "github.com/hnsx-io/hnsx/server/internal/evaluation/repository"
-	evalservice "github.com/hnsx-io/hnsx/server/internal/evaluation/service"
-	policyrepository "github.com/hnsx-io/hnsx/server/internal/policy/repository"
-	policyservice "github.com/hnsx-io/hnsx/server/internal/policy/service"
-	secretcrypto "github.com/hnsx-io/hnsx/server/internal/secret/crypto"
-	secretrepository "github.com/hnsx-io/hnsx/server/internal/secret/repository"
-	secretservice "github.com/hnsx-io/hnsx/server/internal/secret/service"
-	sessionrepository "github.com/hnsx-io/hnsx/server/internal/session/repository"
-	sessionservice "github.com/hnsx-io/hnsx/server/internal/session/service"
-	storeservice "github.com/hnsx-io/hnsx/server/internal/store/service"
-	"github.com/hnsx-io/hnsx/server/internal/telemetry"
-	tracerepository "github.com/hnsx-io/hnsx/server/internal/trace/repository"
-	traceservice "github.com/hnsx-io/hnsx/server/internal/trace/service"
-	"github.com/hnsx-io/hnsx/server/internal/worker"
-	workerrepository "github.com/hnsx-io/hnsx/server/internal/worker/repository"
-	workerservice "github.com/hnsx-io/hnsx/server/internal/worker/service"
-	"github.com/hnsx-io/hnsx/server/pkg/db"
-	"github.com/hnsx-io/hnsx/server/pkg/domain"
+	"github.com/hnsx-io/hnsx/server/internal/api/router"
+	agenthandler "github.com/hnsx-io/hnsx/server/internal/api/handler/agent"
+	daemonhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/daemon"
+	issuehandler "github.com/hnsx-io/hnsx/server/internal/api/handler/issue"
+	squadhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/squad"
+	workspacehandler "github.com/hnsx-io/hnsx/server/internal/api/handler/workspace"
+	"github.com/hnsx-io/hnsx/server/internal/domain/agentruntime"
+	agentinfra "github.com/hnsx-io/hnsx/server/internal/infra/agentruntime" // concrete backends
+	"github.com/hnsx-io/hnsx/server/internal/infra/db/postgres"
+	agentsvc "github.com/hnsx-io/hnsx/server/internal/service/agent"
+	daemonsvc "github.com/hnsx-io/hnsx/server/internal/service/daemon"
+	daemonruntime "github.com/hnsx-io/hnsx/server/internal/service/daemon_runtime"
+	issuesvc "github.com/hnsx-io/hnsx/server/internal/service/issue"
+	squadsvc "github.com/hnsx-io/hnsx/server/internal/service/squad"
+	workspacesvc "github.com/hnsx-io/hnsx/server/internal/service/workspace"
 )
 
-// Executor was removed in W16+ Phase 3 (pkg/session is gone).
-// Session execution now happens entirely in the Python worker; the Go
-// side only orchestrates and persists.
+// Config holds runtime configuration for hnsxd. Loaded from
+// HNSX_* environment variables and an optional YAML file.
+type Config struct {
+	// HTTPAddr is the bind address for the HTTP+WS server (default ":8080").
+	HTTPAddr string `yaml:"http_addr" env:"HNSX_HTTP_ADDR"`
+	// PostgresDSN is the connection string for the HnsX Postgres database.
+	PostgresDSN string `yaml:"postgres_dsn" env:"HNSX_POSTGRES_DSN"`
+	// LogLevel is one of debug, info, warn, error (default "info").
+	LogLevel string `yaml:"log_level" env:"HNSX_LOG_LEVEL"`
+	// ClaudeExecutable overrides the `claude` CLI lookup path (default: PATH).
+	ClaudeExecutable string `yaml:"claude_executable" env:"HNSX_CLAUDE_EXECUTABLE"`
+}
 
-// Application composes all server-side dependencies.
+// LoadConfig reads configuration from the given file (if non-empty) and
+// environment variables. File values are overridden by HNSX_* env vars.
+func LoadConfig(path string) (*Config, error) {
+	cfg := &Config{
+		HTTPAddr:         getEnv("HNSX_HTTP_ADDR", ":8080"),
+		PostgresDSN:      os.Getenv("HNSX_POSTGRES_DSN"),
+		LogLevel:         getEnv("HNSX_LOG_LEVEL", "info"),
+		ClaudeExecutable: getEnv("HNSX_CLAUDE_EXECUTABLE", ""),
+	}
+	if path != "" {
+		return nil, fmt.Errorf("config file loading not yet implemented: %s", path)
+	}
+	return cfg, nil
+}
+
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// Application is the wired-up runtime. Held by main; Close() releases
+// every resource opened during New.
 type Application struct {
-	Config   *config.Config
-	DB       *db.DB
-	OTelProv *telemetry.Provider
-	Log      *zap.Logger
+	cfg      *Config
+	logger   *slog.Logger
+	Backends agentruntime.Registry
 
-	DomainService   *domainservice.Service
-	SessionService  *sessionservice.Service
-	WorkerService   *workerservice.Service
-	PolicyService   *policyservice.Service
-	AuditService    *auditservice.Service
-	TraceService    *traceservice.Service
-	EvalService     *evalservice.Service
-	SecretService   *secretservice.Service
-	ApprovalService *approvalservice.Service
-	StoreService    *storeservice.Service
+	// Resource services exposed for CLI / WS transports.
+	WorkspaceSvc *workspacesvc.Service
+	AgentSvc     *agentsvc.Service
+	IssueSvc     *issuesvc.Service
+	SquadSvc     *squadsvc.Service
+	DaemonSvc    *daemonsvc.Service
 
-	State *State
+	// DB pool + handlers. Available so WS layer (R1.9) and tests can use them.
+	DB       *postgres.DB
+	Handlers router.Deps
 
-	redisClient *redis.Client
+	// DaemonRuntime is the long-running worker loop. Lazily constructed
+	// only when DB is available; nil otherwise.
+	DaemonRuntime *daemonruntime.Service
+
+	// HTTP server lifecycle.
+	httpServer *http.Server
 }
 
-// NewApplication wires repositories, services, and infrastructure based on cfg.
-func NewApplication(ctx context.Context, cfg *config.Config, log *zap.Logger) (*Application, error) {
-	if log == nil {
-		return nil, errors.New("application: nil logger")
+// New constructs the application: loads config, opens DB pool, wires
+// repos -> services -> handlers -> router.
+//
+// The Postgres pool is optional: if cfg.PostgresDSN is empty, the
+// application boots without DB and the HTTP server responds with 500 on
+// any endpoint that needs persistence. This keeps `hnsxd backends list`
+// (and other CLI subcommands) usable without a running database.
+func New(ctx context.Context, cfg *Config) (*Application, error) {
+	if cfg == nil {
+		return nil, errors.New("app: nil config")
 	}
 
-	otelProv, err := telemetry.Init(ctx, telemetry.OTelOptions{
-		ServiceName:  cfg.OTel.ServiceName,
-		Exporter:     cfg.OTel.Exporter,
-		OTLPEndpoint: cfg.OTel.OTLPEndpoint,
-	})
+	logger, err := newLogger(cfg.LogLevel)
 	if err != nil {
-		return nil, fmt.Errorf("otel: %w", err)
+		return nil, fmt.Errorf("logger: %w", err)
 	}
 
-	store, err := openStore(ctx, cfg, log)
-	if err != nil {
-		return nil, fmt.Errorf("db: open: %w", err)
+	app := &Application{
+		cfg:    cfg,
+		logger: logger,
 	}
-	if err := db.Migrate(ctx, store, cfg.MigrationsDir); err != nil {
-		return nil, fmt.Errorf("db: migrate: %w", err)
-	}
-	log.Info("migrations applied", zap.String("dir", cfg.MigrationsDir))
 
-	appState := NewState()
+	// 1. Agent runtime registry (no DB needed).
+	registry := agentinfra.NewRegistry(logger)
+	claudeRunner := agentinfra.NewClaudeRunner(cfg.ClaudeExecutable, logger)
+	registry.Register(agentinfra.NewClaudeBackend(claudeRunner))
+	app.Backends = registry
+	logger.Info("app: agent backends registered",
+		"backends", strings.Join(registry.List(), ", "),
+	)
 
-	// Repositories: GORM/Postgres only. InMemory implementations remain in
-	// repository packages as test helpers but are never used at runtime.
-	domainRepo := domainrepository.NewPostgresRepository(store)
-	sessionRepo := sessionrepository.NewPostgresRepository(store)
-	workerRepo := workerrepository.NewPostgresRepository(store)
-	auditRepo := auditrepository.NewPostgresRepository(store)
-	traceRepo := tracerepository.NewPostgresRepository(store)
-	evalRepo := evalrepository.NewPostgresRepository(store)
-	policyRepo := policyrepository.NewPostgresRepository(store)
-	secretRepo := secretrepository.NewPostgresRepository(store)
-	approvalRepo := approvalrepo.NewPostgresRepository(store)
-
-	// Services.
-	domainSvc := domainservice.NewService(domainRepo)
-	sessionSvc := sessionservice.NewService(sessionRepo)
-	policySvc := policyservice.NewService(policyRepo)
-	auditSvc := auditservice.NewService(auditRepo)
-	traceSvc := traceservice.NewService(traceRepo)
-	evalSvc := evalservice.NewService(evalRepo)
-	// Secret encryption at rest is fail-fast: HNSX_SECRET_KEY must be set
-	// before the control plane boots. Server refuses to start without it
-	// rather than silently downgrading to plaintext.
-	secretCipher, err := secretcrypto.New()
-	if err != nil {
-		return nil, fmt.Errorf("secret cipher: %w (set HNSX_SECRET_KEY, min 16 chars)", err)
-	}
-	log.Info("secret store: encryption enabled", zap.String("alg", "AES-256-GCM"))
-	secretSvc := secretservice.NewService(secretRepo, secretCipher)
-	storeSvc := storeservice.NewService(store)
-	approvalSvc := approvalservice.NewService(approvalRepo, approvalStateBroadcaster{state: appState})
-
-	// Sinks.
-	sinks := []domain.Sink{
-		telemetry.NewStdoutSink(),
-		telemetry.NewDBSink(store.GormDB),
-	}
-	if cfg.OTel.Exporter != "none" {
-		sinks = append(sinks, telemetry.NewTracerSink()) //nolint:typecheck // W16+ Phase 3 migration
-	}
-	traceSink := &funcSink{
-		name: "trace",
-		record: func(ctx context.Context, obs domain.Observation) error {
-			return traceSvc.Record(ctx, obs)
-		},
-	}
-	sinks = append(sinks, traceSink)
-
-	// Executor removed in W16+ Phase 3 — session execution is now fully
-	// delegated to the Python worker. The Go side orchestrates and
-	// persists; policy/approval/audit hooks are wired in the worker.
-
-	// Worker pool is only enabled when a gRPC address is configured.
-	var workerSvc *workerservice.Service
-	var rdb *redis.Client
-	if cfg.GRPCAddr != "" {
-		var sessionQ worker.SessionQueue
-		if cfg.RedisEnabled() {
-			rdb = redis.NewClient(&redis.Options{
-				Addr:     cfg.Redis.Addr,
-				Password: cfg.Redis.Password,
-				DB:       cfg.Redis.DB,
-			})
-			sessionQ = worker.NewRedisSessionQueue(rdb, cfg.Redis.QueueKeyPrefix)
-			log.Info("session queue: redis",
-				zap.String("addr", cfg.Redis.Addr),
-				zap.String("prefix", cfg.Redis.QueueKeyPrefix))
-		} else {
-			sessionQ = worker.NewSessionQueue()
-			log.Info("session queue: in-memory")
+	// 2. Database pool (optional).
+	if cfg.PostgresDSN != "" {
+		// Postgres package expects a *zap.Logger. We pass a no-op one and
+		// rely on slog at the application boundary; GORM slow queries are
+		// still logged via slog inside the postgres package's warn path.
+		db, err := postgres.Open(ctx, postgres.Config{
+			DSN:        cfg.PostgresDSN,
+			LogQueries: false,
+		}, zap.NewNop())
+		if err != nil {
+			return nil, fmt.Errorf("app: postgres: %w", err)
 		}
-		workerSvc = workerservice.NewServiceWithQueue(workerRepo, sessionQ)
+		app.DB = db
+		logger.Info("app: postgres ready")
+	} else {
+		logger.Warn("app: postgres DSN not set; DB-backed endpoints will fail")
 	}
 
-	return &Application{
-		Config:          cfg,
-		DB:              store,
-		OTelProv:        otelProv,
-		Log:             log,
-		DomainService:   domainSvc,
-		SessionService:  sessionSvc,
-		WorkerService:   workerSvc,
-		ApprovalService: approvalSvc,
-		PolicyService:   policySvc,
-		AuditService:    auditSvc,
-		TraceService:    traceSvc,
-		EvalService:     evalSvc,
-		SecretService:   secretSvc,
-		StoreService:    storeSvc,
-		State:           appState,
-		redisClient:     rdb,
-	}, nil
+	// 3. Wire repos -> services -> handlers (only if DB is available).
+	if app.DB != nil {
+		workspaceRepo := postgres.NewWorkspaceRepo(app.DB)
+		agentRepo := postgres.NewAgentRepo(app.DB)
+		issueRepo := postgres.NewIssueRepo(app.DB)
+		squadRepo := postgres.NewSquadRepo(app.DB)
+		daemonRepo := postgres.NewDaemonRepo(app.DB)
+
+		app.WorkspaceSvc = workspacesvc.New(workspaceRepo)
+		app.AgentSvc = agentsvc.New(agentRepo)
+		app.IssueSvc = issuesvc.New(issueRepo)
+		app.SquadSvc = squadsvc.New(squadRepo)
+		app.DaemonSvc = daemonsvc.New(daemonRepo)
+
+		app.Handlers = router.Deps{
+			Workspace: workspacehandler.New(app.WorkspaceSvc),
+			Issue:     issuehandler.New(app.IssueSvc),
+			Agent:     agenthandler.New(app.AgentSvc),
+			Squad:     squadhandler.New(app.SquadSvc),
+			Daemon:    daemonhandler.New(app.DaemonSvc),
+		}
+
+		// Daemon runtime: pulls assigned issues, spawns the agent backend,
+		// streams observations. Lazily wired only when DB is available.
+		sink := postgres.NewObservationSink(app.DB)
+		app.DaemonRuntime = daemonruntime.New(daemonruntime.Config{
+			Issues:   app.IssueSvc,
+			Agents:   app.AgentSvc,
+			Registry: app.Backends,
+			Sink:     sink,
+			Logger:   logger,
+		})
+	}
+
+	// 4. HTTP server lifecycle.
+	engine := router.New(app.Handlers)
+	app.httpServer = &http.Server{
+		Addr:              cfg.HTTPAddr,
+		Handler:           engine,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	return app, nil
 }
 
-// Close cleans up resources held by the application.
-func (a *Application) Close(ctx context.Context) error {
-	if a.WorkerService != nil {
-		a.WorkerService.Close()
+// Serve runs the HTTP server until ctx is cancelled. Blocks.
+func (a *Application) Serve(ctx context.Context) error {
+	if a.httpServer == nil {
+		return errors.New("app: http server not initialized")
 	}
-	if a.redisClient != nil {
-		_ = a.redisClient.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		a.logger.Info("app: serving HTTP",
+			"addr", a.cfg.HTTPAddr,
+			"db", a.DB != nil,
+		)
+		if err := a.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+			return
+		}
+		errCh <- nil
+	}()
+
+	select {
+	case <-ctx.Done():
+		a.logger.Info("app: shutting down HTTP server")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return a.httpServer.Shutdown(shutdownCtx)
+	case err := <-errCh:
+		return err
 	}
+}
+
+// Close releases every resource held by the application.
+func (a *Application) Close() {
+	a.logger.Info("app: closing")
 	if a.DB != nil {
-		a.DB.Close()
+		_ = a.DB.Close()
 	}
-	if a.OTelProv != nil {
-		return a.OTelProv.Shutdown(ctx)
-	}
-	return nil
 }
 
-// approvalServiceGateAdapter removed in W16+ Phase 3 (Executor gone).
-// Approval gating now lives in the Python worker; the Go side only
-// persists state via the internal approval service.
+// Logger returns the application logger.
+func (a *Application) Logger() *slog.Logger { return a.logger }
 
-// approvalStateBroadcaster publishes approval lifecycle events as session
-// observations so SSE consumers (Console) see them in real time.
-type approvalStateBroadcaster struct {
-	state *State
+// newLogger builds a slog logger at the configured level.
+func newLogger(level string) (*slog.Logger, error) {
+	var lvl slog.Level
+	switch strings.ToLower(level) {
+	case "debug":
+		lvl = slog.LevelDebug
+	case "info", "":
+		lvl = slog.LevelInfo
+	case "warn", "warning":
+		lvl = slog.LevelWarn
+	case "error":
+		lvl = slog.LevelError
+	default:
+		return nil, fmt.Errorf("invalid log level %q", level)
+	}
+	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})
+	return slog.New(h), nil
 }
-
-func (b approvalStateBroadcaster) PublishApproval(event string, a *approvalmodel.Approval) {
-	if b.state == nil || a == nil {
-		return
-	}
-	now := time.Now()
-	base := domain.Observation{
-		SessionID: a.SessionID,
-		DomainID:  a.DomainID,
-		Timestamp: now,
-	}
-	switch event {
-	case "approval_required":
-		b.state.PublishObservation(a.SessionID, domain.Observation{
-			Kind:      "approval_required",
-			SessionID: a.SessionID,
-			DomainID:  a.DomainID,
-			Timestamp: now,
-			Payload: map[string]any{
-				"id":           a.ID,
-				"action":       a.Action,
-				"resource":     a.Resource,
-				"risk_level":   a.RiskLevel,
-				"context":      a.Context,
-				"requested_by": a.RequestedBy,
-			},
-		})
-		b.state.PublishObservation(a.SessionID, domain.Observation{
-			Kind:      "state",
-			SessionID: a.SessionID,
-			DomainID:  a.DomainID,
-			Timestamp: now,
-			Payload:   map[string]any{"state": "paused"},
-		})
-	case "approval_resolved":
-		b.state.PublishObservation(a.SessionID, domain.Observation{
-			Kind:      "approval_resolved",
-			SessionID: a.SessionID,
-			DomainID:  a.DomainID,
-			Timestamp: now,
-			Payload: map[string]any{
-				"id":          a.ID,
-				"status":      a.Status,
-				"reviewed_by": a.ReviewedBy,
-				"comment":     a.Comment,
-			},
-		})
-		b.state.PublishObservation(a.SessionID, domain.Observation{
-			Kind:      "state",
-			SessionID: a.SessionID,
-			DomainID:  a.DomainID,
-			Timestamp: now,
-			Payload:   map[string]any{"state": "running"},
-		})
-		b.state.PublishObservation(a.SessionID, domain.Observation{
-			Kind:      "session_resumed",
-			SessionID: a.SessionID,
-			DomainID:  a.DomainID,
-			Timestamp: now,
-			Payload: map[string]any{
-				"reason":      "approval_resolved",
-				"approval_id": a.ID,
-			},
-		})
-	}
-	_ = base
-}
-
-// auditRecorder removed in W16+ Phase 3 (Executor gone).
-// Audit recording now lives in the Python worker; the Go side only
-// persists via its own internal audit service.
-
-// funcSink adapts a function to the runtime.Sink interface.
-type funcSink struct {
-	name   string
-	record func(context.Context, domain.Observation) error
-}
-
-// openStore opens the configured Postgres database. The daemon-mode
-// infrastructure (secret-key auto-gen, sensible defaults) lives in
-// ensureSecretKey / config.Default, not in the DB layer — keeping the
-// store function trivial means local dev is "point at Postgres DSN,
-// everything else works the same as production".
-func openStore(ctx context.Context, cfg *config.Config, log *zap.Logger) (*db.DB, error) {
-	if !cfg.PostgresEnabled() {
-		return nil, errors.New("postgres is required: set HNSX_DATABASE_URL (e.g. postgres://hnsx:hnsx@localhost:5432/hnsx?sslmode=disable)")
-	}
-	store, err := db.Open(ctx, cfg.DatabaseURL)
-	if err != nil {
-		return nil, err
-	}
-	if cfg.DaemonDataDir != "" {
-		if err := ensureSecretKey(cfg.DaemonDataDir, log); err != nil {
-			return nil, fmt.Errorf("daemon: secret key: %w", err)
-		}
-	}
-	return store, nil
-}
-
-// ensureSecretKey writes a random 32-byte hex key to <dataDir>/secret.key
-// on first boot and exports HNSX_SECRET_KEY for the rest of the process.
-// Existing users keep their key so encrypted secrets stay decryptable.
-func ensureSecretKey(dataDir string, log *zap.Logger) error {
-	keyPath := filepath.Join(dataDir, "secret.key")
-	if _, err := os.Stat(keyPath); err == nil {
-		b, readErr := os.ReadFile(keyPath)
-		if readErr != nil {
-			return fmt.Errorf("read %s: %w", keyPath, readErr)
-		}
-		_ = os.Setenv("HNSX_SECRET_KEY", strings.TrimSpace(string(b)))
-		return nil
-	}
-	if err := os.MkdirAll(dataDir, 0o700); err != nil {
-		return fmt.Errorf("mkdir %s: %w", dataDir, err)
-	}
-	key := make([]byte, 32)
-	if _, err := rand.Read(key); err != nil {
-		return fmt.Errorf("rand: %w", err)
-	}
-	hexed := hex.EncodeToString(key)
-	if err := os.WriteFile(keyPath, []byte(hexed), 0o600); err != nil {
-		return fmt.Errorf("write %s: %w", keyPath, err)
-	}
-	_ = os.Setenv("HNSX_SECRET_KEY", hexed)
-	log.Info("auto-generated HNSX_SECRET_KEY",
-		zap.String("path", keyPath),
-		zap.String("action", "BACK THIS UP — losing this file means losing access to encrypted secrets"))
-	return nil
-}
-
-func (s *funcSink) Name() string { return s.name }
-
-func (s *funcSink) Record(ctx context.Context, obs domain.Observation) error {
-	return s.record(ctx, obs)
-}
-
-func (s *funcSink) Flush(context.Context) error { return nil }
-func (s *funcSink) Close(context.Context) error { return nil }
