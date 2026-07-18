@@ -44,6 +44,7 @@ config file at ~/.config/hnsxd/config.yaml.`,
 
 	root.AddCommand(serveCmd())
 	root.AddCommand(daemonCmd())
+	root.AddCommand(newBackendsCmd())
 
 	return root
 }

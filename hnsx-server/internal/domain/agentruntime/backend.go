@@ -21,7 +21,7 @@ type Backend interface {
 	Name() string
 	// Execute spawns the agent subprocess and returns a Session bound to its
 	// message stream. Caller is responsible for closing the Session.
-	Execute(ctx context.Context, prompt string, opts ExecOptions) (*Session, error)
+	Execute(ctx context.Context, prompt string, opts ExecOptions) (Session, error)
 }
 
 // Session is the live handle to a running agent.
