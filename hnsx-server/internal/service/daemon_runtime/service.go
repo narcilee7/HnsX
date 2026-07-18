@@ -11,9 +11,13 @@ package daemon_runtime
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -195,18 +199,27 @@ func (s *Service) runIssue(ctx context.Context, a *agent.Agent, i *issue.Issue) 
 	}
 
 	// Stream messages into the observation sink.
+	promptHash := hashPrompt(prompt)
+	agentTemplateID := agentTemplateID(a, backendName, model)
+	signatures := newToolSignatureSet()
 	var seq int64
 	for msg := range sess.Messages() {
+		// Accumulate tool signatures as we see tool_use events.
+		if name := extractToolName(msg); name != "" {
+			signatures.Add(name)
+		}
 		obs := &observation.Observation{
-			ID:           uuid.NewString(),
-			WorkspaceID:  i.WorkspaceID,
-			IssueID:      i.ID,
-			AgentID:      a.ID,
-			Kind:         kindFromMessage(msg),
-			Sequence:     seq,
-			Payload:      msg.Payload,
-			OccurredAt:   time.Now().UTC(),
-			PromptHash:   hashPrompt(prompt),
+			ID:              uuid.NewString(),
+			WorkspaceID:     i.WorkspaceID,
+			IssueID:         i.ID,
+			AgentID:         a.ID,
+			Kind:            kindFromMessage(msg),
+			Sequence:        seq,
+			Payload:         msg.Payload,
+			OccurredAt:      time.Now().UTC(),
+			PromptHash:      promptHash,
+			AgentTemplateID: agentTemplateID,
+			ToolSignatures:  signatures.JSON(),
 		}
 		seq++
 		if err := s.sink.Write(ctx, obs); err != nil {
@@ -272,10 +285,69 @@ func kindFromMessage(m agentruntime.Message) observation.Kind {
 }
 
 func hashPrompt(p string) string {
-	// R3 fills this with sha256(prompt); for R1.9 we leave it empty so
-	// the observation row still records the dimension column.
-	_ = p
-	return ""
+	// sha256 hex digest; lets eval slice regressions by exact prompt.
+	sum := sha256.Sum256([]byte(p))
+	return hex.EncodeToString(sum[:])
+}
+
+// agentTemplateID derives a stable template identifier from the agent's
+// runtime config. The shape is "<backend>:<model>" so two agents
+// pointing at the same backend+model land in the same template bucket.
+// R3.x may promote this to a first-class AgentTemplate entity.
+func agentTemplateID(a *agent.Agent, backend, model string) string {
+	if a == nil {
+		return backend + ":" + model
+	}
+	// Prefer an explicit template id if the harness binding is set later.
+	if a.ID != "" {
+		return a.ID
+	}
+	return backend + ":" + model
+}
+
+// toolSignatureSet accumulates tool names seen during an agent run,
+// preserving insertion order and emitting a stable JSON array.
+type toolSignatureSet struct {
+	order []string
+	set   map[string]struct{}
+}
+
+func newToolSignatureSet() *toolSignatureSet {
+	return &toolSignatureSet{set: make(map[string]struct{})}
+}
+
+func (s *toolSignatureSet) Add(name string) {
+	if name == "" {
+		return
+	}
+	if _, ok := s.set[name]; ok {
+		return
+	}
+	s.set[name] = struct{}{}
+	s.order = append(s.order, name)
+}
+
+func (s *toolSignatureSet) JSON() json.RawMessage {
+	if len(s.order) == 0 {
+		return json.RawMessage("[]")
+	}
+	buf, _ := json.Marshal(s.order)
+	return buf
+}
+
+// extractToolName pulls the tool name out of a tool_use message's
+// payload. Returns "" if the message is not a tool_use event.
+func extractToolName(m agentruntime.Message) string {
+	if m.Kind != agentruntime.MsgToolUse {
+		return ""
+	}
+	var p struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(m.Payload, &p); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(p.Name)
 }
 
 func resOrErrMsg(res *agentruntime.Result, err error) string {
