@@ -35,6 +35,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/api/router"
 	agenthandler "github.com/hnsx-io/hnsx/server/internal/api/handler/agent"
 	daemonhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/daemon"
+	harnesshandler "github.com/hnsx-io/hnsx/server/internal/api/handler/harness"
 	issuehandler "github.com/hnsx-io/hnsx/server/internal/api/handler/issue"
 	squadhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/squad"
 	workspacehandler "github.com/hnsx-io/hnsx/server/internal/api/handler/workspace"
@@ -45,6 +46,7 @@ import (
 	daemonsvc "github.com/hnsx-io/hnsx/server/internal/service/daemon"
 	daemonruntime "github.com/hnsx-io/hnsx/server/internal/service/daemon_runtime"
 	evalsvc "github.com/hnsx-io/hnsx/server/internal/service/eval"
+	harnesssvc "github.com/hnsx-io/hnsx/server/internal/service/harness"
 	issuesvc "github.com/hnsx-io/hnsx/server/internal/service/issue"
 	squadsvc "github.com/hnsx-io/hnsx/server/internal/service/squad"
 	workspacesvc "github.com/hnsx-io/hnsx/server/internal/service/workspace"
@@ -98,6 +100,7 @@ type Application struct {
 	IssueSvc     *issuesvc.Service
 	SquadSvc     *squadsvc.Service
 	DaemonSvc    *daemonsvc.Service
+	HarnessSvc   *harnesssvc.Service
 
 	// DB pool + handlers. Available so WS layer (R1.9) and tests can use them.
 	DB       *postgres.DB
@@ -176,6 +179,7 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 		app.IssueSvc = issuesvc.New(issueRepo)
 		app.SquadSvc = squadsvc.New(squadRepo)
 		app.DaemonSvc = daemonsvc.New(daemonRepo)
+		app.HarnessSvc = harnesssvc.New(postgres.NewHarnessRepo(app.DB))
 
 		app.Handlers = router.Deps{
 			Workspace: workspacehandler.New(app.WorkspaceSvc),
@@ -183,6 +187,7 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 			Agent:     agenthandler.New(app.AgentSvc),
 			Squad:     squadhandler.New(app.SquadSvc),
 			Daemon:    daemonhandler.New(app.DaemonSvc),
+			Harness:   harnesshandler.New(app.HarnessSvc),
 		}
 
 		// Daemon runtime: pulls assigned issues, spawns the agent backend,

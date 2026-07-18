@@ -8,6 +8,7 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/agent"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/daemon"
+	"github.com/hnsx-io/hnsx/server/internal/api/handler/harness"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/issue"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/squad"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/workspace"
@@ -22,6 +23,7 @@ type Deps struct {
 	Agent     *agent.Handler
 	Squad     *squad.Handler
 	Daemon    *daemon.Handler
+	Harness   *harness.Handler
 }
 
 // New constructs a fully-configured gin.Engine with all routes mounted
@@ -42,6 +44,9 @@ func New(deps Deps) *gin.Engine {
 	deps.Agent.Register(api)
 	deps.Squad.Register(api)
 	deps.Daemon.Register(api)
+	if deps.Harness != nil {
+		deps.Harness.Register(api)
+	}
 
 	return r
 }

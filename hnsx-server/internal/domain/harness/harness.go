@@ -16,6 +16,9 @@ import (
 	"time"
 )
 
+// ErrHarnessNotFound is returned by Repo implementations when a lookup misses.
+var ErrHarnessNotFound = errors.New("harness: not found")
+
 // Prompt is a named template that the agent runtime renders before
 // each turn. Vars are extracted from the issue description or workspace
 // context at execution time.
