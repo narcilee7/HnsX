@@ -45,6 +45,11 @@ config file at ~/.config/hnsxd/config.yaml.`,
 	root.AddCommand(serveCmd())
 	root.AddCommand(daemonCmd())
 	root.AddCommand(newBackendsCmd())
+	root.AddCommand(newWorkspaceCmd())
+	root.AddCommand(newIssueCmd())
+	root.AddCommand(newAgentCmd())
+	root.AddCommand(newSquadCmd())
+	root.AddCommand(newDaemonCmdGroup())
 
 	return root
 }
