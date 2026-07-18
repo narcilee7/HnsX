@@ -133,9 +133,12 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 	}
 
 	// 1. Agent runtime registry (no DB needed).
-	registry := agentinfra.NewRegistry(logger)
-	claudeRunner := agentinfra.NewClaudeRunner(cfg.ClaudeExecutable, logger)
-	registry.Register(agentinfra.NewClaudeBackend(claudeRunner))
+	registry := agentinfra.NewDefaultRegistry(logger)
+	// Honor HNSX_CLAUDE_EXECUTABLE: re-register the claude backend with
+	// the override path so the rest of the registry stays untouched.
+	if cfg.ClaudeExecutable != "" {
+		registry.Register(agentinfra.NewClaudeBackend(agentinfra.NewClaudeRunner(cfg.ClaudeExecutable, logger)))
+	}
 	app.Backends = registry
 	logger.Info("app: agent backends registered",
 		"backends", strings.Join(registry.List(), ", "),
