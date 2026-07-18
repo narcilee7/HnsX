@@ -26,10 +26,10 @@ func newBackendsCmd() *cobra.Command {
 		Short: "List all registered agent runtime backends",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg := minimalConfig()
-			registry := agentinfra.NewRegistry(nil)
-			claudeRunner := agentinfra.NewClaudeRunner(cfg.ClaudeExecutable, nil)
-			registry.Register(agentinfra.NewClaudeBackend(claudeRunner))
-
+			registry := agentinfra.NewDefaultRegistry(nil)
+			if cfg.ClaudeExecutable != "" {
+				registry.Register(agentinfra.NewClaudeBackend(agentinfra.NewClaudeRunner(cfg.ClaudeExecutable, nil)))
+			}
 			names := registry.List()
 			if len(names) == 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), "(no backends registered)")

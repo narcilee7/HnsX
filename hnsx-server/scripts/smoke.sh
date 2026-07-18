@@ -39,7 +39,11 @@ log "4/5  hnsxd backends list"
 output=$(/tmp/hnsxd backends list 2>/dev/null) || fail "hnsxd backends list exited non-zero"
 echo "$output" | grep -qx "claude" \
     || fail "expected 'claude' in backend list, got: $output"
-pass "claude backend registered"
+count=$(echo "$output" | wc -l | tr -d ' ')
+if [[ $count -lt 10 ]]; then
+    fail "expected at least 10 backends registered, got $count: $output"
+fi
+pass "backends registered ($count total; claude present)"
 
 log "5/5  grep blacklist (no leftover old code)"
 # Run a series of greps that must all return empty. Each line documents
