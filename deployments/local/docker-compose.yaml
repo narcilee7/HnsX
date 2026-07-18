@@ -37,10 +37,16 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/etc/grafana/dashboards:ro
 
+  # ─────────────────────────────────────────────────────────────────────
+  # HarnessX control plane (W23). Replaces the original `server` block;
+  # builds from ./bin/harnessx-server so the local build is reused.
+  # Mounts the example Domains so they're registered on first boot.
+  # ─────────────────────────────────────────────────────────────────────
   server:
+    image: harnessx-server:latest
     build:
-      context: ../../hnsx-server
-      dockerfile: ../deployments/local/Dockerfile.server
+      context: ../..
+      dockerfile: deployments/local/Dockerfile.server
     ports:
       - "50052:50051"
       - "50062:50061"
@@ -66,36 +72,36 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    command: ["--seed-from", "/app/example-domains"]
+    command: ["server", "--multica-mode", "--seed-from", "/app/example-domains"]
 
-  worker:
+  # ─────────────────────────────────────────────────────────────────────
+  # HarnessX Daemon (W23). The single-binary daemon replaces the legacy
+  # Python worker. Connects to the control plane over WS, spawns CC/Codex
+  # subprocesses, streams observations back.
+  #
+  # Set HARNESSX_DAEMON_AGENT to the agent CLI you want the daemon to spawn
+  # (claude | codex | codebuddy | copilot | cursor | opencode | openclaw |
+  # hermes | pi | kimi | kiro | qoder | traecli | agy). Default: claude.
+  # ─────────────────────────────────────────────────────────────────────
+  daemon:
+    image: harnessx-daemon:latest
     build:
-      context: ../../hnsx-worker
-      dockerfile: ../deployments/local/Dockerfile.worker
+      context: ../..
+      dockerfile: deployments/local/Dockerfile.daemon
     environment:
-      HNSX_SERVER: "server:50061"
-      HNSX_ECHO_TOOL_CALL: "${HNSX_ECHO_TOOL_CALL:-}"
-      HNSX_FORCE_ADAPTER_KIND: "${HNSX_FORCE_ADAPTER_KIND:-noop}"
+      HARNESSX_SERVER_URL: "http://server:50051"
+      HARNESSX_DAEMON_WORKSPACE_ID: "${HARNESSX_WORKSPACE_ID:-00000000-0000-0000-0000-000000000000}"
+      HARNESSX_DAEMON_COMMAND: "${HARNESSX_DAEMON_AGENT:-claude}"
+      HARNESSX_DAEMON_ARGS: "${HARNESSX_DAEMON_ARGS:--p --output-format stream-json --verbose}"
+      HARNESSX_DAEMON_MAX_COST_USD: "${HARNESSX_DAEMON_MAX_COST_USD:-1.0}"
     depends_on:
       server:
         condition: service_healthy
     restart: unless-stopped
     volumes:
-      - ../../example-domains/mcp-demo/mcp_server.py:/app/mcp_server.py:ro
-    command:
-      - "run"
-      - "--server"
-      - "server:50061"
-      - "--worker-id"
-      - "worker-1"
-      - "--max-concurrent-sessions"
-      - "2"
-      - "--providers"
-      - "anthropic,openai,echo,noop"
-      - "--models"
-      - "claude-haiku-4-5,gpt-4o-mini"
-      - "--sandbox-runtimes"
-      - "none"
+      # Mount the local agent CLIs so the daemon can spawn them.
+      - ~/.claude:/root/.claude:ro
+      - ~/.codex:/root/.codex:ro
 
 volumes:
   postgres_data:

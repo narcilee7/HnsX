@@ -9,6 +9,10 @@
 # Usage:
 #   curl -sSL https://raw.githubusercontent.com/narcilee7/HnsX/main/scripts/install.sh | sh
 #   HNSX_INSTALL_DIR=/usr/local/bin ./scripts/install.sh
+#
+# HarnessX (W22) extends this installer to also drop the forked Multica
+# binaries and the HarnessX daemon:
+#   HNSX_INSTALL_HARNESSX=1 ./scripts/install.sh
 
 set -euo pipefail
 
@@ -16,6 +20,12 @@ REPO="narcilee7/HnsX"
 BIN_NAME="hnsx"
 SERVER_BIN_NAME="hnsx-server"
 INSTALL_DIR="${HNSX_INSTALL_DIR:-$HOME/.local/bin}"
+INSTALL_HARNESSX="${HNSX_INSTALL_HARNESSX:-0}"
+
+# Optional HarnessX binaries (W22). Skipped unless HNSX_INSTALL_HARNESSX=1.
+HARNESSX_DAEMON="harnessx-daemon"
+MULTICA_CLI="multica"
+MULTICA_SERVER="multica-server"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "✗ missing: $1" >&2; exit 1; }; }
 
@@ -85,6 +95,20 @@ for bin in "$BIN_NAME" "$SERVER_BIN_NAME"; do
   echo "✓ installed $bin to $INSTALL_DIR/$bin"
 done
 
+# W22: optionally install HarnessX daemon + forked Multica binaries.
+if [[ "$INSTALL_HARNESSX" == "1" ]]; then
+  for bin in "$HARNESSX_DAEMON" "$MULTICA_CLI" "$MULTICA_SERVER"; do
+    src="$tmpdir/$bin"
+    if [[ ! -f "$src" ]]; then
+      echo "⚠ missing optional binary: $bin (skipping)" >&2
+      continue
+    fi
+    mv "$src" "$INSTALL_DIR/$bin"
+    chmod +x "$INSTALL_DIR/$bin"
+    echo "✓ installed $bin to $INSTALL_DIR/$bin"
+  done
+fi
+
 # PATH hint.
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
@@ -94,3 +118,21 @@ esac
 
 echo "→ try: $BIN_NAME --help"
 echo "→ try: $BIN_NAME try customer-service"
+
+if [[ "$INSTALL_HARNESSX" == "1" ]]; then
+  cat <<EOF
+
+HarnessX binaries installed. To run the full stack:
+
+  # 1. Start Postgres
+  brew services start postgresql@16   # macOS
+
+  # 2. Start the control plane (with Multica-compatible API on by default)
+  export HNSX_DATABASE_URL='postgres://harnessx:harnessx@localhost:5432/harnessx?sslmode=disable'
+  $INSTALL_DIR/harnessx-server server
+
+  # 3. In another shell, start the local daemon
+  $INSTALL_DIR/harnessx-daemon --server http://127.0.0.1:50051
+
+EOF
+fi
