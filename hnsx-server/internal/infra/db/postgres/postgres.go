@@ -20,9 +20,13 @@ import (
 	"time"
 
 	"github.com/hnsx-io/hnsx/server/internal/domain/agent"
+	"github.com/hnsx-io/hnsx/server/internal/domain/approval"
 	"github.com/hnsx-io/hnsx/server/internal/domain/daemon"
+	"github.com/hnsx-io/hnsx/server/internal/domain/eval"
+	"github.com/hnsx-io/hnsx/server/internal/domain/harness"
 	"github.com/hnsx-io/hnsx/server/internal/domain/issue"
 	"github.com/hnsx-io/hnsx/server/internal/domain/observation"
+	"github.com/hnsx-io/hnsx/server/internal/domain/policy"
 	"github.com/hnsx-io/hnsx/server/internal/domain/squad"
 	"github.com/hnsx-io/hnsx/server/internal/domain/workspace"
 	"go.uber.org/zap"
@@ -130,6 +134,12 @@ func (d *DB) migrate(_ context.Context) error {
 		&squad.Squad{},
 		&daemon.Daemon{},
 		&observation.Observation{},
+		// R3 value modules
+		&harness.Harness{},
+		&policy.Policy{},
+		&eval.EvalSet{},
+		&eval.Run{},
+		&approval.Approval{},
 	)
 }
 

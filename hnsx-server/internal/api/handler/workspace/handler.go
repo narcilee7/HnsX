@@ -36,10 +36,15 @@ func (h *Handler) Register(r gin.IRouter) {
 	g.POST("", h.Create)
 	g.GET("", h.List)
 	g.GET("/s/:slug", h.GetBySlug)
-	g.GET("/:id", h.Get)
-	g.PATCH("/:id", h.Update)
-	g.POST("/:id/archive", h.Archive)
-	g.DELETE("/:id", h.Delete)
+	// NOTE: no GET /workspaces/:id — that conflicts with
+	// /workspaces/:workspace_id/issues (gin rejects two :wildcards at
+	// the same path depth). Clients fetch a workspace by slug, or use
+	// the list endpoint with a filter. R3.x adds /workspaces/w/:id
+	// once we move nested resources off the shared path.
+	g.GET("/w/:id", h.Get)
+	g.PATCH("/w/:id", h.Update)
+	g.POST("/w/:id/archive", h.Archive)
+	g.DELETE("/w/:id", h.Delete)
 }
 
 // Create handles POST /workspaces.
