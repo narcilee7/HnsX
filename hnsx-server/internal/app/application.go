@@ -33,6 +33,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/hnsx-io/hnsx/server/internal/api/router"
+	wshandler "github.com/hnsx-io/hnsx/server/internal/api/handler/ws"
 	agenthandler "github.com/hnsx-io/hnsx/server/internal/api/handler/agent"
 	approvalhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/approval"
 	daemonhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/daemon"
@@ -56,6 +57,7 @@ import (
 	policysvc "github.com/hnsx-io/hnsx/server/internal/service/policy"
 	squadsvc "github.com/hnsx-io/hnsx/server/internal/service/squad"
 	workspacesvc "github.com/hnsx-io/hnsx/server/internal/service/workspace"
+	"github.com/hnsx-io/hnsx/server/internal/ws/handler"
 )
 
 // policyLookup is the daemon_runtime.PolicyLookup implementation that
@@ -256,6 +258,20 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 
 	// 4. HTTP server lifecycle.
 	engine := router.New(app.Handlers)
+
+	// 4a. /ws/daemon endpoint. Daemons connect here for claim/observation
+	//     round-trips; the WS handler is wired with the same services
+	//     the HTTP handlers use, so the source of truth stays in one place.
+	if app.DB != nil {
+		wsBridge := &wsServiceAdapter{
+			issues: &issueServiceHandle{svc: app.IssueSvc},
+			sink:   postgres.NewObservationSink(app.DB),
+			approval: &approvalServiceHandle{svc: app.ApprovalSvc},
+		}
+		daemonWSHandler := handler.NewHandler(wsBridge, logger)
+		engine.GET("/ws/daemon", wshandler.Handler(daemonWSHandler, logger))
+	}
+
 	app.httpServer = &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           engine,
