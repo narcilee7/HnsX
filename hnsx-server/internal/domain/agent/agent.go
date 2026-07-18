@@ -4,6 +4,8 @@
 // (built incrementally across R2-R3) and runs against a runtime backend
 // (Claude Code, Codex, Cursor, ...). Agents live inside a workspace and
 // can be assigned to issues.
+//
+// Persistence: the struct doubles as the GORM model.
 package agent
 
 import (
@@ -43,21 +45,23 @@ const (
 
 // Agent is the aggregate root.
 type Agent struct {
-	ID                 string
-	WorkspaceID        string
-	Name               string
-	Description        string
-	AvatarURL          *string
-	RuntimeMode        RuntimeMode
-	RuntimeConfig      json.RawMessage // backend-specific (cli binary, args, model, ...)
-	Visibility         Visibility
-	Status             Status
-	MaxConcurrentTasks int
-	OwnerID            *string
-	ArchivedAt         *time.Time
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	ID                 string          `gorm:"type:uuid;primaryKey" json:"id"`
+	WorkspaceID        string          `gorm:"type:uuid;not null;index" json:"workspace_id"`
+	Name               string          `gorm:"type:text;not null" json:"name"`
+	Description        string          `gorm:"type:text;not null;default:''" json:"description"`
+	AvatarURL          *string         `gorm:"type:text" json:"avatar_url,omitempty"`
+	RuntimeMode        RuntimeMode     `gorm:"type:text;not null;default:'local'" json:"runtime_mode"`
+	RuntimeConfig      json.RawMessage `gorm:"type:jsonb;not null;default:'{}'::jsonb" json:"runtime_config"`
+	Visibility         Visibility      `gorm:"type:text;not null;default:'workspace'" json:"visibility"`
+	Status             Status          `gorm:"type:text;not null;default:'idle';index" json:"status"`
+	MaxConcurrentTasks int             `gorm:"not null;default:1" json:"max_concurrent_tasks"`
+	OwnerID            *string         `gorm:"type:uuid" json:"owner_id,omitempty"`
+	ArchivedAt         *time.Time      `gorm:"type:timestamptz" json:"archived_at,omitempty"`
+	CreatedAt          time.Time       `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt          time.Time       `gorm:"autoUpdateTime" json:"updated_at"`
 }
+
+func (Agent) TableName() string { return "agents" }
 
 // Validate enforces invariants.
 func (a *Agent) Validate() error {

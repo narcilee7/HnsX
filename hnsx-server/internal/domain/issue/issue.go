@@ -4,6 +4,8 @@
 // moves: backlog -> todo -> in_progress -> in_review -> done. Issues produce
 // Observations when assigned to an agent (R3 attaches dimension tags for
 // the data flywheel).
+//
+// Persistence: the struct doubles as the GORM model.
 package issue
 
 import (
@@ -55,25 +57,27 @@ const (
 
 // Issue is the aggregate root.
 type Issue struct {
-	ID                 string
-	WorkspaceID        string
-	Title              string
-	Description        string
-	Status             Status
-	Priority           Priority
-	AssigneeType       *AssigneeType
-	AssigneeID         *string
-	CreatorType        CreatorType
-	CreatorID          string
-	ParentIssueID      *string
-	AcceptanceCriteria json.RawMessage
-	ContextRefs        json.RawMessage
-	Position           float64
-	DueDate            *time.Time
-	Number             int
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	ID                 string          `gorm:"type:uuid;primaryKey" json:"id"`
+	WorkspaceID        string          `gorm:"type:uuid;not null;index" json:"workspace_id"`
+	Number             int             `gorm:"not null" json:"number"`
+	Title              string          `gorm:"type:text;not null" json:"title"`
+	Description        string          `gorm:"type:text;not null;default:''" json:"description"`
+	Status             Status          `gorm:"type:text;not null;default:'backlog';index" json:"status"`
+	Priority           Priority        `gorm:"type:text;not null;default:'none'" json:"priority"`
+	AssigneeType       *AssigneeType   `gorm:"type:text" json:"assignee_type,omitempty"`
+	AssigneeID         *string         `gorm:"type:uuid;index" json:"assignee_id,omitempty"`
+	CreatorType        CreatorType     `gorm:"type:text;not null" json:"creator_type"`
+	CreatorID          string          `gorm:"type:uuid;not null" json:"creator_id"`
+	ParentIssueID      *string         `gorm:"type:uuid" json:"parent_issue_id,omitempty"`
+	AcceptanceCriteria json.RawMessage `gorm:"type:jsonb;not null;default:'[]'::jsonb" json:"acceptance_criteria"`
+	ContextRefs        json.RawMessage `gorm:"type:jsonb;not null;default:'[]'::jsonb" json:"context_refs"`
+	Position           float64         `gorm:"not null;default:0" json:"position"`
+	DueDate            *time.Time      `gorm:"type:timestamptz" json:"due_date,omitempty"`
+	CreatedAt          time.Time       `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt          time.Time       `gorm:"autoUpdateTime" json:"updated_at"`
 }
+
+func (Issue) TableName() string { return "issues" }
 
 // Validate enforces invariants.
 func (i *Issue) Validate() error {

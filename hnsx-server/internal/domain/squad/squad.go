@@ -3,6 +3,11 @@
 // A Squad is a named group of agents (and optionally members) that
 // coordinate on a workflow. Squads are the unit of routing: an issue can
 // be assigned to a squad and the squad's leader dispatches to members.
+//
+// Persistence: Squad is the GORM model; Member is serialized as JSONB
+// inside the squads row for simplicity in R1.4 (no JOINs needed for the
+// 90% case where we only need leader / member IDs). R3 may split into a
+// separate squad_members table if querying by member becomes hot.
 package squad
 
 import (
@@ -29,21 +34,23 @@ const (
 
 // Squad is the aggregate root.
 type Squad struct {
-	ID          string
-	WorkspaceID string
-	Name        string
-	Description string
-	Members     []Member
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          string    `gorm:"type:uuid;primaryKey" json:"id"`
+	WorkspaceID string    `gorm:"type:uuid;not null;index" json:"workspace_id"`
+	Name        string    `gorm:"type:text;not null" json:"name"`
+	Description string    `gorm:"type:text;not null;default:''" json:"description"`
+	Members     []Member  `gorm:"type:jsonb;not null;default:'[]'::jsonb;serializer:json" json:"members"`
+	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
+
+func (Squad) TableName() string { return "squads" }
 
 // Member is a reference from a squad to an agent or a human member.
 type Member struct {
-	ID       string
-	Kind     MemberKind
-	Role     MemberRole
-	JoinedAt time.Time
+	ID       string    `json:"id"`
+	Kind     MemberKind `json:"kind"`
+	Role     MemberRole `json:"role"`
+	JoinedAt time.Time `json:"joined_at"`
 }
 
 // Validate enforces invariants.

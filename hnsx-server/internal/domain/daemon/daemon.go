@@ -4,6 +4,8 @@
 // workspace. It owns a set of runtimes (one per available CLI backend)
 // and reports heartbeats so the control plane knows which agents it can
 // currently execute.
+//
+// Persistence: the struct doubles as the GORM model.
 package daemon
 
 import (
@@ -23,17 +25,19 @@ const (
 
 // Daemon is the aggregate root.
 type Daemon struct {
-	ID            string
-	WorkspaceID   string
-	Name          string
-	Platform      string  // darwin | linux | windows
-	OS            string  // normalized OS string
-	Version       string  // hnsxd version
-	Status        Status
-	LastHeartbeat time.Time
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID            string    `gorm:"type:uuid;primaryKey" json:"id"`
+	WorkspaceID   string    `gorm:"type:uuid;not null;index" json:"workspace_id"`
+	Name          string    `gorm:"type:text;not null" json:"name"`
+	Platform      string    `gorm:"type:text;not null" json:"platform"`
+	OS            string    `gorm:"type:text;not null" json:"os"`
+	Version       string    `gorm:"type:text;not null;default:''" json:"version"`
+	Status        Status    `gorm:"type:text;not null;default:'online';index" json:"status"`
+	LastHeartbeat time.Time `gorm:"autoUpdateTime" json:"last_heartbeat"`
+	CreatedAt     time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt     time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
+
+func (Daemon) TableName() string { return "daemons" }
 
 // Validate enforces invariants.
 func (d *Daemon) Validate() error {

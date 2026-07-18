@@ -3,6 +3,11 @@
 // A Workspace is the top-level tenancy boundary. It owns agents, issues,
 // squads, daemons, and chat sessions. Workspace.Context is injected into
 // every agent prompt running inside it.
+//
+// Persistence: the struct doubles as the GORM model. Gorm tags live here
+// rather than in a parallel DTO so we don't maintain two shapes per
+// entity. The tags are passive metadata — domain logic above does not
+// depend on GORM at the package level.
 package workspace
 
 import (
@@ -21,17 +26,26 @@ const (
 )
 
 // Workspace is the aggregate root.
+//
+// GORM model: ID is a UUID generated app-side (google/uuid) so we don't
+// need pgcrypto. Timestamps use gorm's autoCreateTime/autoUpdateTime so
+// callers don't have to set them. JSONB columns (Settings) are stored as
+// raw JSON.
 type Workspace struct {
-	ID          string
-	Name        string
-	Slug        string
-	Description string
-	Context     string          // workspace-level system prompt injected into agent runs
-	Settings    json.RawMessage // free-form settings (theme, defaults, integrations)
-	Status      Status
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          string         `gorm:"type:uuid;primaryKey" json:"id"`
+	Name        string         `gorm:"type:text;not null" json:"name"`
+	Slug        string         `gorm:"type:text;not null;uniqueIndex" json:"slug"`
+	Description string         `gorm:"type:text;not null;default:''" json:"description"`
+	Context     string         `gorm:"type:text;not null;default:''" json:"context"`
+	Settings    json.RawMessage `gorm:"type:jsonb;not null;default:'{}'::jsonb" json:"settings"`
+	Status      Status         `gorm:"type:text;not null;default:'active'" json:"status"`
+	CreatedAt   time.Time      `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt   time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 }
+
+// TableName fixes the table name; otherwise GORM pluralizes to "workspaces"
+// (which matches our convention anyway, but pinning it removes ambiguity).
+func (Workspace) TableName() string { return "workspaces" }
 
 // Validate enforces invariants. Called from the service layer before persistence.
 func (w *Workspace) Validate() error {

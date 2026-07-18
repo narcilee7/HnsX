@@ -4,6 +4,8 @@
 // per agent Message (and per policy decision / eval score); the Sink writes
 // them to Postgres with dimension tags that let the EvalSet runner slice
 // regressions by prompt_hash / agent_template_id / tool_signatures.
+//
+// Persistence: the struct doubles as the GORM model.
 package observation
 
 import (
@@ -27,30 +29,32 @@ const (
 type PolicyDecision string
 
 const (
-	PolicyAllow           PolicyDecision = "allow"
-	PolicyDeny            PolicyDecision = "deny"
+	PolicyAllow            PolicyDecision = "allow"
+	PolicyDeny             PolicyDecision = "deny"
 	PolicyApprovalRequired PolicyDecision = "approval_required"
 )
 
 // Observation is the value object written to the sink.
 type Observation struct {
-	ID         string
-	WorkspaceID string
-	IssueID    string
-	AgentID    string
+	ID         string          `gorm:"type:uuid;primaryKey" json:"id"`
+	WorkspaceID string         `gorm:"type:uuid;not null" json:"workspace_id"`
+	IssueID    string          `gorm:"type:uuid;not null;index" json:"issue_id"`
+	AgentID    string          `gorm:"type:uuid;not null" json:"agent_id"`
 
-	Kind     Kind
-	Sequence int64
-	Payload  json.RawMessage
-	OccurredAt time.Time
+	Kind     Kind            `gorm:"type:text;not null" json:"kind"`
+	Sequence int64           `gorm:"not null;default:0" json:"sequence"`
+	Payload  json.RawMessage `gorm:"type:jsonb;not null;default:'{}'::jsonb" json:"payload"`
+	OccurredAt time.Time     `gorm:"autoCreateTime;index" json:"occurred_at"`
 
 	// Flywheel dimensions (R3 fills these in)
-	PromptHash       string          // sha256 of the rendered prompt
-	AgentTemplateID  string          // agent_template_id from the resolved harness
-	ToolSignatures   []string        // tool names invoked this turn
-	PolicyDecision   PolicyDecision  // for Kind == KindPolicyDecision
-	EvalRunID        string          // for Kind == KindEvalScore
+	PromptHash       string          `gorm:"type:text;not null;default:''" json:"prompt_hash"`
+	AgentTemplateID  string          `gorm:"type:text;not null;default:''" json:"agent_template_id"`
+	ToolSignatures   json.RawMessage `gorm:"type:jsonb;not null;default:'[]'::jsonb" json:"tool_signatures"`
+	PolicyDecision   PolicyDecision  `gorm:"type:text;not null;default:''" json:"policy_decision"`
+	EvalRunID        string          `gorm:"type:text;not null;default:'';index" json:"eval_run_id"`
 }
+
+func (Observation) TableName() string { return "observations" }
 
 // Sink is the persistence port. Implemented by infra/db/postgres.
 type Sink interface {
