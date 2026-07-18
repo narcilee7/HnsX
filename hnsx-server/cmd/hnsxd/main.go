@@ -52,6 +52,9 @@ config file at ~/.config/hnsxd/config.yaml.`,
 	root.AddCommand(newSquadCmd())
 	root.AddCommand(newDaemonCmdGroup())
 	root.AddCommand(newHarnessCmd())
+	root.AddCommand(newPolicyCmd())
+	root.AddCommand(newEvalCmd())
+	root.AddCommand(newApprovalCmd())
 
 	return root
 }

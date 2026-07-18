@@ -34,20 +34,25 @@ import (
 
 	"github.com/hnsx-io/hnsx/server/internal/api/router"
 	agenthandler "github.com/hnsx-io/hnsx/server/internal/api/handler/agent"
+	approvalhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/approval"
 	daemonhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/daemon"
+	evalhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/eval"
 	harnesshandler "github.com/hnsx-io/hnsx/server/internal/api/handler/harness"
 	issuehandler "github.com/hnsx-io/hnsx/server/internal/api/handler/issue"
+	policyhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/policy"
 	squadhandler "github.com/hnsx-io/hnsx/server/internal/api/handler/squad"
 	workspacehandler "github.com/hnsx-io/hnsx/server/internal/api/handler/workspace"
 	"github.com/hnsx-io/hnsx/server/internal/domain/agentruntime"
 	agentinfra "github.com/hnsx-io/hnsx/server/internal/infra/agentruntime" // concrete backends
 	"github.com/hnsx-io/hnsx/server/internal/infra/db/postgres"
 	agentsvc "github.com/hnsx-io/hnsx/server/internal/service/agent"
+	approvalsvc "github.com/hnsx-io/hnsx/server/internal/service/approval"
 	daemonsvc "github.com/hnsx-io/hnsx/server/internal/service/daemon"
 	daemonruntime "github.com/hnsx-io/hnsx/server/internal/service/daemon_runtime"
 	evalsvc "github.com/hnsx-io/hnsx/server/internal/service/eval"
 	harnesssvc "github.com/hnsx-io/hnsx/server/internal/service/harness"
 	issuesvc "github.com/hnsx-io/hnsx/server/internal/service/issue"
+	policysvc "github.com/hnsx-io/hnsx/server/internal/service/policy"
 	squadsvc "github.com/hnsx-io/hnsx/server/internal/service/squad"
 	workspacesvc "github.com/hnsx-io/hnsx/server/internal/service/workspace"
 )
@@ -101,6 +106,9 @@ type Application struct {
 	SquadSvc     *squadsvc.Service
 	DaemonSvc    *daemonsvc.Service
 	HarnessSvc   *harnesssvc.Service
+	PolicySvc    *policysvc.Service
+	EvalSvc      *evalsvc.Service
+	ApprovalSvc  *approvalsvc.Service
 
 	// DB pool + handlers. Available so WS layer (R1.9) and tests can use them.
 	DB       *postgres.DB
@@ -180,6 +188,14 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 		app.SquadSvc = squadsvc.New(squadRepo)
 		app.DaemonSvc = daemonsvc.New(daemonRepo)
 		app.HarnessSvc = harnesssvc.New(postgres.NewHarnessRepo(app.DB))
+		app.PolicySvc = policysvc.New(postgres.NewPolicyRepo(app.DB))
+		app.EvalSvc = evalsvc.New(
+			postgres.NewEvalSetRepo(app.DB),
+			postgres.NewEvalRunRepo(app.DB),
+			postgres.NewObservationSink(app.DB),
+			logger,
+		)
+		app.ApprovalSvc = approvalsvc.New(postgres.NewApprovalRepo(app.DB))
 
 		app.Handlers = router.Deps{
 			Workspace: workspacehandler.New(app.WorkspaceSvc),
@@ -188,6 +204,9 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 			Squad:     squadhandler.New(app.SquadSvc),
 			Daemon:    daemonhandler.New(app.DaemonSvc),
 			Harness:   harnesshandler.New(app.HarnessSvc),
+			Policy:    policyhandler.New(app.PolicySvc),
+			Eval:      evalhandler.New(app.EvalSvc),
+			Approval:  approvalhandler.New(app.ApprovalSvc),
 		}
 
 		// Daemon runtime: pulls assigned issues, spawns the agent backend,

@@ -30,7 +30,7 @@ func (r *EvalSetRepo) Get(ctx context.Context, id string) (*eval.EvalSet, error)
 	var e eval.EvalSet
 	err := r.db.WithContext(ctx).First(&e, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrEvalSetNotFound
+		return nil, eval.ErrEvalSetNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (r *EvalSetRepo) Update(ctx context.Context, e *eval.EvalSet) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrEvalSetNotFound
+		return eval.ErrEvalSetNotFound
 	}
 	return nil
 }
@@ -78,7 +78,7 @@ func (r *EvalSetRepo) Delete(ctx context.Context, id string) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrEvalSetNotFound
+		return eval.ErrEvalSetNotFound
 	}
 	return nil
 }
@@ -98,7 +98,7 @@ func (r *EvalRunRepo) Get(ctx context.Context, id string) (*eval.Run, error) {
 	var run eval.Run
 	err := r.db.WithContext(ctx).First(&run, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrEvalRunNotFound
+		return nil, eval.ErrEvalRunNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -137,7 +137,7 @@ func (r *EvalRunRepo) Update(ctx context.Context, run *eval.Run) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return ErrEvalRunNotFound
+		return eval.ErrEvalRunNotFound
 	}
 	return nil
 }

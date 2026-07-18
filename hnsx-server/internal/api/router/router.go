@@ -7,9 +7,12 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/agent"
+	"github.com/hnsx-io/hnsx/server/internal/api/handler/approval"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/daemon"
+	"github.com/hnsx-io/hnsx/server/internal/api/handler/eval"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/harness"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/issue"
+	"github.com/hnsx-io/hnsx/server/internal/api/handler/policy"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/squad"
 	"github.com/hnsx-io/hnsx/server/internal/api/handler/workspace"
 	"github.com/hnsx-io/hnsx/server/internal/api/middleware"
@@ -24,6 +27,9 @@ type Deps struct {
 	Squad     *squad.Handler
 	Daemon    *daemon.Handler
 	Harness   *harness.Handler
+	Policy    *policy.Handler
+	Eval      *eval.Handler
+	Approval  *approval.Handler
 }
 
 // New constructs a fully-configured gin.Engine with all routes mounted
@@ -46,6 +52,15 @@ func New(deps Deps) *gin.Engine {
 	deps.Daemon.Register(api)
 	if deps.Harness != nil {
 		deps.Harness.Register(api)
+	}
+	if deps.Policy != nil {
+		deps.Policy.Register(api)
+	}
+	if deps.Eval != nil {
+		deps.Eval.Register(api)
+	}
+	if deps.Approval != nil {
+		deps.Approval.Register(api)
 	}
 
 	return r

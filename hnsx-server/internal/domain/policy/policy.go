@@ -16,6 +16,9 @@ import (
 	"time"
 )
 
+// ErrPolicyNotFound is returned by Repo implementations when a lookup misses.
+var ErrPolicyNotFound = errors.New("policy: not found")
+
 // Kind categorizes a rule.
 type Kind string
 
