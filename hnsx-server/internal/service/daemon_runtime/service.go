@@ -225,8 +225,10 @@ func (s *Service) runIssue(ctx context.Context, a *agent.Agent, i *issue.Issue) 
 	pol := s.loadPolicy(ctx, i.WorkspaceID)
 	var seq int64
 	for msg := range sess.Messages() {
-		// Accumulate tool signatures as we see tool_use events.
-		if name := extractToolName(msg); name != "" {
+		// Accumulate tool signatures as we see tool_use events — covers
+		// both top-level tool_use events AND tool_use blocks embedded
+		// inside an assistant message's content[].
+		for _, name := range toolNamesForMessage(msg) {
 			signatures.Add(name)
 		}
 
