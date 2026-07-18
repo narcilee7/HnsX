@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/hnsx-io/hnsx/server/internal/domain/approval"
 	"github.com/hnsx-io/hnsx/server/internal/domain/issue"
 	"github.com/hnsx-io/hnsx/server/internal/domain/observation"
@@ -86,12 +88,16 @@ func (h *Handler) HandleClaim(ctx context.Context, req ws.ClaimRequest) (ws.Issu
 func (h *Handler) HandleObservations(ctx context.Context, batch []ws.ObservationEvent) error {
 	out := make([]*observation.Observation, 0, len(batch))
 	for _, e := range batch {
-		occurred, err := time.Parse(time.RFC3339, e.OccurredAt)
+		occurred, err := time.Parse(time.RFC3339Nano, e.OccurredAt)
 		if err != nil {
 			occurred = time.Now().UTC()
 		}
+		id := e.ID
+		if id == "" {
+			id = uuid.NewString()
+		}
 		obs := &observation.Observation{
-			ID:              e.WorkspaceID, // populated by server-side; placeholder
+			ID:              id,
 			WorkspaceID:     e.WorkspaceID,
 			IssueID:         e.IssueID,
 			AgentID:         e.AgentID,
@@ -102,6 +108,8 @@ func (h *Handler) HandleObservations(ctx context.Context, batch []ws.Observation
 			PromptHash:      e.PromptHash,
 			AgentTemplateID: e.AgentTemplateID,
 			ToolSignatures:  e.ToolSignatures,
+			PolicyDecision:  observation.PolicyDecision(e.PolicyDecision),
+			EvalRunID:       e.EvalRunID,
 		}
 		out = append(out, obs)
 	}

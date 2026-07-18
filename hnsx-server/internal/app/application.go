@@ -271,11 +271,16 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 		}
 		dialCancel()
 
+		// Observation sink for the daemon runtime: observations travel over
+		// the WS to the server, which persists them. If WS is down, fall back
+		// to writing directly to Postgres so local-only smoke tests still work.
+		wsSink := wsclient.NewObservationSink(wsClient, sink)
+
 		app.DaemonRuntime = daemonruntime.New(daemonruntime.Config{
 			Issues:   app.IssueSvc,
 			Agents:   app.AgentSvc,
 			Registry: app.Backends,
-			Sink:     sink,
+			Sink:     wsSink,
 			WS:       wsClient,
 			Eval:     evalAutoRunner{evalSvc},
 			Policies: &policyLookup{repo: policyRepo},

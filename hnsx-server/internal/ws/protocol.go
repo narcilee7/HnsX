@@ -62,6 +62,7 @@ type ClaimedIssue struct {
 
 // ObservationEvent is the body of a TypeObservations envelope.
 type ObservationEvent struct {
+	ID              string          `json:"id"`
 	WorkspaceID     string          `json:"workspace_id"`
 	IssueID         string          `json:"issue_id"`
 	AgentID         string          `json:"agent_id"`
@@ -72,6 +73,8 @@ type ObservationEvent struct {
 	PromptHash      string          `json:"prompt_hash"`
 	AgentTemplateID string          `json:"agent_template_id"`
 	ToolSignatures  json.RawMessage `json:"tool_signatures"`
+	PolicyDecision  string          `json:"policy_decision,omitempty"`
+	EvalRunID       string          `json:"eval_run_id,omitempty"`
 }
 
 // IssueStatusEvent is the body of a TypeIssueStatus envelope.
