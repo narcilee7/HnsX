@@ -57,8 +57,20 @@ import (
 	policysvc "github.com/hnsx-io/hnsx/server/internal/service/policy"
 	squadsvc "github.com/hnsx-io/hnsx/server/internal/service/squad"
 	workspacesvc "github.com/hnsx-io/hnsx/server/internal/service/workspace"
+	wsclient "github.com/hnsx-io/hnsx/server/internal/ws"
 	"github.com/hnsx-io/hnsx/server/internal/ws/handler"
 )
+
+// wsURLFromHTTPAddr converts the server's HTTP bind address to a
+// WebSocket URL pointing at /ws/daemon. Strips the leading ":" for
+// port-only binds and prepends "ws://".
+func wsURLFromHTTPAddr(addr string) string {
+	addr = strings.TrimPrefix(addr, ":")
+	if !strings.Contains(addr, "://") {
+		addr = "ws://127.0.0.1:" + addr
+	}
+	return strings.TrimRight(addr, "/") + "/ws/daemon"
+}
 
 // policyLookup is the daemon_runtime.PolicyLookup implementation that
 // returns the workspace's first Policy. R3.x swaps this for a per-harness
@@ -243,11 +255,28 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 			Logger: logger,
 		})
 		engine := policysvc.NewEngine()
+
+		// WS client: the daemon runtime talks to the server over
+		// /ws/daemon instead of sharing the Postgres pool. Built even
+		// for the in-process case so the runtime uses the same code
+		// path whether the daemon is local or remote.
+		wsURL := wsURLFromHTTPAddr(cfg.HTTPAddr)
+		wsClient := wsclient.NewClient(wsURL)
+		dialCtx, dialCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := wsClient.Connect(dialCtx); err != nil {
+			logger.Warn("app: ws client connect failed (daemon will fall back to direct DB)",
+				"url", wsURL, "err", err)
+		} else {
+			logger.Info("app: ws client connected to daemon endpoint", "url", wsURL)
+		}
+		dialCancel()
+
 		app.DaemonRuntime = daemonruntime.New(daemonruntime.Config{
 			Issues:   app.IssueSvc,
 			Agents:   app.AgentSvc,
 			Registry: app.Backends,
 			Sink:     sink,
+			WS:       wsClient,
 			Eval:     evalAutoRunner{evalSvc},
 			Policies: &policyLookup{repo: policyRepo},
 			Gate:     gate,

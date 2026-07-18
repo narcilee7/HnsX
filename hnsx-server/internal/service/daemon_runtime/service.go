@@ -25,6 +25,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/domain/issue"
 	"github.com/hnsx-io/hnsx/server/internal/domain/observation"
 	"github.com/hnsx-io/hnsx/server/internal/domain/policy"
+	"github.com/hnsx-io/hnsx/server/internal/ws"
 )
 
 // PolicyLookup fetches the policy attached to a workspace. The default
@@ -39,6 +40,15 @@ type approvalGate interface {
 	Wait(ctx context.Context, approvalID string) (approval.Status, error)
 }
 
+// WSClient is the typed subset of the daemon ↔ server WS protocol
+// the runtime uses. Implemented by ws.Client; tests pass a stub.
+type WSClient interface {
+	Claim(ctx context.Context, workspaceID string) ([]ws.ClaimedIssue, error)
+	WriteObservations(ctx context.Context, batch []ws.ObservationEvent) error
+	UpdateStatus(ctx context.Context, issueID string, status issue.Status) error
+	Heartbeat(ctx context.Context, workspaceID string) error
+}
+
 // Service is the daemon-runtime orchestrator. It pulls work from the issue
 // service, runs it through the agent runtime registry, and records every
 // emitted message as an observation.
@@ -47,6 +57,7 @@ type Service struct {
 	agents   *agent_svc_handle
 	registry agentruntime.Registry
 	sink     observation.Sink
+	wsClient WSClient
 	eval     EvalAutoRunner
 	policies PolicyLookup
 	gate     approvalGate
@@ -62,6 +73,7 @@ type Config struct {
 	Agents   AgentGetter
 	Registry agentruntime.Registry
 	Sink     observation.Sink
+	WS       WSClient
 	Eval     EvalAutoRunner
 	Policies PolicyLookup
 	Gate     approvalGate
@@ -99,6 +111,7 @@ func New(cfg Config) *Service {
 		agents:   &agent_svc_handle{AgentGetter: cfg.Agents},
 		registry: cfg.Registry,
 		sink:     cfg.Sink,
+		wsClient: cfg.WS,
 		eval:     cfg.Eval,
 		policies: cfg.Policies,
 		gate:     cfg.Gate,
@@ -137,42 +150,97 @@ func (s *Service) Run(ctx context.Context, workspaceID string, tick time.Duratio
 	}
 }
 
-// tick runs one pass: list running agents in this workspace, then for each
-// pick up one issue and run it.
-//
-// For R1.9 we keep the agent list hardcoded to "any agent whose
-// RuntimeMode is local and which we can find"; the workspace-scoped
-// sweep comes in R2 once the daemon↔server heartbeats are wired.
+// tick runs one pass: claim work via WS, then for each claimed
+// issue run it through the configured backend.
 func (s *Service) tick(ctx context.Context, workspaceID string) error {
-	// In R1.9 the daemon discovers agents via the agent service's
-	// ListByWorkspace; R2 will replace this with a heartbeat-driven
-	// registry keyed on daemon_id.
-	agents, err := s.listAgentsForWorkspace(ctx, workspaceID)
-	if err != nil {
-		return fmt.Errorf("list agents: %w", err)
-	}
-	if len(agents) == 0 {
-		return nil
+	// Heartbeat: cheap liveness signal so the server knows this
+	// daemon is alive. R3.5h+ writes this to the daemons table.
+	if s.wsClient != nil {
+		if err := s.wsClient.Heartbeat(ctx, workspaceID); err != nil {
+			s.logger.Warn("daemon_runtime: ws heartbeat failed", "err", err)
+		}
 	}
 
-	for _, a := range agents {
-		issues, err := s.issues.ListAssignedToAgent(ctx, a.ID, []issue.Status{issue.StatusTodo, issue.StatusInProgress})
+	// Claim: ask the server for the workspace's assigned issues.
+	// R3.5h+ uses WS exclusively; R1.9-R3.5h fell back to direct DB
+	// via s.issues.ListAssignedToAgent.
+	var issues []*issue.Issue
+	if s.wsClient != nil {
+		claimed, err := s.wsClient.Claim(ctx, workspaceID)
 		if err != nil {
-			s.logger.Warn("daemon_runtime: list issues failed", "agent", a.ID, "err", err)
-			continue
+			s.logger.Warn("daemon_runtime: ws claim failed", "err", err)
+		} else {
+			for _, c := range claimed {
+				issues = append(issues, &issue.Issue{
+					ID:          c.ID,
+					WorkspaceID: c.WorkspaceID,
+					Title:       c.Title,
+					Description: c.Description,
+					AssigneeID:  strPtrOrNil(c.AgentID),
+				})
+			}
 		}
-		if len(issues) == 0 {
-			continue
+	}
+	if s.wsClient == nil {
+		// Fallback: direct DB (used by the CLI's e2e paths that
+		// share the server's Postgres pool).
+		agents, err := s.listAgentsForWorkspace(ctx, workspaceID)
+		if err != nil {
+			return fmt.Errorf("list agents: %w", err)
 		}
-		// Take the first one; R2 may use priority / FIFO / squad leader routing.
-		if err := s.runIssue(ctx, a, issues[0]); err != nil {
+		if len(agents) == 0 {
+			return nil
+		}
+		for _, a := range agents {
+			its, err := s.issues.ListAssignedToAgent(ctx, a.ID, []issue.Status{issue.StatusTodo, issue.StatusInProgress})
+			if err != nil {
+				s.logger.Warn("daemon_runtime: list issues failed", "agent", a.ID, "err", err)
+				continue
+			}
+			issues = append(issues, its...)
+		}
+	}
+
+	for _, i := range issues {
+		if err := s.runIssue(ctx, workspaceID, i); err != nil {
 			s.logger.Warn("daemon_runtime: run issue failed",
-				"agent", a.ID, "issue", issues[0].ID, "err", err)
-			// Mark the issue as blocked so we don't loop on it.
-			_ = s.issues.UpdateStatus(ctx, issues[0].ID, issue.StatusBlocked)
+				"issue", i.ID, "err", err)
+			_ = s.updateIssueStatus(ctx, i, issue.StatusBlocked)
 		}
 	}
 	return nil
+}
+
+// strPtrOrNil returns &s when s is non-empty, else nil.
+func strPtrOrNil(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// strDeref returns *s when non-nil, else "".
+func strDeref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// updateIssueStatus prefers the WS path (daemon ↔ server) when wired;
+// falls back to direct IssueSvc for CLI-only paths that don't open a
+// WebSocket connection.
+func (s *Service) updateIssueStatus(ctx context.Context, i *issue.Issue, status issue.Status) error {
+	if s.wsClient != nil {
+		if err := s.wsClient.UpdateStatus(ctx, i.ID, status); err != nil {
+			s.logger.Warn("daemon_runtime: ws status update failed, falling back",
+				"issue", i.ID, "err", err)
+			// fall through
+		} else {
+			return nil
+		}
+	}
+	return s.issues.UpdateStatus(ctx, i.ID, status)
 }
 
 // runIssue spawns the configured backend for the agent, streams messages
@@ -181,7 +249,15 @@ func (s *Service) tick(ctx context.Context, workspaceID string) error {
 // The agent's RuntimeConfig (JSON) is expected to contain {"backend":
 // "claude", "model": "..."} — for R1.9 we only honor "backend" and
 // default to "claude".
-func (s *Service) runIssue(ctx context.Context, a *agent.Agent, i *issue.Issue) error {
+// runIssue runs one issue end-to-end: claim → spawn → stream messages
+// → update status. The agent is fetched by ID (WS claim does not yet
+// carry full agent row, just the agent_id on the issue).
+func (s *Service) runIssue(ctx context.Context, workspaceID string, i *issue.Issue) error {
+	agentID := strDeref(i.AssigneeID)
+	a, err := s.agents.Get(ctx, agentID)
+	if err != nil {
+		return fmt.Errorf("load agent %q: %w", agentID, err)
+	}
 	backendName := "claude"
 	model := ""
 	if len(a.RuntimeConfig) > 0 {

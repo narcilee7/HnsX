@@ -24,7 +24,7 @@ type wsServiceAdapter struct {
 
 type issueServiceHandle struct {
 	svc interface {
-		ListAssignedToAgent(ctx context.Context, agentID string, statuses []issue.Status) ([]*issue.Issue, error)
+		ListByWorkspace(ctx context.Context, workspaceID string, filter issue.ListFilter) ([]*issue.Issue, error)
 		UpdateStatus(ctx context.Context, id string, status issue.Status) error
 	}
 }
@@ -36,8 +36,8 @@ type approvalServiceHandle struct {
 	}
 }
 
-func (a *wsServiceAdapter) ListAssignedToAgent(ctx context.Context, agentID string, statuses []issue.Status) ([]*issue.Issue, error) {
-	return a.issues.svc.ListAssignedToAgent(ctx, agentID, statuses)
+func (a *wsServiceAdapter) ListByWorkspace(ctx context.Context, workspaceID string, filter issue.ListFilter) ([]*issue.Issue, error) {
+	return a.issues.svc.ListByWorkspace(ctx, workspaceID, filter)
 }
 
 func (a *wsServiceAdapter) UpdateStatus(ctx context.Context, id string, status issue.Status) error {

@@ -18,7 +18,7 @@ import (
 // Services is the surface this package needs from app. Defined as a
 // narrow interface so we can wire it in tests with stubs.
 type Services interface {
-	ListAssignedToAgent(ctx context.Context, agentID string, statuses []issue.Status) ([]*issue.Issue, error)
+	ListByWorkspace(ctx context.Context, workspaceID string, filter issue.ListFilter) ([]*issue.Issue, error)
 	UpdateStatus(ctx context.Context, id string, status issue.Status) error
 	WriteObservations(ctx context.Context, obs []*observation.Observation) error
 	ApprovalRequest(ctx context.Context, a *approval.Approval) error
@@ -41,19 +41,25 @@ func NewHandler(svc Services, log *slog.Logger) *Handler {
 	return &Handler{svc: svc, log: log}
 }
 
-// HandleClaim returns the issues currently assigned to the daemon's
+// HandleClaim returns the issues currently assigned in the
 // workspace, filtered to todo / in_progress.
 func (h *Handler) HandleClaim(ctx context.Context, req ws.ClaimRequest) (ws.IssuesResponse, error) {
 	if req.WorkspaceID == "" {
 		return ws.IssuesResponse{}, fmt.Errorf("workspace_id required")
 	}
-	// R3.5h: claim is workspace-scoped; the daemon iterates agents
-	// itself. Here we just list the workspace's issues.
-	// R3.5h+ refines to per-agent claim via the daemon's own
-	// AgentSvc.ListByWorkspace lookup.
-	items, err := h.svc.ListAssignedToAgent(ctx, req.WorkspaceID, []issue.Status{
-		issue.StatusTodo, issue.StatusInProgress,
+	items, err := h.svc.ListByWorkspace(ctx, req.WorkspaceID, issue.ListFilter{
+		Status: issue.StatusTodo,
+		Limit:  50,
 	})
+	// Filter to todo + in_progress; ListFilter only takes one status
+	// for simplicity here — R3.5h+ extends to multi-status claim.
+	items2, err2 := h.svc.ListByWorkspace(ctx, req.WorkspaceID, issue.ListFilter{
+		Status: issue.StatusInProgress,
+		Limit:  50,
+	})
+	if err2 == nil {
+		items = append(items, items2...)
+	}
 	if err != nil {
 		return ws.IssuesResponse{}, err
 	}
