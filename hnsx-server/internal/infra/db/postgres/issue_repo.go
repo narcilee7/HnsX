@@ -78,6 +78,19 @@ func (r *IssueRepo) ListAssignedToAgent(ctx context.Context, agentID string, sta
 	return out, nil
 }
 
+func (r *IssueRepo) MaxNumber(ctx context.Context, workspaceID string) (int, error) {
+	var maxN int
+	err := r.db.WithContext(ctx).
+		Model(&issue.Issue{}).
+		Where("workspace_id = ?", workspaceID).
+		Select("COALESCE(MAX(number), 0)").
+		Scan(&maxN).Error
+	if err != nil {
+		return 0, err
+	}
+	return maxN, nil
+}
+
 func (r *IssueRepo) Update(ctx context.Context, i *issue.Issue) error {
 	if err := i.Validate(); err != nil {
 		return err

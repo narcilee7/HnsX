@@ -112,6 +112,10 @@ type Repo interface {
 	Get(ctx context.Context, id string) (*Issue, error)
 	ListByWorkspace(ctx context.Context, workspaceID string, filter ListFilter) ([]*Issue, error)
 	ListAssignedToAgent(ctx context.Context, agentID string, statuses []Status) ([]*Issue, error)
+	// MaxNumber returns the highest issue number currently used within
+	// a workspace, or 0 if no issues exist. Used by the service to assign
+	// monotonic workspace-scoped numbers on Create.
+	MaxNumber(ctx context.Context, workspaceID string) (int, error)
 	Update(ctx context.Context, i *Issue) error
 	UpdateStatus(ctx context.Context, id string, status Status) error
 	Delete(ctx context.Context, id string) error
