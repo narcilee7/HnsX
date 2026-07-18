@@ -43,6 +43,7 @@ import (
 	"github.com/hnsx-io/hnsx/server/internal/infra/db/postgres"
 	agentsvc "github.com/hnsx-io/hnsx/server/internal/service/agent"
 	daemonsvc "github.com/hnsx-io/hnsx/server/internal/service/daemon"
+	daemonruntime "github.com/hnsx-io/hnsx/server/internal/service/daemon_runtime"
 	issuesvc "github.com/hnsx-io/hnsx/server/internal/service/issue"
 	squadsvc "github.com/hnsx-io/hnsx/server/internal/service/squad"
 	workspacesvc "github.com/hnsx-io/hnsx/server/internal/service/workspace"
@@ -100,6 +101,10 @@ type Application struct {
 	// DB pool + handlers. Available so WS layer (R1.9) and tests can use them.
 	DB       *postgres.DB
 	Handlers router.Deps
+
+	// DaemonRuntime is the long-running worker loop. Lazily constructed
+	// only when DB is available; nil otherwise.
+	DaemonRuntime *daemonruntime.Service
 
 	// HTTP server lifecycle.
 	httpServer *http.Server
@@ -175,6 +180,17 @@ func New(ctx context.Context, cfg *Config) (*Application, error) {
 			Squad:     squadhandler.New(app.SquadSvc),
 			Daemon:    daemonhandler.New(app.DaemonSvc),
 		}
+
+		// Daemon runtime: pulls assigned issues, spawns the agent backend,
+		// streams observations. Lazily wired only when DB is available.
+		sink := postgres.NewObservationSink(app.DB)
+		app.DaemonRuntime = daemonruntime.New(daemonruntime.Config{
+			Issues:   app.IssueSvc,
+			Agents:   app.AgentSvc,
+			Registry: app.Backends,
+			Sink:     sink,
+			Logger:   logger,
+		})
 	}
 
 	// 4. HTTP server lifecycle.

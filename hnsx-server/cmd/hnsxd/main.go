@@ -15,6 +15,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -80,13 +81,30 @@ func serveCmd() *cobra.Command {
 }
 
 func daemonCmd() *cobra.Command {
+	var (
+		workspaceID string
+		tickSeconds int
+	)
 	cmd := &cobra.Command{
 		Use:   "daemon",
-		Short: "Run the agent runtime (spawns agent CLIs, reports observations)",
+		Short: "Run the agent runtime loop (claims issues, spawns CLIs, writes observations)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// Wired up in R1.9 (daemon_runtime).
-			return fmt.Errorf("hnsxd daemon: not yet implemented (R1.9)")
+			application, err := app.New(cmd.Context(), minimalConfig())
+			if err != nil {
+				return fmt.Errorf("hnsxd daemon: init app: %w", err)
+			}
+			defer application.Close()
+			if application.DaemonRuntime == nil {
+				return fmt.Errorf("hnsxd daemon: not started — HNSX_POSTGRES_DSN is not set")
+			}
+			if workspaceID == "" {
+				return fmt.Errorf("hnsxd daemon: --workspace is required")
+			}
+			tick := time.Duration(tickSeconds) * time.Second
+			return application.DaemonRuntime.Run(cmd.Context(), workspaceID, tick)
 		},
 	}
+	cmd.Flags().StringVar(&workspaceID, "workspace", "", "workspace ID this daemon services (required)")
+	cmd.Flags().IntVar(&tickSeconds, "tick-seconds", 5, "how often to poll for new issues")
 	return cmd
 }
