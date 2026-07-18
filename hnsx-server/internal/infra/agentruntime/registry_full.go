@@ -22,10 +22,13 @@ func NewDefaultRegistry(logger *slog.Logger) *Registry {
 	r.Register(NewPiBackend())
 	r.Register(NewCodexBackend())
 
-	// ACP / JSON-RPC style — stub for R2 (returns clear "not ported" error).
+	// ACP / JSON-RPC style — R3.5g ports hermes/kimi/kiro.
 	r.Register(NewHermesBackend())
 	r.Register(NewKimiBackend())
 	r.Register(NewKiroBackend())
+
+	// openclaw still a stub: in-process agent runtime + gateway routing
+	// warrants its own effort; R2.x.
 	r.Register(NewOpenClawBackend())
 
 	return r

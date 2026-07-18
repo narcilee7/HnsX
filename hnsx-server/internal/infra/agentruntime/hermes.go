@@ -1,11 +1,18 @@
 package agentruntime
 
-// HermesBackend is a stub. The real Hermes CLI speaks ACP (Agent Client
-// Protocol) JSON-RPC over stdin/stdout — not stream-json — so porting
-// requires a separate ACP backend base. Tracked for R2.x.
+import "github.com/hnsx-io/hnsx/server/internal/domain/agentruntime"
+
+// HermesBackend implements agentruntime.Backend for hermes-cli using
+// the ACP (JSON-RPC 2.0) wire protocol.
 //
 // Reference: git show 4aedded:multica_fork/pkg/agent/hermes.go
-func NewHermesBackend() *StubBackend {
-	return NewStubBackend("hermes", "hermes",
-		"ACP/JSON-RPC transport not yet ported (R2.x)")
+func NewHermesBackend() *ACPBackend {
+	return NewACPBackend(ACPConfig{
+		Name:       "hermes",
+		Executable: "hermes",
+		ExtraArgs:  nil,
+	})
 }
+
+var _ agentruntime.Backend = (*ACPBackend)(nil)
+
